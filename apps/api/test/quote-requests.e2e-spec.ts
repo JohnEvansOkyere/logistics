@@ -335,11 +335,16 @@ test("quote draft edits append immutable revisions and persist in customer histo
       revisionNumber: number;
       content: string;
       createdAt: string;
+      savedBy: string;
     }>;
   };
   assert.equal(first.revisions.length, 1);
   assert.equal(first.revisions[0].revisionNumber, 1);
   assert.equal(first.revisions[0].content, "Synthetic version one");
+  assert.equal(
+    first.revisions[0].savedBy,
+    "50000000-0000-4000-8000-000000000001",
+  );
 
   const secondResponse = await save("Synthetic revised version two");
   assert.equal(secondResponse.status, 200);

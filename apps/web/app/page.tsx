@@ -1,184 +1,175 @@
+import Link from "next/link";
 import { AuthStatus } from "./auth/AuthStatus";
-
-const apiBaseUrl =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:3001/api";
+import { SettingsSidebarSection } from "./SettingsSidebarSection";
 
 export default function HomePage() {
   return (
     <div className="workspace-shell">
       <aside className="sidebar">
-        <a
-          className="brand"
-          href="#overview"
-          aria-label="BJH Logistics overview"
-        >
+        <Link className="brand" href="/" aria-label="BJH Logistics overview">
           <span className="brand-mark" aria-hidden="true">
             BJH
           </span>
           <span className="brand-copy">
             <strong>BJH Logistics</strong>
-            <small>Operations workspace</small>
+            <small>Operations</small>
           </span>
-        </a>
+        </Link>
 
         <p className="nav-heading">WORKSPACE</p>
         <nav className="workspace-nav" aria-label="Staff workspace">
-          <a className="nav-link active" href="#overview" aria-current="page">
+          <Link className="nav-link active" href="/" aria-current="page">
             <span className="nav-icon" aria-hidden="true">
               ◫
             </span>
             Overview
-          </a>
-          <a className="nav-link" href="/customers">
+          </Link>
+          <Link className="nav-link" href="/customers">
             <span className="nav-icon" aria-hidden="true">
               ◉
             </span>
             Customers
-          </a>
-          <a className="nav-link" href="/quotations">
+          </Link>
+          <Link className="nav-link" href="/quotations">
             <span className="nav-icon" aria-hidden="true">
               ≡
             </span>
             Quotations
-          </a>
-          <a className="nav-link" href="#jobs">
-            <span className="nav-icon" aria-hidden="true">
-              ▣
-            </span>
-            Jobs
-          </a>
-          <a className="nav-link" href="/documents-preview">
-            <span className="nav-icon" aria-hidden="true">
-              ▤
-            </span>
-            Document previews
-          </a>
+          </Link>
         </nav>
+
+        <SettingsSidebarSection />
 
         <div className="sidebar-note">
           <span className="local-indicator" aria-hidden="true" />
           <div>
-            <strong>Local workspace</strong>
-            <p>Sign in to use the local customer and quote-request engine.</p>
+            <strong>Local environment</strong>
+            <p>Connected to the local Supabase stack.</p>
           </div>
         </div>
       </aside>
 
       <div className="workspace-main">
         <header className="topbar">
-          <span>Staff workspace</span>
-          <a href={`${apiBaseUrl}/health`}>
-            Check API health <span aria-hidden="true">↗</span>
-          </a>
-          <AuthStatus />
+          <div className="breadcrumb">
+            <span>Workspace</span>
+            <span aria-hidden="true">/</span>
+            <strong>Overview</strong>
+          </div>
+          <div className="topbar-actions">
+            <AuthStatus />
+          </div>
         </header>
 
         <main className="dashboard" id="overview">
           <section className="welcome-row" aria-labelledby="page-title">
             <div>
-              <p className="eyebrow">OVERVIEW</p>
-              <h1 id="page-title">Operations overview</h1>
+              <p className="eyebrow">OPERATIONS</p>
+              <h1 id="page-title">Good work starts with a clear handoff.</h1>
               <p className="welcome-copy">
-                Your staff workspace is ready for the next stage of local
-                development.
+                Keep customer records and quote requests moving from first
+                contact to a reviewed draft.
               </p>
             </div>
-            <span className="environment-badge">LOCAL DEVELOPMENT</span>
-          </section>
-
-          <section
-            className="connection-notice"
-            aria-label="Workspace data status"
-          >
-            <span className="notice-icon" aria-hidden="true">
-              i
+            <span className="environment-badge">
+              <span className="status-dot" />
+              LOCAL WORKSPACE
             </span>
-            <p>
-              <strong>Local business records are available.</strong> Customer
-              and quote-request workflows use SQLite; jobs, shipments, and
-              billing are not implemented yet.
-            </p>
           </section>
 
-          <section className="modules-section" aria-labelledby="modules-title">
-            <div className="section-heading">
+          <section className="work-panel" aria-labelledby="work-title">
+            <div className="work-panel-heading">
               <div>
-                <h2 id="modules-title">Workspace modules</h2>
-                <p>Interface foundations for day-to-day operations.</p>
+                <p className="eyebrow">YOUR WORKSPACE</p>
+                <h2 id="work-title">What would you like to take care of?</h2>
               </div>
-              <span className="section-caption">NO LIVE RECORDS</span>
+              <p className="work-panel-note">
+                Choose an action to get started.
+              </p>
             </div>
 
-            <div className="module-grid">
-              <article className="module-card" id="customers">
-                <div className="module-card-top">
-                  <span
-                    className="module-icon customer-icon"
-                    aria-hidden="true"
-                  >
-                    ◉
-                  </span>
-                  <span className="module-status">Not connected</span>
+            <div className="action-grid">
+              <article className="action-card primary-action">
+                <span className="action-icon" aria-hidden="true">
+                  ＋
+                </span>
+                <div className="action-copy">
+                  <p className="action-kicker">QUOTATIONS</p>
+                  <h3>Start a quote request</h3>
+                  <p>
+                    Capture the service details and prepare the request for
+                    follow-up.
+                  </p>
                 </div>
-                <h3>Customers</h3>
-                <p>Customer profiles and contact workspace.</p>
-                <a className="module-link" href="/customers">
-                  Open sample directory <span aria-hidden="true">→</span>
-                </a>
+                <Link className="action-link" href="/quotations/new-request">
+                  Create request <span aria-hidden="true">→</span>
+                </Link>
               </article>
 
-              <article className="module-card" id="quotations">
-                <div className="module-card-top">
-                  <span className="module-icon quote-icon" aria-hidden="true">
-                    ≡
-                  </span>
-                  <span className="module-status">Not connected</span>
+              <article className="action-card">
+                <span
+                  className="action-icon customer-action-icon"
+                  aria-hidden="true"
+                >
+                  ◉
+                </span>
+                <div className="action-copy">
+                  <p className="action-kicker">CUSTOMERS</p>
+                  <h3>Add a customer</h3>
+                  <p>
+                    Keep company and contact details together for future
+                    requests.
+                  </p>
                 </div>
-                <h3>Quotations</h3>
-                <p>Quote requests, drafts, and review workspace.</p>
-                <a className="module-link" href="/quotations">
-                  Open sample inbox <span aria-hidden="true">→</span>
-                </a>
+                <Link className="action-link" href="/customers/new">
+                  Add customer <span aria-hidden="true">→</span>
+                </Link>
               </article>
+            </div>
+          </section>
 
-              <article className="module-card" id="jobs">
-                <div className="module-card-top">
-                  <span className="module-icon jobs-icon" aria-hidden="true">
-                    ▣
-                  </span>
-                  <span className="module-status">Not connected</span>
+          <section className="desk-section" aria-labelledby="desk-title">
+            <div className="desk-heading">
+              <div>
+                <p className="eyebrow">DAILY WORK</p>
+                <h2 id="desk-title">Keep the desk moving</h2>
+              </div>
+              <Link className="text-link" href="/quotations">
+                Open quotation desk <span aria-hidden="true">→</span>
+              </Link>
+            </div>
+            <div className="workflow-strip">
+              <div className="workflow-step">
+                <span className="step-number">01</span>
+                <div>
+                  <strong>Record the request</strong>
+                  <p>Capture what the customer needs.</p>
                 </div>
-                <h3>Jobs</h3>
-                <p>Job files, milestones, and assigned work.</p>
-                <span className="module-footnote">UI foundation</span>
-              </article>
-
-              <article className="module-card">
-                <div className="module-card-top">
-                  <span
-                    className="module-icon documents-icon"
-                    aria-hidden="true"
-                  >
-                    ▤
-                  </span>
-                  <span className="module-status preview-status">
-                    Preview only
-                  </span>
+              </div>
+              <span className="workflow-connector" aria-hidden="true" />
+              <div className="workflow-step">
+                <span className="step-number">02</span>
+                <div>
+                  <strong>Prepare a draft</strong>
+                  <p>Save revisions against the request.</p>
                 </div>
-                <h3>Documents</h3>
-                <p>Synthetic layouts for structural review and printing.</p>
-                <a className="module-link" href="/documents-preview">
-                  Open document previews <span aria-hidden="true">→</span>
-                </a>
-              </article>
+              </div>
+              <span className="workflow-connector" aria-hidden="true" />
+              <div className="workflow-step">
+                <span className="step-number">03</span>
+                <div>
+                  <strong>Review before sending</strong>
+                  <p>Keep approval and issue actions deliberate.</p>
+                </div>
+              </div>
             </div>
           </section>
 
           <footer className="dashboard-footer">
-            <span>BJH Logistics · Local development</span>
             <span>
-              No client records or operational activity are displayed.
+              BJH Logistics <span aria-hidden="true">·</span> Staff workspace
             </span>
+            <span>Local development environment</span>
           </footer>
         </main>
       </div>

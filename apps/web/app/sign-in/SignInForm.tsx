@@ -144,7 +144,7 @@ export function SignInForm() {
       <p className={styles.description}>
         {mode === "bootstrap"
           ? "The first local account becomes the super admin. Bootstrap closes after that account is assigned."
-          : "Sign in with the super_admin account to use the local business engine."}
+          : "Sign in with your invited staff account to continue to the workspace."}
       </p>
 
       <form className={styles.form} onSubmit={submit}>

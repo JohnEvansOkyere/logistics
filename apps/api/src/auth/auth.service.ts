@@ -39,6 +39,9 @@ export class AuthService {
 
   async getSession(user: AuthenticatedUser) {
     const roles = await this.database.getActiveStaffRoles(user.userId);
+    if (roles.length === 0) {
+      throw new ForbiddenException("An active staff role is required");
+    }
     return {
       userId: user.userId,
       email: user.email,

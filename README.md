@@ -33,11 +33,11 @@ cp .env.example .env
 corepack pnpm dev
 ```
 
-Open the web app at <http://127.0.0.1:3000>; the API health endpoint is <http://127.0.0.1:3001/api/health>. Without `DATABASE_URL`, the API creates `.local/logistics.sqlite` and applies pending SQLite migrations in `apps/api/src/database/migrations/` on startup. With `DATABASE_URL`, it uses PostgreSQL for a read-only health probe and does not apply migrations. The database and `.env` are gitignored. To apply SQLite migrations without starting the API, run `corepack pnpm --filter @bjh/api db:migrate`. To reset local SQLite state, stop the API, remove `.local/logistics.sqlite` and its `-shm`/`-wal` sidecars, then run `corepack pnpm --filter @bjh/api db:migrate` or restart the API.
+Open the web app at <http://127.0.0.1:3002>; the API health endpoint is <http://127.0.0.1:3001/api/health>. The web dev server uses port 3002 so it can run beside the API on 3001 and avoid an existing web process on 3000. Use `corepack pnpm web:dev` to start only the web app beside an already running local API, or `corepack pnpm dev` to start both apps when their ports are free. Without `DATABASE_URL`, the API creates `.local/logistics.sqlite` and applies pending SQLite migrations in `apps/api/src/database/migrations/` on startup. With `DATABASE_URL`, it uses PostgreSQL for a read-only health probe and does not apply migrations. The database and `.env` are gitignored. To apply SQLite migrations without starting the API, run `corepack pnpm --filter @bjh/api db:migrate`. To reset local SQLite state, stop the API, remove `.local/logistics.sqlite` and its `-shm`/`-wal` sidecars, then run `corepack pnpm --filter @bjh/api db:migrate` or restart the API.
 
 For the optional hosted PostgreSQL readiness probe, keep `DATABASE_URL` and `DATABASE_SSL_CA_PATH` server-side in `.env`. Download the project's root CA from Supabase **Database → SSL Configuration** to the ignored `.local/supabase-root.crt` path (or set `DATABASE_SSL_CA_PATH` to another private local path). This only verifies connectivity; it does not migrate or read business tables.
 
-Open <http://127.0.0.1:3000/documents-preview> to review the synthetic quotation, draft invoice, transport-document field layout, and payment receipt. Use the browser's Print command for one preview per page. These are layout samples only: they use placeholder amounts and do not issue invoices, carrier forms, or receipts.
+Open <http://127.0.0.1:3002/documents-preview> to review the synthetic quotation, draft invoice, transport-document field layout, and payment receipt. Use the browser's Print command for one preview per page. These are layout samples only: they use placeholder amounts and do not issue invoices, carrier forms, or receipts.
 
 Run checks from the repository root with `corepack pnpm lint`, `corepack pnpm format:check`, `corepack pnpm typecheck`, `corepack pnpm test`, `corepack pnpm test:e2e`, and `corepack pnpm build`. API tests use a fresh temporary SQLite file and verify the latest migration, one-time super-admin bootstrap, role-guard denials, customer/quote-request validation, search, explicit linking, retrieval and restart persistence.
 
@@ -54,7 +54,7 @@ corepack pnpm supabase:start
 corepack pnpm exec supabase status
 ```
 
-Copy the local Project URL and publishable key from `supabase status` into `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in `.env`, and leave `DATABASE_URL` empty so the app uses local SQLite. Run `corepack pnpm dev` and open <http://127.0.0.1:3000/sign-in>. The first authenticated local account can claim `super_admin` once. Later signups cannot claim that role; admin-managed staff account creation is a later step. Auth users live in the local Supabase Auth database, and this testing role assignment lives in ignored SQLite. Do not use a hosted Supabase URL for this test flow.
+Copy the local Project URL and publishable key from `supabase status` into `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in `.env`, and leave `DATABASE_URL` empty so the app uses local SQLite. Run `corepack pnpm dev` and open <http://127.0.0.1:3002/sign-in>. The first authenticated local account can claim `super_admin` once. Later signups cannot claim that role; admin-managed staff account creation is a later step. Auth users live in the local Supabase Auth database, and this testing role assignment lives in ignored SQLite. Do not use a hosted Supabase URL for this test flow.
 
 Set `SUPER_ADMIN_BOOTSTRAP_ENABLED=true` only in local `.env`; bootstrap is disabled automatically when `NODE_ENV=production`. Use the sign-up form for the first local administrator, then sign in with that account to exercise the customer and quotation endpoints. The API rejects requests without a valid Supabase access token and an active local `super_admin` role.
 
@@ -70,3 +70,5 @@ corepack pnpm supabase:stop
 ```
 
 `supabase:reset` recreates **only the local** Supabase database and reapplies `supabase/migrations/`. `supabase:test` runs 61 pgTAP assertions covering private-schema access, company-owned records (including denial by known record ID), CRUD within each of four sea/air workflow scopes, super-admin role assignment/revocation, membership revocation, and audit visibility. Test identities are synthetic fixtures, not fixed user-to-role assignments; identities and records exist only inside a rolled-back transaction. No durable application accounts or seed records are created. This does not connect the Nest API or prove API-level authorization. The first start downloads Supabase container images.
+
+

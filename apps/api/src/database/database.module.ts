@@ -25,16 +25,20 @@ function createPostgresPool(connectionString: string): Pool {
 
   const configuredCaPath =
     process.env.DATABASE_SSL_CA_PATH ?? "../../.local/supabase-root.crt";
+  const localConnection =
+    url.hostname === "127.0.0.1" || url.hostname === "localhost";
   const caPath = isAbsolute(configuredCaPath)
     ? configuredCaPath
     : resolve(process.cwd(), configuredCaPath);
   let ca: string | undefined;
-  try {
-    ca = readFileSync(caPath, "utf8");
-  } catch {
-    logger.error(
-      "Supabase root certificate unavailable; PostgreSQL health probes will rely on system CAs",
-    );
+  if (!localConnection) {
+    try {
+      ca = readFileSync(caPath, "utf8");
+    } catch {
+      logger.error(
+        "Supabase root certificate unavailable; PostgreSQL health probes will rely on system CAs",
+      );
+    }
   }
 
   // TLS settings are provided explicitly so pg verifies the server certificate.
@@ -43,7 +47,11 @@ function createPostgresPool(connectionString: string): Pool {
   }
   const pool = new Pool({
     connectionString: url.toString(),
-    ssl: ca ? { ca, rejectUnauthorized: true } : { rejectUnauthorized: true },
+    ssl: localConnection
+      ? false
+      : ca
+        ? { ca, rejectUnauthorized: true }
+        : { rejectUnauthorized: true },
     max: 5,
     connectionTimeoutMillis: 5_000,
     idleTimeoutMillis: 30_000,

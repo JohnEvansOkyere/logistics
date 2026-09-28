@@ -10,6 +10,7 @@ import {
   QuoteDraftRecord,
   QuoteRequestRecord,
   StaffRoleKey,
+  StaffRoleAssignmentRecord,
 } from "./database.port";
 import { runSqliteMigrations } from "./sqlite-migrations";
 
@@ -157,7 +158,7 @@ export class SqliteDatabaseService
 
     const revisions = this.connection
       .prepare(
-        `SELECT id, revision_number, content, created_at
+        `SELECT id, revision_number, content, created_at, saved_by_user_id
          FROM quote_draft_revision
          WHERE quote_draft_id = ?
          ORDER BY revision_number DESC`,
@@ -175,6 +176,7 @@ export class SqliteDatabaseService
         revisionNumber: revision.revision_number,
         content: revision.content,
         createdAt: revision.created_at,
+        savedBy: revision.saved_by_user_id,
       })),
     };
   }
@@ -182,6 +184,7 @@ export class SqliteDatabaseService
   async saveQuoteDraft(
     requestId: string,
     content: string,
+    savedBy: string,
     savedAt: string,
   ): Promise<QuoteDraftRecord> {
     const draftId = randomUUID();
@@ -209,8 +212,8 @@ export class SqliteDatabaseService
       this.connection
         .prepare(
           `INSERT INTO quote_draft_revision
-            (id, quote_draft_id, revision_number, content, created_at)
-           VALUES (?, ?, ?, ?, ?)`,
+            (id, quote_draft_id, revision_number, content, created_at, saved_by_user_id)
+           VALUES (?, ?, ?, ?, ?, ?)`,
         )
         .run(
           revisionId,
@@ -218,6 +221,7 @@ export class SqliteDatabaseService
           revisionNumber.next_revision,
           content,
           savedAt,
+          savedBy,
         );
     })();
 
@@ -321,23 +325,31 @@ export class SqliteDatabaseService
   }
 
   async claimInitialSuperAdmin(userId: string): Promise<boolean> {
-    const result = this.connection
-      .prepare(
-        `INSERT INTO staff_role_assignment
-          (assignment_id, user_id, role_key, assigned_at)
-         SELECT @assignmentId, @userId, 'super_admin', @assignedAt
-         WHERE NOT EXISTS (
-           SELECT 1 FROM staff_role_assignment
-           WHERE role_key = 'super_admin' AND revoked_at IS NULL
-         )`,
-      )
-      .run({
-        assignmentId: randomUUID(),
-        userId,
-        assignedAt: new Date().toISOString(),
-      });
-
-    return result.changes === 1;
+    const assignmentId = randomUUID();
+    const assignedAt = new Date().toISOString();
+    return this.connection.transaction(() => {
+      const result = this.connection
+        .prepare(
+          `INSERT INTO staff_role_assignment
+            (assignment_id, user_id, role_key, assigned_at, assigned_by)
+           SELECT @assignmentId, @userId, 'super_admin', @assignedAt, @userId
+           WHERE NOT EXISTS (
+             SELECT 1 FROM staff_role_assignment
+             WHERE role_key = 'super_admin' AND revoked_at IS NULL
+           )`,
+        )
+        .run({ assignmentId, userId, assignedAt });
+      if (result.changes === 1) {
+        this.connection
+          .prepare(
+            `INSERT INTO staff_role_audit_event
+              (event_id, actor_user_id, event_type, assignment_id, occurred_at)
+             VALUES (?, ?, 'staff_role_assigned', ?, ?)`,
+          )
+          .run(randomUUID(), userId, assignmentId, assignedAt);
+      }
+      return result.changes === 1;
+    })();
   }
 
   async getActiveStaffRoles(userId: string): Promise<StaffRoleKey[]> {
@@ -349,6 +361,122 @@ export class SqliteDatabaseService
       .all(userId) as Array<{ role_key: StaffRoleKey }>;
 
     return rows.map(({ role_key }) => role_key);
+  }
+
+  async listStaffRoleAssignments(): Promise<StaffRoleAssignmentRecord[]> {
+    const rows = this.connection
+      .prepare(
+        `SELECT assignment_id, user_id, role_key, assigned_by, assigned_at, revoked_at
+         FROM staff_role_assignment ORDER BY assigned_at DESC, assignment_id DESC`,
+      )
+      .all() as Array<{
+      assignment_id: string;
+      user_id: string;
+      role_key: StaffRoleKey;
+      assigned_by: string;
+      assigned_at: string;
+      revoked_at: string | null;
+    }>;
+    return rows.map((row) => ({
+      id: row.assignment_id,
+      userId: row.user_id,
+      roleKey: row.role_key,
+      assignedBy: row.assigned_by,
+      assignedAt: row.assigned_at,
+      revokedAt: row.revoked_at,
+    }));
+  }
+
+  async assignStaffRole(
+    userId: string,
+    roleKey: StaffRoleKey,
+    assignedBy: string,
+  ): Promise<
+    StaffRoleAssignmentRecord | "super_admin_exists" | "already_active"
+  > {
+    const assignment: StaffRoleAssignmentRecord = {
+      id: randomUUID(),
+      userId,
+      roleKey,
+      assignedBy,
+      assignedAt: new Date().toISOString(),
+      revokedAt: null,
+    };
+    try {
+      this.connection.transaction(() => {
+        this.connection
+          .prepare(
+            `INSERT INTO staff_role_assignment
+              (assignment_id, user_id, role_key, assigned_by, assigned_at)
+             VALUES (@id, @userId, @roleKey, @assignedBy, @assignedAt)`,
+          )
+          .run(assignment);
+        this.connection
+          .prepare(
+            `INSERT INTO staff_role_audit_event
+              (event_id, actor_user_id, event_type, assignment_id, occurred_at)
+             VALUES (?, ?, 'staff_role_assigned', ?, ?)`,
+          )
+          .run(randomUUID(), assignedBy, assignment.id, assignment.assignedAt);
+      })();
+      return assignment;
+    } catch (error) {
+      if ((error as { code?: string }).code === "SQLITE_CONSTRAINT_UNIQUE") {
+        if (
+          roleKey === "super_admin" &&
+          this.connection
+            .prepare(
+              `SELECT 1 FROM staff_role_assignment
+               WHERE role_key = 'super_admin' AND revoked_at IS NULL LIMIT 1`,
+            )
+            .get()
+        ) {
+          return "super_admin_exists";
+        }
+        return "already_active";
+      }
+      throw error;
+    }
+  }
+
+  async revokeStaffRole(
+    userId: string,
+    roleKey: StaffRoleKey,
+    revokedBy: string,
+  ): Promise<"revoked" | "not_found" | "last_super_admin"> {
+    return this.connection.transaction(() => {
+      const assignment = this.connection
+        .prepare(
+          `SELECT assignment_id FROM staff_role_assignment
+           WHERE user_id = ? AND role_key = ? AND revoked_at IS NULL`,
+        )
+        .get(userId, roleKey) as { assignment_id: string } | undefined;
+      if (!assignment) return "not_found";
+      const superAdminCount = this.connection
+        .prepare(
+          `SELECT COUNT(*) AS count FROM staff_role_assignment
+           WHERE role_key = 'super_admin' AND revoked_at IS NULL`,
+        )
+        .get() as { count: number };
+      if (roleKey === "super_admin" && superAdminCount.count === 1) {
+        return "last_super_admin";
+      }
+      const revokedAt = new Date().toISOString();
+      this.connection
+        .prepare(
+          `UPDATE staff_role_assignment SET revoked_at = ?
+           WHERE assignment_id = ? AND revoked_at IS NULL`,
+        )
+        .run(revokedAt, assignment.assignment_id);
+      this.connection
+        .prepare(
+          `INSERT INTO staff_role_audit_event
+            (event_id, actor_user_id, event_type, assignment_id, occurred_at)
+           VALUES (?, ?, 'staff_role_revoked', ?, ?)`,
+        )
+        .run(randomUUID(), revokedBy, assignment.assignment_id, revokedAt);
+      return "revoked";
+    })();
   }
 
   private groupCustomers(rows: CustomerRow[]): CustomerCompanyRecord[] {
@@ -450,4 +578,5 @@ type QuoteDraftRevisionRow = {
   revision_number: number;
   content: string;
   created_at: string;
+  saved_by_user_id: string | null;
 };

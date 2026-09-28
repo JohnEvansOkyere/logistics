@@ -1,5 +1,5 @@
 import { Controller, Get, Inject, Post, Req, UseGuards } from "@nestjs/common";
-import { SupabaseIdentityGuard, SuperAdminGuard } from "./auth.guards";
+import { SupabaseIdentityGuard } from "./auth.guards";
 import type { AuthenticatedRequest } from "./auth.guards";
 import { AuthService } from "./auth.service";
 
@@ -19,7 +19,7 @@ export class AuthController {
   }
 
   @Get("session")
-  @UseGuards(SupabaseIdentityGuard, SuperAdminGuard)
+  @UseGuards(SupabaseIdentityGuard)
   getSession(@Req() request: AuthenticatedRequest) {
     return this.auth.getSession(request.authUser!);
   }

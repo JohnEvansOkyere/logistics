@@ -1,0 +1,321 @@
+.page {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: 38px clamp(20px, 4vw, 54px) 56px;
+}
+.heading,
+.directoryHeading,
+.userHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.heading {
+  margin-bottom: 24px;
+}
+.heading h1 {
+  margin: 4px 0 8px;
+  color: #17324d;
+  font-size: clamp(1.7rem, 3vw, 2.2rem);
+  letter-spacing: -0.035em;
+}
+.heading p:not(.eyebrow) {
+  margin: 0;
+  color: #62788a;
+  font-size: 0.9rem;
+}
+.eyebrow {
+  margin: 0;
+  color: #6b8295;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+.count,
+.directoryHeading > span {
+  color: #63798b;
+  font-size: 0.74rem;
+}
+.invitePanel,
+.directory {
+  border: 1px solid #d7e3ed;
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 5px 18px #183c5d08;
+}
+.invitePanel {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.75fr) 1.25fr;
+  gap: 28px;
+  align-items: center;
+  padding: 24px;
+}
+.invitePanel h2,
+.directoryHeading h2 {
+  margin: 5px 0 7px;
+  color: #17324d;
+  font-size: 1.1rem;
+}
+.invitePanel p:not(.eyebrow) {
+  margin: 0;
+  color: #6b8091;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+.inviteForm {
+  display: grid;
+  grid-template-columns:
+    minmax(160px, 1fr) minmax(180px, 1fr) minmax(190px, 0.8fr)
+    auto;
+  align-items: end;
+  gap: 12px;
+}
+.inviteForm label,
+.addRole label {
+  display: grid;
+  gap: 6px;
+  color: #4c6478;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.inviteForm input,
+.inviteForm select,
+.addRole select,
+.passwordForm input {
+  min-width: 0;
+  height: 40px;
+  border: 1px solid #cad9e4;
+  border-radius: 7px;
+  background: white;
+  color: #18334c;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 0.78rem;
+}
+.inviteForm button,
+.addRole button,
+.pagination button,
+.passwordForm button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 7px;
+  background: #0b3fae;
+  color: white;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.inviteForm button:disabled,
+.pagination button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.directory {
+  margin-top: 22px;
+  padding: 23px;
+}
+.directoryHeading {
+  margin-bottom: 17px;
+}
+.userList {
+  display: grid;
+  gap: 12px;
+}
+.userCard {
+  border: 1px solid #dce6ed;
+  border-radius: 9px;
+  padding: 17px;
+}
+.userHeading {
+  align-items: flex-start;
+}
+.userHeading h3 {
+  overflow-wrap: anywhere;
+  margin: 0 0 5px;
+  color: #203b54;
+  font-size: 0.9rem;
+}
+.userHeading p {
+  margin: 0;
+  color: #7a8d9d;
+  font-size: 0.69rem;
+}
+.activeBadge,
+.inactiveBadge {
+  flex: 0 0 auto;
+  border-radius: 20px;
+  padding: 5px 9px;
+  font-size: 0.63rem;
+  font-weight: 700;
+}
+.activeBadge {
+  background: #e8f5ee;
+  color: #26734e;
+}
+.inactiveBadge {
+  background: #f1f4f6;
+  color: #657887;
+}
+.roleList {
+  margin-top: 13px;
+  border-top: 1px solid #edf1f4;
+}
+.roleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #edf1f4;
+  padding: 10px 0;
+  color: #344f67;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+.roleRow small {
+  display: block;
+  margin-top: 4px;
+  color: #8798a5;
+  font-size: 0.65rem;
+  font-weight: 400;
+}
+.revokeButton {
+  border: 1px solid #e1c7c7;
+  border-radius: 6px;
+  background: white;
+  color: #9d4141;
+  padding: 6px 9px;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.noRoles,
+.empty,
+.history p {
+  color: #788c9d;
+  font-size: 0.76rem;
+}
+.history {
+  margin-top: 13px;
+  color: #4e6578;
+  font-size: 0.7rem;
+}
+.history summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.accountWarning {
+  max-width: 680px;
+  color: #8c5a20;
+  line-height: 1.5;
+}
+.passwordForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 9px;
+  margin: 10px 0 13px;
+}
+.passwordForm label {
+  display: grid;
+  min-width: min(100%, 230px);
+  gap: 6px;
+  color: #4c6478;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.passwordForm input {
+  height: 35px;
+}
+.passwordForm button {
+  min-height: 35px;
+}
+.history ul {
+  display: grid;
+  gap: 6px;
+  padding-left: 20px;
+  line-height: 1.5;
+}
+.addRole {
+  display: flex;
+  align-items: end;
+  gap: 9px;
+  margin-top: 14px;
+}
+.addRole select {
+  height: 35px;
+}
+.addRole button {
+  min-height: 35px;
+  font-size: 0.69rem;
+}
+.pagination {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  color: #6b8091;
+  font-size: 0.7rem;
+}
+.pagination button {
+  min-height: 33px;
+  background: #f2f6fa;
+  color: #284760;
+}
+.error,
+.notice {
+  border-radius: 7px;
+  margin: 14px 0 0;
+  padding: 11px 13px;
+  font-size: 0.75rem;
+}
+.error {
+  background: #fff1f0;
+  color: #a3413b;
+}
+.notice {
+  background: #eef8f2;
+  color: #28724e;
+}
+
+@media (max-width: 850px) {
+  .invitePanel {
+    grid-template-columns: 1fr;
+  }
+  .inviteForm {
+    grid-template-columns: 1fr 1fr;
+  }
+  .inviteForm button {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 540px) {
+  .page {
+    padding: 25px 15px 36px;
+  }
+  .invitePanel,
+  .directory {
+    padding: 16px;
+  }
+  .inviteForm {
+    grid-template-columns: 1fr;
+  }
+  .inviteForm button {
+    grid-column: auto;
+  }
+  .heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .count {
+    align-self: flex-start;
+  }
+  .userHeading {
+    flex-direction: column;
+  }
+}

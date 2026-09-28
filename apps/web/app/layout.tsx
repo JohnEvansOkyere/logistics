@@ -3,9 +3,9 @@ import type { ReactNode } from "react";
 import "./styles.css";
 
 export const metadata: Metadata = {
-  title: "Operations workspace | BJH Logistics",
+  title: "Operations | BJH Logistics",
   description:
-    "Local frontend workspace for BJH Logistics. No operational records are loaded.",
+    "Manage customer records and quotation requests in the BJH Logistics staff workspace.",
 };
 
 export default function RootLayout({

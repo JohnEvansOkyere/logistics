@@ -97,6 +97,7 @@ export class QuoteRequestsService {
   async saveDraft(
     requestId: string,
     input: unknown,
+    savedBy: string,
   ): Promise<QuoteDraftRecord> {
     await this.requireAssociatedRequest(requestId);
     if (!input || typeof input !== "object" || Array.isArray(input)) {
@@ -117,6 +118,7 @@ export class QuoteRequestsService {
     return this.database.saveQuoteDraft(
       requestId,
       content.trim(),
+      savedBy,
       new Date().toISOString(),
     );
   }

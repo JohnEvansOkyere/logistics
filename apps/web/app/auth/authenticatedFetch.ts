@@ -11,7 +11,7 @@ export async function authenticatedFetch(
 
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session) {
-    throw new Error("Sign in with the super_admin account to continue");
+    throw new Error("Sign in with an assigned staff account to continue");
   }
 
   const headers = new Headers(init.headers);

@@ -2,7 +2,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT extensions.plan(61);
+SELECT extensions.plan(62);
 
 SELECT extensions.has_schema('app', 'private application schema exists');
 SELECT extensions.ok(
@@ -29,6 +29,12 @@ SELECT extensions.ok(
 -- All app-schema access below is transaction-local test access. Nothing here
 -- creates an application account or durable fixture record.
 GRANT USAGE ON SCHEMA app TO authenticated;
+
+-- A persistent local bootstrap admin may already hold the singleton role.
+-- The outer test transaction rolls this temporary revocation back at the end.
+UPDATE app.staff_role_assignment
+SET revoked_at = now()
+WHERE role_key = 'super_admin' AND revoked_at IS NULL;
 
 INSERT INTO auth.users (id, aud, role, email)
 VALUES
@@ -112,8 +118,23 @@ VALUES
 SET LOCAL ROLE authenticated;
 SET LOCAL request.jwt.claim.sub = '00000000-0000-4000-8000-000000000011';
 
+SELECT extensions.throws_ok(
+  $$INSERT INTO app.staff_role_assignment (user_id, role_key, assigned_by)
+    VALUES ('00000000-0000-4000-8000-000000000012', 'super_admin', '00000000-0000-4000-8000-000000000011')$$,
+  '23505',
+  NULL,
+  'A second active super_admin role is rejected by the database'
+);
+
 SELECT extensions.is(
-  (SELECT count(*) FROM app.staff_role_assignment),
+  (SELECT count(*) FROM app.staff_role_assignment
+   WHERE user_id IN (
+     '00000000-0000-4000-8000-000000000011',
+     '00000000-0000-4000-8000-000000000012',
+     '00000000-0000-4000-8000-000000000013',
+     '00000000-0000-4000-8000-000000000014',
+     '00000000-0000-4000-8000-000000000015'
+   )),
   5::bigint,
   'Kofi as super_admin can inspect all staff role assignments'
 );
@@ -134,7 +155,8 @@ SELECT extensions.is(
   'Kofi as oversight-only super_admin cannot edit workflow records'
 );
 SELECT extensions.is(
-  (SELECT count(*) FROM app.audit_event),
+  (SELECT count(*) FROM app.audit_event
+   WHERE actor_user_id = '00000000-0000-4000-8000-000000000011'),
   7::bigint,
   'Kofi as super_admin can review role and membership audit events'
 );
@@ -305,7 +327,12 @@ SELECT extensions.lives_ok(
     VALUES ('00000000-0000-4000-8000-000000000013', 'sea_export_rep', '00000000-0000-4000-8000-000000000011')$$,
   'Kofi can assign Yaw the new sea-export role'
 );
-SELECT extensions.is((SELECT count(*) FROM app.audit_event), 9::bigint, 'Kofi can review all role and membership audit events');
+SELECT extensions.is(
+  (SELECT count(*) FROM app.audit_event
+   WHERE actor_user_id = '00000000-0000-4000-8000-000000000011'),
+  9::bigint,
+  'Kofi can review all role and membership audit events'
+);
 
 SET LOCAL request.jwt.claim.sub = '00000000-0000-4000-8000-000000000013';
 
@@ -336,7 +363,12 @@ WITH revoked AS (
   RETURNING membership_id
 )
 SELECT extensions.is((SELECT count(*) FROM revoked), 1::bigint, 'Kofi can revoke a customer-company membership');
-SELECT extensions.is((SELECT count(*) FROM app.audit_event), 10::bigint, 'membership revocation is written to the audit log');
+SELECT extensions.is(
+  (SELECT count(*) FROM app.audit_event
+   WHERE actor_user_id = '00000000-0000-4000-8000-000000000011'),
+  10::bigint,
+  'membership revocation is written to the audit log'
+);
 
 SET LOCAL request.jwt.claim.sub = '00000000-0000-4000-8000-000000000021';
 

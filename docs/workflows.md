@@ -4,7 +4,9 @@ These are proposed job templates derived from the two conversations, not hard-co
 
 ## Shared entry and states
 
-Quote request → quote draft/revision → issued → accepted/rejected/expired → job opened (or staff opens a directly instructed job). Generate a collision-safe file number on opening. Job summary: `open`, `in_progress`, `on_hold`, `ready_to_close`, `closed`, `cancelled`; reopening a closed job requires a recorded reason and permission. Each job has exactly one primary service/direction/mode, but can contain multiple containers and related transport legs. Job number format and direct-job policy are [open decisions](decisions.md).
+Quote request → responsible department rep drafts/revises → super admin reviews/approves → issued → accepted/rejected/expired → job opened (or staff opens a directly instructed job). Acceptance is recorded against the specific quote version with actor and timestamp; no separate evidence attachment is required. Do not import historic records. Generate a collision-safe file number on opening. Job summary: `open`, `in_progress`, `on_hold`, `ready_to_close`, `closed`, `cancelled`; reopening a closed job requires a recorded reason and permission. Each job has exactly one primary service/direction/mode, but can contain multiple containers and related transport legs. Job number format and direct-job policy are [open decisions](decisions.md).
+
+Authorized BJH users configure legal issuer status, tax and related finance settings; the app must not assume or hard-code those values. The quote draft/revision slice does not issue quotes, approve them or create jobs.
 
 ## Sea import
 

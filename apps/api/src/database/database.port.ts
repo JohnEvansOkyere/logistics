@@ -22,6 +22,7 @@ export interface QuoteDraftRevisionRecord {
   revisionNumber: number;
   content: string;
   createdAt: string;
+  savedBy: string | null;
 }
 
 export interface QuoteDraftRecord {
@@ -54,6 +55,15 @@ export type StaffRoleKey =
   | "sea_import_rep"
   | "sea_export_rep";
 
+export interface StaffRoleAssignmentRecord {
+  id: string;
+  userId: string;
+  roleKey: StaffRoleKey;
+  assignedBy: string;
+  assignedAt: string;
+  revokedAt: string | null;
+}
+
 export abstract class DatabasePort {
   abstract healthCheck(): Promise<DatabaseHealth>;
   abstract createQuoteRequest(
@@ -71,6 +81,7 @@ export abstract class DatabasePort {
   abstract saveQuoteDraft(
     requestId: string,
     content: string,
+    savedBy: string,
     savedAt: string,
   ): Promise<QuoteDraftRecord>;
   abstract createCustomer(
@@ -81,4 +92,17 @@ export abstract class DatabasePort {
   abstract hasActiveSuperAdmin(): Promise<boolean>;
   abstract claimInitialSuperAdmin(userId: string): Promise<boolean>;
   abstract getActiveStaffRoles(userId: string): Promise<StaffRoleKey[]>;
+  abstract listStaffRoleAssignments(): Promise<StaffRoleAssignmentRecord[]>;
+  abstract assignStaffRole(
+    userId: string,
+    roleKey: StaffRoleKey,
+    assignedBy: string,
+  ): Promise<
+    StaffRoleAssignmentRecord | "super_admin_exists" | "already_active"
+  >;
+  abstract revokeStaffRole(
+    userId: string,
+    roleKey: StaffRoleKey,
+    revokedBy: string,
+  ): Promise<"revoked" | "not_found" | "last_super_admin">;
 }

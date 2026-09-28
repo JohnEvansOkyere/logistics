@@ -18,6 +18,7 @@ export type QuoteDraftRevision = {
   revisionNumber: number;
   content: string;
   createdAt: string;
+  savedBy: string | null;
 };
 
 export type QuoteDraft = {

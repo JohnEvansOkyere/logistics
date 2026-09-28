@@ -8,9 +8,11 @@ import {
   Post,
   Put,
   Query,
+  Req,
   UseGuards,
 } from "@nestjs/common";
 import { SupabaseIdentityGuard, SuperAdminGuard } from "../auth/auth.guards";
+import type { AuthenticatedRequest } from "../auth/auth.guards";
 import { QuoteRequestsService } from "./quote-requests.service";
 
 @Controller("api/v1/quote-requests")
@@ -42,8 +44,12 @@ export class QuoteRequestsController {
   }
 
   @Put(":id/draft")
-  saveDraft(@Param("id") id: string, @Body() body: unknown) {
-    return this.requests.saveDraft(id, body);
+  saveDraft(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.requests.saveDraft(id, body, request.authUser!.userId);
   }
 
   @Patch(":id/customer")

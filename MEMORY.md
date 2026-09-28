@@ -43,3 +43,63 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **What was decided:** The local draft slice stores one editable plain-text body per explicitly customer-associated quote request. Each save appends an immutable numbered content snapshot; request and customer history expose revision count and latest save time. Drafts cannot be read or saved before explicit association.
 **Why:** This provides editable, traceable local work while D03 and D06 still govern approved pricing, tax, terms, numbering, and issued-document structure.
 **What was rejected:** Inventing structured rates, currency/tax fields, legal terms, quote issuance or acceptance, or job creation in this slice.
+
+## 2026-09-28, Supabase-first local integration and confirmed D03/D06/D12
+
+**What was decided:** Use the local Supabase stack for Auth and business persistence during development, with a scripted start/migrate/app launch and a data-preserving stop command. D03 settings are configurable by authorized BJH users without legal/tax assumptions; department reps prepare operational records and documents for super-admin approval (D06); quote acceptance applies to the identified quote version and records actor/time, with no separate evidence attachment or historic import (D12).
+**Why:** The user wants production-directed builds to exercise Supabase earlier and explicitly answered these discovery decisions.
+**What was rejected:** Switching this testing slice to a hosted Supabase project, resetting or clearing local data during development, reopening answered D03/D06/D12 questions, or adding quote issuance/job creation to the draft slice.
+
+## 2026-09-28, Operations-first dashboard presentation
+
+**What was decided:** Present the home screen around customer and quotation tasks, with a concise request-to-draft handoff and honest local-environment labeling. Do not show invented workload metrics or unfinished jobs as active modules.
+**Why:** The user said the dashboard looked too much like a demo platform; task-first navigation better reflects current usable workflows without overstating implementation.
+**What was rejected:** Sample-data cards, fake counts, and an unfinished Jobs destination in primary navigation.
+
+## 2026-09-28, Dashboard brand colors
+
+**What was decided:** Use the documented BJH deep blue (`#0B3FAE`) and light blue (`#5C9FD6`) palette for the dashboard, with neutral surfaces and green reserved for connection status.
+**Why:** The user asked for the dashboard colors to match the logo; the brand guide records these approximate logo colors.
+**What was rejected:** The green-led dashboard palette.
+
+## 2026-09-28, Local pgTAP fixture isolation
+
+**What was decided:** Scope role and audit-event count assertions to the synthetic identities created by the test transaction so the access suite also passes against a persistent local database.
+**Why:** The local database can contain a durable super-admin role and audit history; whole-table counts incorrectly treated those legitimate rows as test failures.
+**What was rejected:** Resetting the local database before tests or counting unrelated durable rows as part of the fixture.
+
+## 2026-09-28, Local web development port
+
+**What was decided:** Run the local web app on port 3002, keep the API on 3001, and provide a web-only Supabase dev command for cases where the API is already running.
+**Why:** Port 3000 was occupied by an existing web dev process, while the local API was already serving on 3001.
+**What was rejected:** Replacing or terminating the existing port-3000 process to start another copy.
+
+## 2026-09-28, D04 staff administration slice
+
+**What was decided:** Put staff Auth administration behind super-admin-guarded Nest endpoints. Keep Supabase service-role credentials in the API process only; invite accounts into a password-setup route; preserve role assignment/revocation history; and enforce the single active `super_admin` invariant in PostgreSQL.
+**Why:** The confirmed D04 workflow says the super admin creates accounts and assigns roles, while browser code must not hold privileged credentials and local tests must not send real invitations.
+**What was rejected:** Calling Supabase Auth Admin from the browser, testing by sending client invitations, allowing super-admin role reassignment through the staff form, or replacing immutable role history with in-place edits.
+
+## 2026-09-28, Persistent local singleton test fixture
+
+**What was decided:** Before inserting pgTAP's synthetic super-admin, temporarily revoke the already-persisted local singleton inside the test's outer transaction; the final rollback restores it. Keep the database-level duplicate-role assertion and retain the no-reset local test workflow.
+**Why:** The new partial unique index correctly rejected the test's fixed synthetic super-admin when a durable local admin already existed. The suite must validate the invariant against persistent local data without clearing that data.
+**What was rejected:** Removing the singleton invariant, resetting the local database, or weakening the test to avoid exercising the unique constraint.
+
+## 2026-09-28, Sidebar settings grouping
+
+**What was decided:** Keep system status under a SETTINGS sidebar group, below the main workspace navigation, and share that group between the overview and staff-access screens. Do not add links for settings workflows that do not exist yet.
+**Why:** The user wants settings grouped together in the lower sidebar area, and System status is the only available settings-related destination today.
+**What was rejected:** Leaving System status in the top bar or linking to placeholder settings features.
+
+## 2026-09-28, Settings hub clarification
+
+**What was decided:** Treat Settings as a hub in the lower sidebar, with distinct pages for Staff management and System status. Move staff management to `/settings/staff` and redirect the former `/admin/users` path there.
+**Why:** The user clarified that Settings will contain multiple settings pages and specifically includes staff management; a label grouping System status alone did not meet the requested navigation model.
+**What was rejected:** A Settings heading that links directly to System status while staff administration stays in the workspace navigation.
+
+## 2026-09-28, Super-admin account lifecycle
+
+**What was decided:** The super admin directly creates staff accounts, chooses their initial passwords, and manually provides sign-in details. Staff administration supports password replacement and reversible suspension/reactivation; it does not send invitations. Reusing an account keeps all activity attributed to that account, not the person using it.
+**Why:** The user specified administrator-managed account creation and control rather than invitation-based onboarding.
+**What was rejected:** Requiring invitees to accept an email and set up their own account.
