@@ -25,3 +25,9 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **What was decided:** Model customer companies and contacts separately in local SQLite; create a company with its initial contact; search across company name, contact name and email. Same-name company submissions create distinct records rather than auto-merging.
 **Why:** This supports P01 while avoiding silent merging without an agreed duplicate-resolution rule.
 **What was rejected:** Automatic company matching/merging during intake.
+
+## 2026-09-28, Quote request company association
+
+**What was decided:** Staff explicitly links a quote request to a customer company from the request detail view; the company profile then shows its linked requests.
+**Why:** This connects P01 and P02 without inferring that a request and customer are the same solely because their names match.
+**What was rejected:** Automatic request-to-customer matching by company-name text.

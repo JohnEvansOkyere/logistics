@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Inject, Param, Post } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from "@nestjs/common";
 import { QuoteRequestsService } from "./quote-requests.service";
 
 @Controller("api/v1/quote-requests")
@@ -14,12 +23,17 @@ export class QuoteRequestsController {
   }
 
   @Get()
-  list() {
-    return this.requests.list();
+  list(@Query("customerCompanyId") customerCompanyId?: string) {
+    return this.requests.list(customerCompanyId);
   }
 
   @Get(":id")
   get(@Param("id") id: string) {
     return this.requests.get(id);
+  }
+
+  @Patch(":id/customer")
+  associateCustomer(@Param("id") id: string, @Body() body: unknown) {
+    return this.requests.associateCustomer(id, body);
   }
 }

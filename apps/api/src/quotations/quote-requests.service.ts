@@ -7,7 +7,10 @@ import {
 import { randomUUID } from "node:crypto";
 import { DatabasePort, QuoteRequestRecord } from "../database/database.port";
 
-type QuoteRequestInput = Omit<QuoteRequestRecord, "id" | "createdAt">;
+type QuoteRequestInput = Omit<
+  QuoteRequestRecord,
+  "id" | "createdAt" | "customerCompanyId" | "customerCompanyName"
+>;
 
 @Injectable()
 export class QuoteRequestsService {
@@ -20,11 +23,20 @@ export class QuoteRequestsService {
       id: randomUUID(),
       ...details,
       createdAt: new Date().toISOString(),
+      customerCompanyId: null,
+      customerCompanyName: null,
     });
   }
 
-  list(): Promise<QuoteRequestRecord[]> {
-    return this.database.listQuoteRequests();
+  list(customerCompanyId?: unknown): Promise<QuoteRequestRecord[]> {
+    if (
+      customerCompanyId !== undefined &&
+      typeof customerCompanyId !== "string"
+    ) {
+      throw new BadRequestException("customerCompanyId must be a string");
+    }
+
+    return this.database.listQuoteRequests(customerCompanyId);
   }
 
   async get(id: string): Promise<QuoteRequestRecord> {
@@ -32,6 +44,36 @@ export class QuoteRequestsService {
     if (!request) {
       throw new NotFoundException("Quote request was not found");
     }
+    return request;
+  }
+
+  async associateCustomer(
+    requestId: string,
+    input: unknown,
+  ): Promise<QuoteRequestRecord> {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      throw new BadRequestException("A customer company ID is required");
+    }
+
+    const customerCompanyId = (input as Record<string, unknown>)
+      .customerCompanyId;
+    if (typeof customerCompanyId !== "string" || !customerCompanyId.trim()) {
+      throw new BadRequestException("customerCompanyId is required");
+    }
+
+    const customer = await this.database.findCustomer(customerCompanyId);
+    if (!customer) {
+      throw new NotFoundException("Customer company was not found");
+    }
+
+    const request = await this.database.linkQuoteRequestToCustomer(
+      requestId,
+      customer.id,
+    );
+    if (!request) {
+      throw new NotFoundException("Quote request was not found");
+    }
+
     return request;
   }
 

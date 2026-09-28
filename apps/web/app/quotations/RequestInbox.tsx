@@ -142,7 +142,11 @@ export function RequestInbox() {
                       Q
                     </span>
                     <span className={styles.requestMain}>
-                      <span className={styles.requestTag}>Quote request</span>
+                      <span className={styles.requestTag}>
+                        {request.customerCompanyName
+                          ? `Linked · ${request.customerCompanyName}`
+                          : "Unlinked request"}
+                      </span>
                       <strong>{request.companyName}</strong>
                       <span className={styles.messagePreview}>
                         {request.message}

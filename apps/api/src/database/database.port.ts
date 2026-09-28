@@ -11,6 +11,8 @@ export interface QuoteRequestRecord {
   email: string;
   message: string;
   createdAt: string;
+  customerCompanyId: string | null;
+  customerCompanyName: string | null;
 }
 
 export interface CustomerContactRecord {
@@ -32,8 +34,14 @@ export abstract class DatabasePort {
   abstract createQuoteRequest(
     request: QuoteRequestRecord,
   ): Promise<QuoteRequestRecord>;
-  abstract listQuoteRequests(): Promise<QuoteRequestRecord[]>;
+  abstract listQuoteRequests(
+    customerCompanyId?: string,
+  ): Promise<QuoteRequestRecord[]>;
   abstract findQuoteRequest(id: string): Promise<QuoteRequestRecord | null>;
+  abstract linkQuoteRequestToCustomer(
+    requestId: string,
+    customerCompanyId: string,
+  ): Promise<QuoteRequestRecord | null>;
   abstract createCustomer(
     customer: CustomerCompanyRecord,
   ): Promise<CustomerCompanyRecord>;

@@ -5,9 +5,14 @@ export type QuoteRequest = {
   email: string;
   message: string;
   createdAt: string;
+  customerCompanyId: string | null;
+  customerCompanyName: string | null;
 };
 
-export type NewQuoteRequest = Omit<QuoteRequest, "id" | "createdAt">;
+export type NewQuoteRequest = Omit<
+  QuoteRequest,
+  "id" | "createdAt" | "customerCompanyId" | "customerCompanyName"
+>;
 
 const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:3001/api";
@@ -27,8 +32,17 @@ async function readResponse<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
 
-export async function listQuoteRequests(): Promise<QuoteRequest[]> {
-  return readResponse<QuoteRequest[]>(await fetch(quoteRequestsUrl));
+export async function listQuoteRequests(
+  customerCompanyId?: string,
+): Promise<QuoteRequest[]> {
+  const query = new URLSearchParams();
+  if (customerCompanyId) {
+    query.set("customerCompanyId", customerCompanyId);
+  }
+  const queryString = query.size > 0 ? `?${query}` : "";
+  return readResponse<QuoteRequest[]>(
+    await fetch(`${quoteRequestsUrl}${queryString}`),
+  );
 }
 
 export async function getQuoteRequest(id: string): Promise<QuoteRequest> {
@@ -46,5 +60,21 @@ export async function createQuoteRequest(
       headers: { "content-type": "application/json" },
       body: JSON.stringify(request),
     }),
+  );
+}
+
+export async function associateQuoteRequestCustomer(
+  requestId: string,
+  customerCompanyId: string,
+): Promise<QuoteRequest> {
+  return readResponse<QuoteRequest>(
+    await fetch(
+      `${quoteRequestsUrl}/${encodeURIComponent(requestId)}/customer`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ customerCompanyId }),
+      },
+    ),
   );
 }

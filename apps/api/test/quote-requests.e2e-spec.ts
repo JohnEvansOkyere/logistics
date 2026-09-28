@@ -156,3 +156,89 @@ test("unknown quote request IDs return not found", async () => {
 
   assert.equal(response.status, 404);
 });
+
+test("staff can explicitly link requests to customers and view request history", async () => {
+  const customerResponse = await fetch(`${baseUrl}/api/v1/customers`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      companyName: "Linked Demo Ltd",
+      contactName: "Morgan Demo",
+      email: "morgan@example.test",
+    }),
+  });
+  const customer = (await customerResponse.json()) as { id: string };
+
+  const requestResponse = await fetch(`${baseUrl}/api/v1/quote-requests`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      companyName: "Linked Demo Ltd",
+      contactName: "Morgan Demo",
+      email: "morgan@example.test",
+      message: "Synthetic linked request",
+    }),
+  });
+  const request = (await requestResponse.json()) as { id: string };
+
+  const linkResponse = await fetch(
+    `${baseUrl}/api/v1/quote-requests/${request.id}/customer`,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ customerCompanyId: customer.id }),
+    },
+  );
+  assert.equal(linkResponse.status, 200);
+  const linked = (await linkResponse.json()) as {
+    customerCompanyId: string | null;
+    customerCompanyName: string | null;
+  };
+  assert.equal(linked.customerCompanyId, customer.id);
+  assert.equal(linked.customerCompanyName, "Linked Demo Ltd");
+
+  await application.close();
+  await startApplication();
+
+  const persistedResponse = await fetch(
+    `${baseUrl}/api/v1/quote-requests/${request.id}`,
+  );
+  const persisted = (await persistedResponse.json()) as {
+    customerCompanyId: string | null;
+  };
+  assert.equal(persisted.customerCompanyId, customer.id);
+
+  const historyResponse = await fetch(
+    `${baseUrl}/api/v1/quote-requests?customerCompanyId=${customer.id}`,
+  );
+  assert.equal(historyResponse.status, 200);
+  assert.deepEqual(
+    (await historyResponse.json()).map((entry: { id: string }) => entry.id),
+    [request.id],
+  );
+});
+
+test("request association rejects unknown customer companies", async () => {
+  const requestResponse = await fetch(`${baseUrl}/api/v1/quote-requests`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      companyName: "Unlinked Demo Ltd",
+      contactName: "Jordan Demo",
+      email: "jordan@example.test",
+      message: "Synthetic request",
+    }),
+  });
+  const request = (await requestResponse.json()) as { id: string };
+
+  const linkResponse = await fetch(
+    `${baseUrl}/api/v1/quote-requests/${request.id}/customer`,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ customerCompanyId: "missing-company" }),
+    },
+  );
+
+  assert.equal(linkResponse.status, 404);
+});

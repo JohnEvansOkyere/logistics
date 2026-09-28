@@ -69,21 +69,30 @@ export class SqliteDatabaseService
     return request;
   }
 
-  async listQuoteRequests(): Promise<QuoteRequestRecord[]> {
+  async listQuoteRequests(
+    customerCompanyId?: string,
+  ): Promise<QuoteRequestRecord[]> {
     const rows = this.connection
       .prepare(
-        `SELECT id, company_name, contact_name, email, message, created_at
-         FROM quote_request
-         ORDER BY created_at DESC, id DESC`,
+        `SELECT
+           request.id,
+           request.company_name,
+           request.contact_name,
+           request.email,
+           request.message,
+           request.created_at,
+           request.customer_company_id,
+           company.company_name AS customer_company_name
+         FROM quote_request AS request
+         LEFT JOIN customer_company AS company
+           ON company.id = request.customer_company_id
+         WHERE @customerCompanyId IS NULL
+           OR request.customer_company_id = @customerCompanyId
+         ORDER BY request.created_at DESC, request.id DESC`,
       )
-      .all() as Array<{
-      id: string;
-      company_name: string;
-      contact_name: string;
-      email: string;
-      message: string;
-      created_at: string;
-    }>;
+      .all({
+        customerCompanyId: customerCompanyId ?? null,
+      }) as QuoteRequestRow[];
 
     return rows.map((row) => this.toQuoteRequest(row));
   }
@@ -91,22 +100,34 @@ export class SqliteDatabaseService
   async findQuoteRequest(id: string): Promise<QuoteRequestRecord | null> {
     const row = this.connection
       .prepare(
-        `SELECT id, company_name, contact_name, email, message, created_at
-         FROM quote_request
-         WHERE id = ?`,
+        `SELECT
+           request.id,
+           request.company_name,
+           request.contact_name,
+           request.email,
+           request.message,
+           request.created_at,
+           request.customer_company_id,
+           company.company_name AS customer_company_name
+         FROM quote_request AS request
+         LEFT JOIN customer_company AS company
+           ON company.id = request.customer_company_id
+         WHERE request.id = ?`,
       )
-      .get(id) as
-      | {
-          id: string;
-          company_name: string;
-          contact_name: string;
-          email: string;
-          message: string;
-          created_at: string;
-        }
-      | undefined;
+      .get(id) as QuoteRequestRow | undefined;
 
     return row ? this.toQuoteRequest(row) : null;
+  }
+
+  async linkQuoteRequestToCustomer(
+    requestId: string,
+    customerCompanyId: string,
+  ): Promise<QuoteRequestRecord | null> {
+    const result = this.connection
+      .prepare("UPDATE quote_request SET customer_company_id = ? WHERE id = ?")
+      .run(customerCompanyId, requestId);
+
+    return result.changes === 0 ? null : this.findQuoteRequest(requestId);
   }
 
   async createCustomer(
@@ -228,6 +249,8 @@ export class SqliteDatabaseService
     email: string;
     message: string;
     created_at: string;
+    customer_company_id: string | null;
+    customer_company_name: string | null;
   }): QuoteRequestRecord {
     return {
       id: row.id,
@@ -236,6 +259,8 @@ export class SqliteDatabaseService
       email: row.email,
       message: row.message,
       createdAt: row.created_at,
+      customerCompanyId: row.customer_company_id,
+      customerCompanyName: row.customer_company_name,
     };
   }
 
@@ -252,4 +277,15 @@ type CustomerRow = {
   contact_name: string | null;
   contact_email: string | null;
   contact_created_at: string | null;
+};
+
+type QuoteRequestRow = {
+  id: string;
+  company_name: string;
+  contact_name: string;
+  email: string;
+  message: string;
+  created_at: string;
+  customer_company_id: string | null;
+  customer_company_name: string | null;
 };

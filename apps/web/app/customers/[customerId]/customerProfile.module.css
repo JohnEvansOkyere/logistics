@@ -199,6 +199,24 @@
   line-height: 1.55;
 }
 
+.historyList {
+  display: grid;
+  gap: 9px;
+  margin: 20px 0 0;
+  padding-left: 18px;
+  color: #536b7e;
+  font-size: 0.75rem;
+}
+
+.historyLink {
+  color: var(--brand-primary);
+  text-decoration: none;
+}
+
+.historyLink:hover {
+  text-decoration: underline;
+}
+
 a:focus-visible {
   outline: 3px solid var(--brand-secondary);
   outline-offset: 3px;

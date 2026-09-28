@@ -39,13 +39,24 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
     );
   }
 
-  async listQuoteRequests(): Promise<QuoteRequestRecord[]> {
+  async listQuoteRequests(
+    _customerCompanyId?: string,
+  ): Promise<QuoteRequestRecord[]> {
     throw new ServiceUnavailableException(
       "PostgreSQL business persistence is not configured",
     );
   }
 
   async findQuoteRequest(_id: string): Promise<QuoteRequestRecord | null> {
+    throw new ServiceUnavailableException(
+      "PostgreSQL business persistence is not configured",
+    );
+  }
+
+  async linkQuoteRequestToCustomer(
+    _requestId: string,
+    _customerCompanyId: string,
+  ): Promise<QuoteRequestRecord | null> {
     throw new ServiceUnavailableException(
       "PostgreSQL business persistence is not configured",
     );

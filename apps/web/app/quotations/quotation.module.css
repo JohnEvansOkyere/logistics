@@ -444,6 +444,58 @@
   line-height: 1.6;
 }
 
+.customerLinkPanel {
+  margin: 0 20px 20px;
+  border-top: 1px solid #e5ebf0;
+  padding: 16px 0 0;
+}
+
+.customerLinkPanel h3 {
+  margin: 0;
+  color: #354e63;
+  font-size: 0.76rem;
+}
+
+.customerLinkPanel p {
+  margin: 8px 0 0;
+  color: #536b7e;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.customerLinkActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.customerLinkActions label {
+  color: #536b7e;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.customerLinkActions select {
+  min-width: 180px;
+  border: 1px solid #bdccd9;
+  border-radius: 6px;
+  background: #fff;
+  color: #29445d;
+  padding: 8px 9px;
+  font: inherit;
+  font-size: 0.72rem;
+}
+
+.customerLinkActions button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.customerLinkError {
+  color: #a94d3d !important;
+}
+
 .notIssued {
   margin-top: 18px;
   border-left: 3px solid #d5a456;
@@ -778,6 +830,10 @@ input:focus-visible {
   }
 
   .messagePanel {
+    margin: 0 16px 16px;
+  }
+
+  .customerLinkPanel {
     margin: 0 16px 16px;
   }
 
