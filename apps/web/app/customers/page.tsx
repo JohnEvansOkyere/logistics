@@ -1,11 +1,10 @@
 import Link from "next/link";
 import { CustomerDirectory } from "./CustomerDirectory";
 import styles from "./customerDirectory.module.css";
-import { sampleCustomers } from "./sampleCustomers";
 
 export const metadata = {
   title: "Customer directory | BJH Logistics",
-  description: "Synthetic customer directory prototype for local UI review.",
+  description: "Local customer company and contact directory.",
 };
 
 export default function CustomersPage() {
@@ -17,7 +16,7 @@ export default function CustomersPage() {
 
       <header className={styles.header}>
         <div>
-          <p className={styles.eyebrow}>STAFF WORKSPACE · UI PROTOTYPE</p>
+          <p className={styles.eyebrow}>STAFF WORKSPACE · LOCAL ENGINE</p>
           <h1 className={styles.title}>Customer directory</h1>
           <p className={styles.description}>
             Search customer profiles and contact details in the staff directory.
@@ -26,18 +25,18 @@ export default function CustomersPage() {
         <span className={styles.localBadge}>LOCAL DEVELOPMENT</span>
       </header>
 
-      <aside className={styles.sampleNotice} aria-label="Sample data notice">
+      <aside className={styles.sampleNotice} aria-label="Local development notice">
         <span className={styles.noticeMark} aria-hidden="true">
           !
         </span>
         <p>
-          <strong>Synthetic sample data only.</strong> These fictional records
-          are for interface review. No client data, API, or Supabase connection
-          is used.
+          <strong>Local development only.</strong> The directory uses local
+          SQLite. Use synthetic details; authentication and company access
+          enforcement are not part of this slice.
         </p>
       </aside>
 
-      <CustomerDirectory customers={sampleCustomers} />
+      <CustomerDirectory />
     </main>
   );
 }
