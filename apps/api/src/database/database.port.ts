@@ -48,6 +48,15 @@ export interface CustomerCompanyRecord {
   contacts: CustomerContactRecord[];
 }
 
+export interface CustomerMembershipRecord {
+  id: string;
+  companyId: string;
+  userId: string;
+  grantedBy: string;
+  grantedAt: string;
+  revokedAt: string | null;
+}
+
 export type StaffRoleKey =
   | "super_admin"
   | "air_import_rep"
@@ -71,8 +80,12 @@ export abstract class DatabasePort {
   ): Promise<QuoteRequestRecord>;
   abstract listQuoteRequests(
     customerCompanyId?: string,
+    allowedCompanyIds?: string[],
   ): Promise<QuoteRequestRecord[]>;
-  abstract findQuoteRequest(id: string): Promise<QuoteRequestRecord | null>;
+  abstract findQuoteRequest(
+    id: string,
+    allowedCompanyIds?: string[],
+  ): Promise<QuoteRequestRecord | null>;
   abstract linkQuoteRequestToCustomer(
     requestId: string,
     customerCompanyId: string,
@@ -87,8 +100,28 @@ export abstract class DatabasePort {
   abstract createCustomer(
     customer: CustomerCompanyRecord,
   ): Promise<CustomerCompanyRecord>;
-  abstract listCustomers(search: string): Promise<CustomerCompanyRecord[]>;
-  abstract findCustomer(id: string): Promise<CustomerCompanyRecord | null>;
+  abstract listCustomers(
+    search: string,
+    companyIds?: string[],
+  ): Promise<CustomerCompanyRecord[]>;
+  abstract findCustomer(
+    id: string,
+    companyIds?: string[],
+  ): Promise<CustomerCompanyRecord | null>;
+  abstract getActiveCustomerCompanyIds(userId: string): Promise<string[]>;
+  abstract listCustomerMemberships(
+    userId: string,
+  ): Promise<CustomerMembershipRecord[]>;
+  abstract grantCustomerMembership(
+    companyId: string,
+    userId: string,
+    grantedBy: string,
+  ): Promise<CustomerMembershipRecord | "already_active">;
+  abstract revokeCustomerMembership(
+    companyId: string,
+    userId: string,
+    revokedBy: string,
+  ): Promise<boolean>;
   abstract hasActiveSuperAdmin(): Promise<boolean>;
   abstract claimInitialSuperAdmin(userId: string): Promise<boolean>;
   abstract getActiveStaffRoles(userId: string): Promise<StaffRoleKey[]>;

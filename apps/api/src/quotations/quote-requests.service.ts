@@ -40,7 +40,10 @@ export class QuoteRequestsService {
     });
   }
 
-  list(customerCompanyId?: unknown): Promise<QuoteRequestRecord[]> {
+  list(
+    customerCompanyId?: unknown,
+    allowedCompanyIds?: string[],
+  ): Promise<QuoteRequestRecord[]> {
     if (
       customerCompanyId !== undefined &&
       typeof customerCompanyId !== "string"
@@ -48,11 +51,17 @@ export class QuoteRequestsService {
       throw new BadRequestException("customerCompanyId must be a string");
     }
 
-    return this.database.listQuoteRequests(customerCompanyId);
+    return this.database.listQuoteRequests(
+      customerCompanyId,
+      allowedCompanyIds,
+    );
   }
 
-  async get(id: string): Promise<QuoteRequestRecord> {
-    const request = await this.database.findQuoteRequest(id);
+  async get(
+    id: string,
+    allowedCompanyIds?: string[],
+  ): Promise<QuoteRequestRecord> {
+    const request = await this.database.findQuoteRequest(id, allowedCompanyIds);
     if (!request) {
       throw new NotFoundException("Quote request was not found");
     }
@@ -89,8 +98,11 @@ export class QuoteRequestsService {
     return request;
   }
 
-  async getDraft(requestId: string): Promise<QuoteDraftRecord | null> {
-    await this.requireAssociatedRequest(requestId);
+  async getDraft(
+    requestId: string,
+    allowedCompanyIds?: string[],
+  ): Promise<QuoteDraftRecord | null> {
+    await this.requireAssociatedRequest(requestId, allowedCompanyIds);
     return this.database.findQuoteDraft(requestId);
   }
 
@@ -125,8 +137,9 @@ export class QuoteRequestsService {
 
   private async requireAssociatedRequest(
     requestId: string,
+    allowedCompanyIds?: string[],
   ): Promise<QuoteRequestRecord> {
-    const request = await this.get(requestId);
+    const request = await this.get(requestId, allowedCompanyIds);
     if (!request.customerCompanyId) {
       throw new ConflictException(
         "Link the quote request to a customer company before drafting",

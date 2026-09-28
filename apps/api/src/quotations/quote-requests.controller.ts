@@ -11,12 +11,16 @@ import {
   Req,
   UseGuards,
 } from "@nestjs/common";
-import { SupabaseIdentityGuard, SuperAdminGuard } from "../auth/auth.guards";
+import {
+  CompanyScopeGuard,
+  SupabaseIdentityGuard,
+  SuperAdminGuard,
+} from "../auth/auth.guards";
 import type { AuthenticatedRequest } from "../auth/auth.guards";
 import { QuoteRequestsService } from "./quote-requests.service";
 
 @Controller("api/v1/quote-requests")
-@UseGuards(SupabaseIdentityGuard, SuperAdminGuard)
+@UseGuards(SupabaseIdentityGuard)
 export class QuoteRequestsController {
   constructor(
     @Inject(QuoteRequestsService)
@@ -24,26 +28,39 @@ export class QuoteRequestsController {
   ) {}
 
   @Post()
+  @UseGuards(SuperAdminGuard)
   create(@Body() body: unknown) {
     return this.requests.create(body);
   }
 
   @Get()
-  list(@Query("customerCompanyId") customerCompanyId?: string) {
-    return this.requests.list(customerCompanyId);
+  @UseGuards(CompanyScopeGuard)
+  list(
+    @Query("customerCompanyId") customerCompanyId: string | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.requests.list(customerCompanyId, request.allowedCompanyIds);
   }
 
   @Get(":id")
-  get(@Param("id") id: string) {
-    return this.requests.get(id);
+  @UseGuards(CompanyScopeGuard)
+  get(@Param("id") id: string, @Req() request: AuthenticatedRequest) {
+    return this.requests.get(id, request.allowedCompanyIds);
   }
 
   @Get(":id/draft")
-  async getDraft(@Param("id") id: string) {
-    return { draft: await this.requests.getDraft(id) };
+  @UseGuards(CompanyScopeGuard)
+  async getDraft(
+    @Param("id") id: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return {
+      draft: await this.requests.getDraft(id, request.allowedCompanyIds),
+    };
   }
 
   @Put(":id/draft")
+  @UseGuards(SuperAdminGuard)
   saveDraft(
     @Param("id") id: string,
     @Body() body: unknown,
@@ -53,6 +70,7 @@ export class QuoteRequestsController {
   }
 
   @Patch(":id/customer")
+  @UseGuards(SuperAdminGuard)
   associateCustomer(@Param("id") id: string, @Body() body: unknown) {
     return this.requests.associateCustomer(id, body);
   }

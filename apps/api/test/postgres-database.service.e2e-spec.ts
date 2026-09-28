@@ -217,6 +217,103 @@ test("Postgres staff-role revocation attributes the audit trigger to the actor",
   assert.ok(statements.some(({ query }) => query === "COMMIT"));
 });
 
+test("Postgres customer and quote queries apply company membership scopes", async () => {
+  const calls: Array<{ query: string; values?: unknown[] }> = [];
+  const pool: PostgresPool = {
+    async query(query, values) {
+      calls.push({ query, values });
+      return { rows: [] };
+    },
+    async connect() {
+      throw new Error("Connection transactions are not used in this test");
+    },
+    async end() {},
+  };
+  const database = new PostgresDatabaseService(pool);
+  const companyId = "50000000-0000-4000-8000-000000000010";
+
+  assert.deepEqual(await database.listCustomers("", [companyId]), []);
+  assert.deepEqual(
+    await database.listQuoteRequests(undefined, [companyId]),
+    [],
+  );
+  assert.ok(calls.every(({ query }) => query.includes("ANY($2::uuid[])")));
+  assert.deepEqual(
+    calls.map(({ values }) => values?.[1]),
+    [[companyId], [companyId]],
+  );
+});
+
+test("Postgres company-membership queries use active rows and revocation audit actor", async () => {
+  const membershipId = "50000000-0000-4000-8000-000000000020";
+  const companyId = "50000000-0000-4000-8000-000000000010";
+  const userId = "50000000-0000-4000-8000-000000000003";
+  const actorId = "50000000-0000-4000-8000-000000000001";
+  const statements: Array<{ query: string; values?: unknown[] }> = [];
+  const client = {
+    async query(query: string, values?: unknown[]) {
+      statements.push({ query, values });
+      return {
+        rows: [],
+        rowCount: query.startsWith("UPDATE app.customer_membership") ? 1 : 0,
+      };
+    },
+    release() {},
+  };
+  const pool: PostgresPool = {
+    async query(query, values) {
+      statements.push({ query, values });
+      if (query.includes("INSERT INTO app.customer_membership")) {
+        return {
+          rows: [
+            {
+              membership_id: membershipId,
+              company_id: companyId,
+              user_id: userId,
+              granted_by: actorId,
+              granted_at: new Date("2026-09-28T10:00:00.000Z"),
+              revoked_at: null,
+            },
+          ],
+        };
+      }
+      if (query.includes("SELECT company_id FROM app.customer_membership")) {
+        return { rows: [{ company_id: companyId }] };
+      }
+      return { rows: [] };
+    },
+    async connect() {
+      return client;
+    },
+    async end() {},
+  };
+  const database = new PostgresDatabaseService(pool);
+
+  assert.deepEqual(await database.getActiveCustomerCompanyIds(userId), [
+    companyId,
+  ]);
+  const membership = await database.grantCustomerMembership(
+    companyId,
+    userId,
+    actorId,
+  );
+  assert.equal(
+    membership === "already_active" ? "" : membership.id,
+    membershipId,
+  );
+  assert.equal(
+    await database.revokeCustomerMembership(companyId, userId, actorId),
+    true,
+  );
+  assert.ok(
+    statements.some(
+      ({ query, values }) =>
+        query.includes("set_config('request.jwt.claim.sub'") &&
+        values?.[0] === actorId,
+    ),
+  );
+});
+
 test("API health returns 503 without leaking database errors", async () => {
   const database = {
     async healthCheck() {

@@ -3,6 +3,7 @@ import {
   DatabaseHealth,
   DatabasePort,
   CustomerCompanyRecord,
+  CustomerMembershipRecord,
   QuoteDraftRecord,
   QuoteRequestRecord,
   StaffRoleKey,
@@ -98,20 +99,29 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
 
   async listQuoteRequests(
     customerCompanyId?: string,
+    allowedCompanyIds?: string[],
   ): Promise<QuoteRequestRecord[]> {
+    if (allowedCompanyIds?.length === 0) return [];
     const result = await this.pool.query(
       `${quoteRequestSelect}
-       WHERE $1::text IS NULL OR request.customer_company_id::text = $1
+       WHERE ($1::text IS NULL OR request.customer_company_id::text = $1)
+         AND ($2::uuid[] IS NULL OR request.customer_company_id = ANY($2::uuid[]))
        ORDER BY request.created_at DESC, request.request_id DESC`,
-      [customerCompanyId ?? null],
+      [customerCompanyId ?? null, allowedCompanyIds ?? null],
     );
     return result.rows.map((row) => this.toQuoteRequest(row));
   }
 
-  async findQuoteRequest(id: string): Promise<QuoteRequestRecord | null> {
+  async findQuoteRequest(
+    id: string,
+    allowedCompanyIds?: string[],
+  ): Promise<QuoteRequestRecord | null> {
+    if (allowedCompanyIds?.length === 0) return null;
     const result = await this.pool.query(
-      `${quoteRequestSelect} WHERE request.request_id::text = $1`,
-      [id],
+      `${quoteRequestSelect}
+       WHERE request.request_id::text = $1
+         AND ($2::uuid[] IS NULL OR request.customer_company_id = ANY($2::uuid[]))`,
+      [id, allowedCompanyIds ?? null],
     );
     return result.rows[0] ? this.toQuoteRequest(result.rows[0]) : null;
   }
@@ -253,27 +263,116 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
     }
   }
 
-  async listCustomers(search: string): Promise<CustomerCompanyRecord[]> {
+  async listCustomers(
+    search: string,
+    companyIds?: string[],
+  ): Promise<CustomerCompanyRecord[]> {
+    if (companyIds?.length === 0) return [];
     const result = await this.pool.query(
       `${customerSelect}
-       WHERE $1 = ''
+       WHERE ($1 = ''
          OR strpos(lower(company.company_name), lower($1)) > 0
          OR strpos(lower(COALESCE(contact.contact_name, '')), lower($1)) > 0
-         OR strpos(lower(COALESCE(contact.email, '')), lower($1)) > 0
+         OR strpos(lower(COALESCE(contact.email, '')), lower($1)) > 0)
+         AND ($2::uuid[] IS NULL OR company.company_id = ANY($2::uuid[]))
        ORDER BY company.company_name, company.created_at, contact.contact_name`,
-      [search],
+      [search, companyIds ?? null],
     );
     return this.groupCustomers(result.rows);
   }
 
-  async findCustomer(id: string): Promise<CustomerCompanyRecord | null> {
+  async findCustomer(
+    id: string,
+    companyIds?: string[],
+  ): Promise<CustomerCompanyRecord | null> {
+    if (companyIds?.length === 0) return null;
     const result = await this.pool.query(
       `${customerSelect}
        WHERE company.company_id::text = $1
+         AND ($2::uuid[] IS NULL OR company.company_id = ANY($2::uuid[]))
        ORDER BY contact.contact_name`,
-      [id],
+      [id, companyIds ?? null],
     );
     return this.groupCustomers(result.rows)[0] ?? null;
+  }
+
+  async getActiveCustomerCompanyIds(userId: string): Promise<string[]> {
+    const result = await this.pool.query(
+      `SELECT company_id FROM app.customer_membership
+       WHERE user_id = $1::uuid AND revoked_at IS NULL ORDER BY company_id`,
+      [userId],
+    );
+    return result.rows.map((row) => String(row.company_id));
+  }
+
+  async listCustomerMemberships(
+    userId: string,
+  ): Promise<CustomerMembershipRecord[]> {
+    const result = await this.pool.query(
+      `SELECT membership_id, company_id, user_id, granted_by, granted_at, revoked_at
+       FROM app.customer_membership WHERE user_id = $1::uuid
+       ORDER BY granted_at DESC, membership_id DESC`,
+      [userId],
+    );
+    return result.rows.map((row) => ({
+      id: String(row.membership_id),
+      companyId: String(row.company_id),
+      userId: String(row.user_id),
+      grantedBy: String(row.granted_by),
+      grantedAt: this.toIsoString(row.granted_at),
+      revokedAt: row.revoked_at ? this.toIsoString(row.revoked_at) : null,
+    }));
+  }
+
+  async grantCustomerMembership(
+    companyId: string,
+    userId: string,
+    grantedBy: string,
+  ): Promise<CustomerMembershipRecord | "already_active"> {
+    const result = await this.pool.query(
+      `INSERT INTO app.customer_membership (company_id, user_id, granted_by)
+       VALUES ($1::uuid, $2::uuid, $3::uuid)
+       ON CONFLICT DO NOTHING
+       RETURNING membership_id, company_id, user_id, granted_by, granted_at, revoked_at`,
+      [companyId, userId, grantedBy],
+    );
+    const row = result.rows[0];
+    if (!row) return "already_active";
+    return {
+      id: String(row.membership_id),
+      companyId: String(row.company_id),
+      userId: String(row.user_id),
+      grantedBy: String(row.granted_by),
+      grantedAt: this.toIsoString(row.granted_at),
+      revokedAt: row.revoked_at ? this.toIsoString(row.revoked_at) : null,
+    };
+  }
+
+  async revokeCustomerMembership(
+    companyId: string,
+    userId: string,
+    revokedBy: string,
+  ): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "SELECT set_config('request.jwt.claim.sub', $1, true)",
+        [revokedBy],
+      );
+      const result = await client.query(
+        `UPDATE app.customer_membership SET revoked_at = now()
+         WHERE company_id = $1::uuid AND user_id = $2::uuid AND revoked_at IS NULL`,
+        [companyId, userId],
+      );
+      await client.query("COMMIT");
+      return Boolean(result.rowCount);
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async hasActiveSuperAdmin(): Promise<boolean> {

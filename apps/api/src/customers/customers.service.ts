@@ -36,7 +36,10 @@ export class CustomersService {
     });
   }
 
-  list(search: unknown): Promise<CustomerCompanyRecord[]> {
+  list(
+    search: unknown,
+    companyIds?: string[],
+  ): Promise<CustomerCompanyRecord[]> {
     if (search !== undefined && typeof search !== "string") {
       throw new BadRequestException("search must be a string");
     }
@@ -46,11 +49,11 @@ export class CustomersService {
       throw new BadRequestException("search must be at most 200 characters");
     }
 
-    return this.database.listCustomers(normalizedSearch);
+    return this.database.listCustomers(normalizedSearch, companyIds);
   }
 
-  async get(id: string): Promise<CustomerCompanyRecord> {
-    const customer = await this.database.findCustomer(id);
+  async get(id: string, companyIds?: string[]): Promise<CustomerCompanyRecord> {
+    const customer = await this.database.findCustomer(id, companyIds);
     if (!customer) {
       throw new NotFoundException("Customer was not found");
     }

@@ -13,6 +13,7 @@ import type { AuthenticatedUser } from "./supabase-auth-verifier";
 export interface AuthenticatedRequest {
   headers: { authorization?: string | string[] };
   authUser?: AuthenticatedUser;
+  allowedCompanyIds?: string[];
 }
 
 @Injectable()
@@ -56,6 +57,40 @@ export class SuperAdminGuard implements CanActivate {
       throw new ForbiddenException("An active super_admin role is required");
     }
 
+    return true;
+  }
+}
+
+@Injectable()
+export class CompanyScopeGuard implements CanActivate {
+  constructor(@Inject(DatabasePort) private readonly database: DatabasePort) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    if (!request.authUser) throw new UnauthorizedException();
+
+    const roles = await this.database.getActiveStaffRoles(
+      request.authUser.userId,
+    );
+    if (roles.includes("super_admin")) {
+      request.allowedCompanyIds = undefined;
+      return true;
+    }
+    if (roles.length > 0) {
+      throw new ForbiddenException(
+        "Department staff access for this API is not configured",
+      );
+    }
+
+    const companyIds = await this.database.getActiveCustomerCompanyIds(
+      request.authUser.userId,
+    );
+    if (companyIds.length === 0) {
+      throw new ForbiddenException(
+        "An active staff role or customer-company membership is required",
+      );
+    }
+    request.allowedCompanyIds = companyIds;
     return true;
   }
 }

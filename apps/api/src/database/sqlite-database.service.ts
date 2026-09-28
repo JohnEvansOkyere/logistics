@@ -7,6 +7,7 @@ import {
   DatabaseHealth,
   DatabasePort,
   CustomerCompanyRecord,
+  CustomerMembershipRecord,
   QuoteDraftRecord,
   QuoteRequestRecord,
   StaffRoleKey,
@@ -75,7 +76,12 @@ export class SqliteDatabaseService
 
   async listQuoteRequests(
     customerCompanyId?: string,
+    allowedCompanyIds?: string[],
   ): Promise<QuoteRequestRecord[]> {
+    if (allowedCompanyIds?.length === 0) return [];
+    const scopeClause = allowedCompanyIds
+      ? `AND request.customer_company_id IN (${allowedCompanyIds.map(() => "?").join(",")})`
+      : "";
     const rows = this.connection
       .prepare(
         `SELECT
@@ -95,18 +101,27 @@ export class SqliteDatabaseService
          FROM quote_request AS request
          LEFT JOIN customer_company AS company
            ON company.id = request.customer_company_id
-         WHERE @customerCompanyId IS NULL
-           OR request.customer_company_id = @customerCompanyId
+         WHERE (? IS NULL OR request.customer_company_id = ?)
+         ${scopeClause}
          ORDER BY request.created_at DESC, request.id DESC`,
       )
-      .all({
-        customerCompanyId: customerCompanyId ?? null,
-      }) as QuoteRequestRow[];
+      .all(
+        customerCompanyId ?? null,
+        customerCompanyId ?? null,
+        ...(allowedCompanyIds ?? []),
+      ) as QuoteRequestRow[];
 
     return rows.map((row) => this.toQuoteRequest(row));
   }
 
-  async findQuoteRequest(id: string): Promise<QuoteRequestRecord | null> {
+  async findQuoteRequest(
+    id: string,
+    allowedCompanyIds?: string[],
+  ): Promise<QuoteRequestRecord | null> {
+    if (allowedCompanyIds?.length === 0) return null;
+    const scopeClause = allowedCompanyIds
+      ? `AND request.customer_company_id IN (${allowedCompanyIds.map(() => "?").join(",")})`
+      : "";
     const row = this.connection
       .prepare(
         `SELECT
@@ -126,9 +141,9 @@ export class SqliteDatabaseService
          FROM quote_request AS request
          LEFT JOIN customer_company AS company
            ON company.id = request.customer_company_id
-         WHERE request.id = ?`,
+         WHERE request.id = ? ${scopeClause}`,
       )
-      .get(id) as QuoteRequestRow | undefined;
+      .get(id, ...(allowedCompanyIds ?? [])) as QuoteRequestRow | undefined;
 
     return row ? this.toQuoteRequest(row) : null;
   }
@@ -255,7 +270,14 @@ export class SqliteDatabaseService
     return customer;
   }
 
-  async listCustomers(search: string): Promise<CustomerCompanyRecord[]> {
+  async listCustomers(
+    search: string,
+    companyIds?: string[],
+  ): Promise<CustomerCompanyRecord[]> {
+    if (companyIds?.length === 0) return [];
+    const companyClause = companyIds
+      ? `AND company.id IN (${companyIds.map(() => "?").join(",")})`
+      : "";
     const rows = this.connection
       .prepare(
         `WITH matching_company AS (
@@ -263,10 +285,10 @@ export class SqliteDatabaseService
            FROM customer_company AS company
            LEFT JOIN customer_contact AS contact
              ON contact.company_id = company.id
-           WHERE @search = ''
-             OR instr(lower(company.company_name), lower(@search)) > 0
-             OR instr(lower(contact.contact_name), lower(@search)) > 0
-             OR instr(lower(contact.email), lower(@search)) > 0
+           WHERE ? = ''
+             OR instr(lower(company.company_name), lower(?)) > 0
+             OR instr(lower(contact.contact_name), lower(?)) > 0
+             OR instr(lower(contact.email), lower(?)) > 0
          )
          SELECT
            company.id AS company_id,
@@ -281,16 +303,30 @@ export class SqliteDatabaseService
            ON matching.id = company.id
          LEFT JOIN customer_contact AS contact
            ON contact.company_id = company.id
+         WHERE 1 = 1 ${companyClause}
          ORDER BY company.company_name COLLATE NOCASE,
            company.created_at,
            contact.contact_name COLLATE NOCASE`,
       )
-      .all({ search }) as CustomerRow[];
+      .all(
+        search,
+        search,
+        search,
+        search,
+        ...(companyIds ?? []),
+      ) as CustomerRow[];
 
     return this.groupCustomers(rows);
   }
 
-  async findCustomer(id: string): Promise<CustomerCompanyRecord | null> {
+  async findCustomer(
+    id: string,
+    companyIds?: string[],
+  ): Promise<CustomerCompanyRecord | null> {
+    if (companyIds?.length === 0) return null;
+    const companyClause = companyIds
+      ? `AND company.id IN (${companyIds.map(() => "?").join(",")})`
+      : "";
     const rows = this.connection
       .prepare(
         `SELECT
@@ -304,12 +340,118 @@ export class SqliteDatabaseService
          FROM customer_company AS company
          LEFT JOIN customer_contact AS contact
            ON contact.company_id = company.id
-         WHERE company.id = ?
+         WHERE company.id = ? ${companyClause}
          ORDER BY contact.contact_name COLLATE NOCASE`,
       )
-      .all(id) as CustomerRow[];
+      .all(id, ...(companyIds ?? [])) as CustomerRow[];
 
     return this.groupCustomers(rows)[0] ?? null;
+  }
+
+  async getActiveCustomerCompanyIds(userId: string): Promise<string[]> {
+    const rows = this.connection
+      .prepare(
+        `SELECT company_id FROM customer_membership
+         WHERE user_id = ? AND revoked_at IS NULL ORDER BY company_id`,
+      )
+      .all(userId) as Array<{ company_id: string }>;
+    return rows.map((row) => row.company_id);
+  }
+
+  async listCustomerMemberships(
+    userId: string,
+  ): Promise<CustomerMembershipRecord[]> {
+    const rows = this.connection
+      .prepare(
+        `SELECT membership_id, company_id, user_id, granted_by, granted_at, revoked_at
+         FROM customer_membership WHERE user_id = ?
+         ORDER BY granted_at DESC, membership_id DESC`,
+      )
+      .all(userId) as Array<{
+      membership_id: string;
+      company_id: string;
+      user_id: string;
+      granted_by: string;
+      granted_at: string;
+      revoked_at: string | null;
+    }>;
+    return rows.map((row) => ({
+      id: row.membership_id,
+      companyId: row.company_id,
+      userId: row.user_id,
+      grantedBy: row.granted_by,
+      grantedAt: row.granted_at,
+      revokedAt: row.revoked_at,
+    }));
+  }
+
+  async grantCustomerMembership(
+    companyId: string,
+    userId: string,
+    grantedBy: string,
+  ): Promise<CustomerMembershipRecord | "already_active"> {
+    const membership: CustomerMembershipRecord = {
+      id: randomUUID(),
+      companyId,
+      userId,
+      grantedBy,
+      grantedAt: new Date().toISOString(),
+      revokedAt: null,
+    };
+    try {
+      this.connection.transaction(() => {
+        this.connection
+          .prepare(
+            `INSERT INTO customer_membership
+              (membership_id, company_id, user_id, granted_by, granted_at)
+             VALUES (@id, @companyId, @userId, @grantedBy, @grantedAt)`,
+          )
+          .run(membership);
+        this.connection
+          .prepare(
+            `INSERT INTO customer_membership_audit_event
+              (event_id, actor_user_id, event_type, membership_id, occurred_at)
+             VALUES (?, ?, 'customer_membership_granted', ?, ?)`,
+          )
+          .run(randomUUID(), grantedBy, membership.id, membership.grantedAt);
+      })();
+      return membership;
+    } catch (error) {
+      if ((error as { code?: string }).code === "SQLITE_CONSTRAINT_UNIQUE") {
+        return "already_active";
+      }
+      throw error;
+    }
+  }
+
+  async revokeCustomerMembership(
+    companyId: string,
+    userId: string,
+    revokedBy: string,
+  ): Promise<boolean> {
+    const revokedAt = new Date().toISOString();
+    return this.connection.transaction(() => {
+      const membership = this.connection
+        .prepare(
+          `SELECT membership_id FROM customer_membership
+           WHERE company_id = ? AND user_id = ? AND revoked_at IS NULL`,
+        )
+        .get(companyId, userId) as { membership_id: string } | undefined;
+      if (!membership) return false;
+      this.connection
+        .prepare(
+          `UPDATE customer_membership SET revoked_at = ? WHERE membership_id = ?`,
+        )
+        .run(revokedAt, membership.membership_id);
+      this.connection
+        .prepare(
+          `INSERT INTO customer_membership_audit_event
+            (event_id, actor_user_id, event_type, membership_id, occurred_at)
+           VALUES (?, ?, 'customer_membership_revoked', ?, ?)`,
+        )
+        .run(randomUUID(), revokedBy, membership.membership_id, revokedAt);
+      return true;
+    })();
   }
 
   async hasActiveSuperAdmin(): Promise<boolean> {
