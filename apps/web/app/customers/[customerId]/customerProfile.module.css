@@ -1,0 +1,239 @@
+.page {
+  width: min(100%, 1120px);
+  margin: 0 auto;
+  padding: 34px clamp(18px, 4vw, 48px) 56px;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--brand-primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.backLink:hover {
+  text-decoration: underline;
+}
+
+.pageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 28px 0 22px;
+}
+
+.eyebrow,
+.sectionEyebrow {
+  margin: 0 0 8px;
+  color: var(--brand-primary);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.pageHeader h1 {
+  max-width: 700px;
+  overflow-wrap: anywhere;
+  color: #152e47;
+  font-size: clamp(1.8rem, 4vw, 2.35rem);
+  letter-spacing: -0.045em;
+  line-height: 1.15;
+}
+
+.description {
+  margin: 9px 0 0;
+  color: var(--brand-muted);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.sampleBadge,
+.localCaption {
+  flex: 0 0 auto;
+  border: 1px solid #d8e2ef;
+  border-radius: 999px;
+  background: #f5f8fd;
+  color: #5b7084;
+  padding: 7px 10px;
+  font-size: 0.61rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.sampleNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 20px;
+  border: 1px solid #d7e6f1;
+  border-radius: 9px;
+  background: #f0f7fc;
+  color: #506a7e;
+  padding: 12px 14px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.sampleNotice > span {
+  display: grid;
+  width: 19px;
+  height: 19px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: #dcecf8;
+  color: #35658b;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.sampleNotice p {
+  margin: 0;
+}
+
+.contactCard,
+.historyCard {
+  border: 1px solid #dfe7ee;
+  border-radius: 11px;
+  background: #fff;
+  padding: 20px;
+}
+
+.cardHeading,
+.historyHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sectionEyebrow {
+  margin-bottom: 5px;
+  color: #738698;
+  font-size: 0.6rem;
+}
+
+.cardHeading h2,
+.historyHeading h2 {
+  margin: 0;
+  color: #233d55;
+  font-size: 0.98rem;
+}
+
+.notConnected {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #f1f4f7;
+  color: #6c7d8a;
+  padding: 5px 8px;
+  font-size: 0.61rem;
+  font-weight: 700;
+}
+
+.contactGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 18px 0 0;
+}
+
+.contactGrid > div {
+  min-width: 0;
+  border-top: 1px solid #e6ebf0;
+  padding: 13px 2px 0;
+}
+
+.contactGrid dt {
+  margin-bottom: 6px;
+  color: #738595;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.contactGrid dd {
+  overflow-wrap: anywhere;
+  margin: 0;
+  color: #29445d;
+  font-size: 0.82rem;
+}
+
+.historySection {
+  margin-top: 30px;
+}
+
+.historyHeading {
+  margin-bottom: 14px;
+}
+
+.localCaption {
+  border-color: #e0e7ee;
+  background: #f8fafc;
+  color: #728394;
+}
+
+.historyGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.historyCard {
+  min-height: 148px;
+  padding: 17px 18px;
+}
+
+.historyCard h3 {
+  margin: 0;
+  color: #29445d;
+  font-size: 0.87rem;
+}
+
+.historyCard p {
+  margin: 22px 0 0;
+  color: var(--brand-muted);
+  font-size: 0.77rem;
+  line-height: 1.55;
+}
+
+a:focus-visible {
+  outline: 3px solid var(--brand-secondary);
+  outline-offset: 3px;
+}
+
+@media (max-width: 620px) {
+  .page {
+    padding: 24px 14px 38px;
+  }
+
+  .pageHeader {
+    display: block;
+    margin-top: 22px;
+  }
+
+  .sampleBadge {
+    display: inline-block;
+    margin-top: 12px;
+  }
+
+  .contactCard {
+    padding: 16px 14px;
+  }
+
+  .contactGrid,
+  .historyGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .cardHeading,
+  .historyHeading {
+    align-items: flex-start;
+  }
+
+  .historyCard {
+    min-height: 132px;
+  }
+}

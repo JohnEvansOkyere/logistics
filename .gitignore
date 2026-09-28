@@ -1,0 +1,38 @@
+# Dependencies and build output
+node_modules/
+.next/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Local databases and SQLite sidecar files
+.local/
+.supabase/
+supabase/.temp/
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.db
+*.db-*
+
+# Local secrets and environment overrides
+.env
+.env.*
+!.env.example
+/secrets/
+/.secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+service-account*.json
+
+# Client-provided materials: keep local unless explicitly approved for sharing
+/client_message_extract.md
+/second_meeting_message.md
+/adress.md
+/EVIDENCES/
+
+# Operating system/editor files
+.DS_Store

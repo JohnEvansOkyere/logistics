@@ -1,0 +1,30 @@
+{
+  "name": "bjh-logistics",
+  "private": true,
+  "packageManager": "pnpm@12.6.0",
+  "engines": {
+    "node": ">=22.22.0 <23"
+  },
+  "scripts": {
+    "dev": "dotenv -e .env -- corepack pnpm --parallel --recursive --if-present dev",
+    "lint": "eslint .",
+    "format": "prettier --write \"apps/**/*.{ts,tsx,css,json}\" \"docs/architecture.md\" \"docs/delivery-plan.md\" \"docs/decisions.md\" \"docs/document-templates.md\" \"README.md\" \"AGENTS.md\" \"CHECKLIST.md\" \"*.json\" \"pnpm-workspace.yaml\" \"eslint.config.mjs\"",
+    "format:check": "prettier --check \"apps/**/*.{ts,tsx,css,json}\" \"docs/architecture.md\" \"docs/delivery-plan.md\" \"docs/decisions.md\" \"docs/document-templates.md\" \"README.md\" \"AGENTS.md\" \"CHECKLIST.md\" \"*.json\" \"pnpm-workspace.yaml\" \"eslint.config.mjs\"",
+    "typecheck": "corepack pnpm --recursive --if-present typecheck",
+    "test": "corepack pnpm --filter @bjh/api test",
+    "test:e2e": "corepack pnpm --filter @bjh/api test:e2e",
+    "build": "corepack pnpm --recursive --if-present build",
+    "supabase:start": "corepack pnpm exec supabase start",
+    "supabase:stop": "corepack pnpm exec supabase stop",
+    "supabase:reset": "corepack pnpm exec supabase db reset --local",
+    "supabase:test": "corepack pnpm exec supabase test db --local"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.2",
+    "dotenv-cli": "11.0.0",
+    "eslint": "9.39.2",
+    "prettier": "3.9.9",
+    "supabase": "2.118.0",
+    "typescript-eslint": "8.70.1"
+  }
+}
