@@ -1,6 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createQuoteRequest } from "./quoteRequestApi";
 import styles from "./quotation.module.css";
 
 type RequestDraft = {
@@ -18,8 +20,11 @@ const emptyDraft: RequestDraft = {
 };
 
 export function RequestComposer() {
+  const router = useRouter();
   const [draft, setDraft] = useState(emptyDraft);
   const [preview, setPreview] = useState<RequestDraft | null>(null);
+  const [submitError, setSubmitError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const companyInput = useRef<HTMLInputElement>(null);
   const contactInput = useRef<HTMLInputElement>(null);
   const emailInput = useRef<HTMLInputElement>(null);
@@ -47,16 +52,38 @@ export function RequestComposer() {
   function clearDraft() {
     setDraft(emptyDraft);
     setPreview(null);
+    setSubmitError("");
+  }
+
+  async function submitRequest() {
+    if (!preview || submitting) {
+      return;
+    }
+
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      const created = await createQuoteRequest(preview);
+      router.push(`/quotations/requests/${created.id}`);
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "The request could not be saved",
+      );
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (preview) {
     return (
       <section className={styles.composerPanel} aria-labelledby="preview-title">
-        <div className={styles.previewSuccess} role="status" aria-live="polite">
-          <span aria-hidden="true">✓</span>
+        <div className={styles.previewSuccess}>
+          <span aria-hidden="true">1</span>
           <div>
-            <h2 id="preview-title">Request preview</h2>
-            <p>Nothing has been submitted or saved.</p>
+            <h2 id="preview-title">Review request</h2>
+            <p>Check these details before saving the request.</p>
           </div>
         </div>
         <dl className={styles.previewDetails}>
@@ -77,6 +104,11 @@ export function RequestComposer() {
             <dd>{preview.message}</dd>
           </div>
         </dl>
+        {submitError && (
+          <p className={styles.formError} role="alert">
+            {submitError}
+          </p>
+        )}
         <div className={styles.formActions}>
           <button
             className={styles.secondaryButton}
@@ -86,11 +118,12 @@ export function RequestComposer() {
             Edit preview
           </button>
           <button
-            className={styles.textButton}
-            onClick={clearDraft}
+            className={styles.primaryButton}
+            disabled={submitting}
+            onClick={() => void submitRequest()}
             type="button"
           >
-            Clear fields
+            {submitting ? "Saving…" : "Submit request"}
           </button>
         </div>
       </section>
@@ -101,10 +134,10 @@ export function RequestComposer() {
     <section className={styles.composerPanel} aria-labelledby="fields-title">
       <div className={styles.composerHeader}>
         <div>
-          <p className={styles.sectionEyebrow}>GENERIC INTAKE FIELDS</p>
+          <p className={styles.sectionEyebrow}>REQUEST INTAKE</p>
           <h2 id="fields-title">Request details</h2>
         </div>
-        <span className={styles.sampleCount}>Local preview only</span>
+        <span className={styles.sampleCount}>Local SQLite</span>
       </div>
 
       <fieldset className={styles.requestFields}>
@@ -191,7 +224,7 @@ export function RequestComposer() {
           onClick={previewRequest}
           type="button"
         >
-          Preview request
+          Review request
         </button>
         <button
           className={styles.textButton}

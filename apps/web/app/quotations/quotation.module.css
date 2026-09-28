@@ -160,41 +160,6 @@
   letter-spacing: 0;
 }
 
-.stateControl {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 20px;
-  border: 1px solid #e3eaf0;
-  border-radius: 8px;
-  background: #f8fafc;
-  padding: 10px 12px;
-}
-
-.stateControl label {
-  color: #536b7e;
-  font-size: 0.72rem;
-  font-weight: 700;
-}
-
-.stateControl select {
-  max-width: 190px;
-  border: 1px solid #cad6e0;
-  border-radius: 6px;
-  background: #fff;
-  color: #29445d;
-  padding: 7px 9px;
-  font: inherit;
-  font-size: 0.72rem;
-}
-
-.stateControl > span {
-  margin-left: auto;
-  color: #7b8c99;
-  font-size: 0.66rem;
-  text-align: right;
-}
-
 .searchLabel {
   display: block;
   margin-bottom: 8px;
@@ -613,6 +578,11 @@
   background: #082f86;
 }
 
+.primaryButton:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
 .secondaryButton {
   border: 1px solid #bdccd9;
   background: #fff;
@@ -659,6 +629,12 @@
   margin: 5px 0 0;
   color: #547361;
   font-size: 0.73rem;
+}
+
+.formError {
+  margin: 14px 0 0;
+  color: #a94d3d;
+  font-size: 0.75rem;
 }
 
 .previewDetails {
@@ -762,16 +738,6 @@ input:focus-visible {
   .sampleCount {
     display: inline-block;
     margin-top: 11px;
-  }
-
-  .stateControl {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .stateControl > span {
-    margin-left: 0;
-    text-align: left;
   }
 
   .requestRow {

@@ -1,16 +1,39 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import type { SampleQuoteRequest } from "./sampleQuoteRequests";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { listQuoteRequests } from "./quoteRequestApi";
+import type { QuoteRequest } from "./quoteRequestApi";
 import styles from "./quotation.module.css";
 
-type PreviewState = "samples" | "empty" | "loading" | "error";
+type LoadState = "loading" | "ready" | "error";
 
-export function RequestInbox({ requests }: { requests: SampleQuoteRequest[] }) {
-  const [previewState, setPreviewState] = useState<PreviewState>("samples");
+export function RequestInbox() {
+  const [requests, setRequests] = useState<QuoteRequest[]>([]);
+  const [loadState, setLoadState] = useState<LoadState>("loading");
+  const [loadError, setLoadError] = useState("");
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLocaleLowerCase();
+
+  const load = useCallback(async () => {
+    setLoadState("loading");
+    setLoadError("");
+    try {
+      setRequests(await listQuoteRequests());
+      setLoadState("ready");
+    } catch (error) {
+      setLoadError(
+        error instanceof Error
+          ? error.message
+          : "The request inbox is unavailable",
+      );
+      setLoadState("error");
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const filteredRequests = useMemo(() => {
     if (!normalizedQuery) {
@@ -31,42 +54,60 @@ export function RequestInbox({ requests }: { requests: SampleQuoteRequest[] }) {
     <section className={styles.inbox} aria-labelledby="inbox-title">
       <div className={styles.inboxHeader}>
         <div>
-          <p className={styles.sectionEyebrow}>LOCAL UI PREVIEW</p>
+          <p className={styles.sectionEyebrow}>LOCAL REQUEST INBOX</p>
           <h2 id="inbox-title">Request inbox</h2>
-          <p>Review the list, empty, loading, and error screen states.</p>
+          <p>Review submitted quote requests.</p>
         </div>
         <div className={styles.inboxActions}>
           <Link className={styles.composerLink} href="/quotations/new-request">
-            Preview intake form <span aria-hidden="true">→</span>
+            New request <span aria-hidden="true">→</span>
           </Link>
           <span className={styles.sampleCount}>
-            {requests.length} sample requests
+            {requests.length} {requests.length === 1 ? "request" : "requests"}
           </span>
         </div>
       </div>
 
-      <div className={styles.stateControl}>
-        <label htmlFor="preview-state">Preview screen state</label>
-        <select
-          id="preview-state"
-          onChange={(event) => {
-            setPreviewState(event.target.value as PreviewState);
-            setQuery("");
-          }}
-          value={previewState}
-        >
-          <option value="samples">Sample requests</option>
-          <option value="empty">Empty inbox</option>
-          <option value="loading">Loading preview</option>
-          <option value="error">Error preview</option>
-        </select>
-        <span>State previews are local and do not make network requests.</span>
-      </div>
+      {loadState === "loading" && (
+        <div className={styles.statePanel} role="status" aria-live="polite">
+          <span className={styles.spinner} aria-hidden="true" />
+          <h3>Loading requests</h3>
+        </div>
+      )}
 
-      {previewState === "samples" && (
+      {loadState === "error" && (
+        <div className={styles.errorPanel} role="alert">
+          <span className={styles.errorIcon} aria-hidden="true">
+            !
+          </span>
+          <div>
+            <h3>Requests could not be loaded</h3>
+            <p>{loadError}</p>
+            <button
+              className={styles.secondaryButton}
+              onClick={() => void load()}
+              type="button"
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loadState === "ready" && requests.length === 0 && (
+        <div className={styles.emptyState}>
+          <span className={styles.emptyIcon} aria-hidden="true">
+            ◷
+          </span>
+          <h3>No requests yet</h3>
+          <p>New quote requests will appear here.</p>
+        </div>
+      )}
+
+      {loadState === "ready" && requests.length > 0 && (
         <>
           <label className={styles.searchLabel} htmlFor="request-search">
-            Search sample requests
+            Search requests
           </label>
           <div className={styles.searchRow}>
             <span aria-hidden="true">⌕</span>
@@ -85,7 +126,7 @@ export function RequestInbox({ requests }: { requests: SampleQuoteRequest[] }) {
             )}
           </div>
           <p className={styles.resultSummary} role="status" aria-live="polite">
-            Showing {filteredRequests.length} of {requests.length} sample
+            Showing {filteredRequests.length} of {requests.length}
             {requests.length === 1 ? " request" : " requests"}
           </p>
 
@@ -101,9 +142,7 @@ export function RequestInbox({ requests }: { requests: SampleQuoteRequest[] }) {
                       Q
                     </span>
                     <span className={styles.requestMain}>
-                      <span className={styles.requestTag}>
-                        Synthetic request
-                      </span>
+                      <span className={styles.requestTag}>Quote request</span>
                       <strong>{request.companyName}</strong>
                       <span className={styles.messagePreview}>
                         {request.message}
@@ -114,7 +153,7 @@ export function RequestInbox({ requests }: { requests: SampleQuoteRequest[] }) {
                       <span>{request.email}</span>
                     </span>
                     <span className={styles.rowAction}>
-                      View sample <span aria-hidden="true">→</span>
+                      View request <span aria-hidden="true">→</span>
                     </span>
                   </Link>
                 </li>
@@ -122,7 +161,7 @@ export function RequestInbox({ requests }: { requests: SampleQuoteRequest[] }) {
             </ul>
           ) : (
             <div className={styles.emptyState}>
-              <h3>No sample requests match</h3>
+              <h3>No requests match</h3>
               <p>Try another company, contact, or request phrase.</p>
               <button onClick={() => setQuery("")} type="button">
                 Clear search
@@ -130,42 +169,6 @@ export function RequestInbox({ requests }: { requests: SampleQuoteRequest[] }) {
             </div>
           )}
         </>
-      )}
-
-      {previewState === "empty" && (
-        <div className={styles.emptyState}>
-          <span className={styles.emptyIcon} aria-hidden="true">
-            ◷
-          </span>
-          <h3>No requests to show</h3>
-          <p>
-            This is a preview of the empty inbox. No live request data is
-            connected.
-          </p>
-        </div>
-      )}
-
-      {previewState === "loading" && (
-        <div className={styles.statePanel} role="status" aria-live="polite">
-          <span className={styles.spinner} aria-hidden="true" />
-          <h3>Loading request preview</h3>
-          <p>Loading state preview only; no request has been made.</p>
-        </div>
-      )}
-
-      {previewState === "error" && (
-        <div className={styles.errorPanel} role="alert">
-          <span className={styles.errorIcon} aria-hidden="true">
-            !
-          </span>
-          <div>
-            <h3>Requests could not be loaded</h3>
-            <p>
-              This is a visual error-state preview. The API is not connected and
-              no network request was made.
-            </p>
-          </div>
-        </div>
       )}
     </section>
   );

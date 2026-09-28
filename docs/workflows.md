@@ -37,6 +37,6 @@ Quote request → quote draft/revision → issued → accepted/rejected/expired 
 ## Cross-cutting rules
 
 - External observations (carrier API/website) never silently undo a staff-confirmed event. Preserve source, observed-at and effective-at, and flag conflicts for review.
-- Status updates marked `internal` do not become client-visible; `client_visible` requires an authorised publish step. Never send internal notes/costs to clients.
+- Customer portal access follows company ownership: users can see all business records associated with their assigned company and no records belonging to another company. Keep BJH-only administrative records outside customer-company records; do not use a per-record publication switch to hide company-owned business data.
 - Missing documents, damaged cargo, revised ETA, partial payment and failed delivery create exceptions/tasks, not a forced happy-path progression.
 - Generated invoice/waybill/delivery note retains its issued version; corrections create a revision/credit or documented adjustment under approved business rules.

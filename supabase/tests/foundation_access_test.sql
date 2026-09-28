@@ -2,7 +2,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT extensions.plan(59);
+SELECT extensions.plan(61);
 
 SELECT extensions.has_schema('app', 'private application schema exists');
 SELECT extensions.ok(
@@ -66,26 +66,18 @@ VALUES
     '00000000-0000-4000-8000-000000000011'
   );
 
-INSERT INTO app.customer_record (
-  record_id,
-  company_id,
-  record_type,
-  reference,
-  client_visible,
-  published_by,
-  published_at
-)
+INSERT INTO app.customer_record (record_id, company_id, record_type, reference)
 VALUES
-  ('20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'invoice', 'HARBOR-INV-1', true, '00000000-0000-4000-8000-000000000011', now()),
-  ('20000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001', 'waybill', 'HARBOR-WAY-1', true, '00000000-0000-4000-8000-000000000011', now()),
-  ('20000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000001', 'receipt', 'HARBOR-REC-1', true, '00000000-0000-4000-8000-000000000011', now()),
-  ('20000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000001', 'other', 'HARBOR-OTHER-1', true, '00000000-0000-4000-8000-000000000011', now()),
-  ('20000000-0000-4000-8000-000000000005', '10000000-0000-4000-8000-000000000001', 'other', 'HARBOR-INTERNAL-1', false, NULL, NULL),
-  ('20000000-0000-4000-8000-000000000006', '10000000-0000-4000-8000-000000000002', 'invoice', 'CEDAR-INV-1', true, '00000000-0000-4000-8000-000000000011', now()),
-  ('20000000-0000-4000-8000-000000000007', '10000000-0000-4000-8000-000000000002', 'waybill', 'CEDAR-WAY-1', true, '00000000-0000-4000-8000-000000000011', now()),
-  ('20000000-0000-4000-8000-000000000008', '10000000-0000-4000-8000-000000000002', 'receipt', 'CEDAR-REC-1', true, '00000000-0000-4000-8000-000000000011', now()),
-  ('20000000-0000-4000-8000-000000000009', '10000000-0000-4000-8000-000000000002', 'other', 'CEDAR-OTHER-1', true, '00000000-0000-4000-8000-000000000011', now()),
-  ('20000000-0000-4000-8000-000000000010', '10000000-0000-4000-8000-000000000002', 'other', 'CEDAR-INTERNAL-1', false, NULL, NULL);
+  ('20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'invoice', 'HARBOR-INV-1'),
+  ('20000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001', 'waybill', 'HARBOR-WAY-1'),
+  ('20000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000001', 'receipt', 'HARBOR-REC-1'),
+  ('20000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000001', 'other', 'HARBOR-OTHER-1'),
+  ('20000000-0000-4000-8000-000000000005', '10000000-0000-4000-8000-000000000001', 'other', 'HARBOR-OTHER-2'),
+  ('20000000-0000-4000-8000-000000000006', '10000000-0000-4000-8000-000000000002', 'invoice', 'CEDAR-INV-1'),
+  ('20000000-0000-4000-8000-000000000007', '10000000-0000-4000-8000-000000000002', 'waybill', 'CEDAR-WAY-1'),
+  ('20000000-0000-4000-8000-000000000008', '10000000-0000-4000-8000-000000000002', 'receipt', 'CEDAR-REC-1'),
+  ('20000000-0000-4000-8000-000000000009', '10000000-0000-4000-8000-000000000002', 'other', 'CEDAR-OTHER-1'),
+  ('20000000-0000-4000-8000-000000000010', '10000000-0000-4000-8000-000000000002', 'other', 'CEDAR-OTHER-2');
 
 CREATE TABLE app.workflow_access_probe (
   record_id uuid PRIMARY KEY,
@@ -270,11 +262,12 @@ SELECT extensions.is((SELECT count(*) FROM removed), 1::bigint, 'Esi can delete 
 SET LOCAL request.jwt.claim.sub = '00000000-0000-4000-8000-000000000021';
 
 SELECT extensions.is((SELECT count(*) FROM app.customer_company), 1::bigint, 'Abena can discover only Harbor Demo Ltd');
-SELECT extensions.is((SELECT count(*) FROM app.customer_record), 4::bigint, 'Abena sees four published Harbor Demo Ltd records');
+SELECT extensions.is((SELECT count(*) FROM app.customer_record), 5::bigint, 'Abena sees all five Harbor Demo Ltd records');
 SELECT extensions.is((SELECT count(*) FROM app.customer_record WHERE record_type = 'invoice'), 1::bigint, 'Abena can see its company invoice');
 SELECT extensions.is((SELECT count(*) FROM app.customer_record WHERE record_type = 'waybill'), 1::bigint, 'Abena can see its company waybill');
 SELECT extensions.is((SELECT count(*) FROM app.customer_record WHERE record_type = 'receipt'), 1::bigint, 'Abena can see its company receipt');
-SELECT extensions.is((SELECT count(*) FROM app.customer_record WHERE record_type = 'other'), 1::bigint, 'Abena can see other published company records');
+SELECT extensions.is((SELECT count(*) FROM app.customer_record WHERE record_type = 'other'), 2::bigint, 'Abena sees all other Harbor Demo Ltd records');
+SELECT extensions.ok(EXISTS (SELECT 1 FROM app.customer_record WHERE record_id = '20000000-0000-4000-8000-000000000005'), 'Abena can see all data owned by Harbor Demo Ltd');
 SELECT extensions.is(
   (SELECT count(*) FROM app.customer_record WHERE record_id = '20000000-0000-4000-8000-000000000006'),
   0::bigint,
@@ -284,11 +277,12 @@ SELECT extensions.is(
 SET LOCAL request.jwt.claim.sub = '00000000-0000-4000-8000-000000000022';
 
 SELECT extensions.is((SELECT count(*) FROM app.customer_company), 1::bigint, 'Nana can discover only Cedar Demo Ltd');
-SELECT extensions.is((SELECT count(*) FROM app.customer_record), 4::bigint, 'Nana sees four published Cedar Demo Ltd records');
+SELECT extensions.is((SELECT count(*) FROM app.customer_record), 5::bigint, 'Nana sees all five Cedar Demo Ltd records');
 SELECT extensions.is((SELECT count(*) FROM app.customer_record WHERE record_type = 'invoice'), 1::bigint, 'Nana can see its company invoice');
 SELECT extensions.is((SELECT count(*) FROM app.customer_record WHERE record_type = 'waybill'), 1::bigint, 'Nana can see its company waybill');
 SELECT extensions.is((SELECT count(*) FROM app.customer_record WHERE record_type = 'receipt'), 1::bigint, 'Nana can see its company receipt');
-SELECT extensions.is((SELECT count(*) FROM app.customer_record WHERE record_type = 'other'), 1::bigint, 'Nana can see other published company records');
+SELECT extensions.is((SELECT count(*) FROM app.customer_record WHERE record_type = 'other'), 2::bigint, 'Nana sees all other Cedar Demo Ltd records');
+SELECT extensions.ok(EXISTS (SELECT 1 FROM app.customer_record WHERE record_id = '20000000-0000-4000-8000-000000000010'), 'Nana can see all data owned by Cedar Demo Ltd');
 SELECT extensions.is(
   (SELECT count(*) FROM app.customer_record WHERE record_id = '20000000-0000-4000-8000-000000000001'),
   0::bigint,

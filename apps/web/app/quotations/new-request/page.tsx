@@ -3,8 +3,8 @@ import { RequestComposer } from "../RequestComposer";
 import styles from "../quotation.module.css";
 
 export const metadata = {
-  title: "Request preview | BJH Logistics",
-  description: "Non-submitting quotation request form UI preview.",
+  title: "New quote request | BJH Logistics",
+  description: "Create a local quote request for the staff inbox.",
 };
 
 export default function NewRequestPreviewPage() {
@@ -16,23 +16,24 @@ export default function NewRequestPreviewPage() {
 
       <header className={styles.pageHeader}>
         <div>
-          <p className={styles.eyebrow}>STAFF WORKSPACE · FORM PREVIEW</p>
+          <p className={styles.eyebrow}>STAFF WORKSPACE · LOCAL ENGINE</p>
           <h1>Quotation request intake</h1>
           <p className={styles.description}>
-            Review a minimal contact-and-message form without creating a live
-            request.
+            Capture contact details and the customer's request for follow-up.
           </p>
         </div>
         <span className={styles.localBadge}>LOCAL DEVELOPMENT</span>
       </header>
 
-      <aside className={styles.sampleNotice} aria-label="Form preview notice">
+      <aside
+        className={styles.sampleNotice}
+        aria-label="Local development notice"
+      >
         <span aria-hidden="true">i</span>
         <p>
-          <strong>Preview only.</strong> Use fictional details. This form does
-          not submit or store information, and has no API or Supabase
-          connection. Service types, pricing, and quote terms are intentionally
-          omitted.
+          <strong>Local development only.</strong> Requests are stored in local
+          SQLite. Use synthetic details. Pricing, quote terms, and job creation
+          are not part of this intake step.
         </p>
       </aside>
 

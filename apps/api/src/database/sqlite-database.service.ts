@@ -2,7 +2,11 @@ import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { DatabaseHealth, DatabasePort } from "./database.port";
+import {
+  DatabaseHealth,
+  DatabasePort,
+  QuoteRequestRecord,
+} from "./database.port";
 import { runSqliteMigrations } from "./sqlite-migrations";
 
 @Injectable()
@@ -47,6 +51,78 @@ export class SqliteDatabaseService
       status: "ok",
       provider: "sqlite",
       schemaVersion: migration.version,
+    };
+  }
+
+  async createQuoteRequest(
+    request: QuoteRequestRecord,
+  ): Promise<QuoteRequestRecord> {
+    this.connection
+      .prepare(
+        `INSERT INTO quote_request
+          (id, company_name, contact_name, email, message, created_at)
+         VALUES (@id, @companyName, @contactName, @email, @message, @createdAt)`,
+      )
+      .run(request);
+
+    return request;
+  }
+
+  async listQuoteRequests(): Promise<QuoteRequestRecord[]> {
+    const rows = this.connection
+      .prepare(
+        `SELECT id, company_name, contact_name, email, message, created_at
+         FROM quote_request
+         ORDER BY created_at DESC, id DESC`,
+      )
+      .all() as Array<{
+      id: string;
+      company_name: string;
+      contact_name: string;
+      email: string;
+      message: string;
+      created_at: string;
+    }>;
+
+    return rows.map((row) => this.toQuoteRequest(row));
+  }
+
+  async findQuoteRequest(id: string): Promise<QuoteRequestRecord | null> {
+    const row = this.connection
+      .prepare(
+        `SELECT id, company_name, contact_name, email, message, created_at
+         FROM quote_request
+         WHERE id = ?`,
+      )
+      .get(id) as
+      | {
+          id: string;
+          company_name: string;
+          contact_name: string;
+          email: string;
+          message: string;
+          created_at: string;
+        }
+      | undefined;
+
+    return row ? this.toQuoteRequest(row) : null;
+  }
+
+  private toQuoteRequest(row: {
+    id: string;
+    company_name: string;
+    contact_name: string;
+    email: string;
+    message: string;
+    created_at: string;
+  }): QuoteRequestRecord {
+    return {
+      id: row.id,
+      companyName: row.company_name,
+      contactName: row.contact_name,
+      email: row.email,
+      message: row.message,
+      createdAt: row.created_at,
     };
   }
 

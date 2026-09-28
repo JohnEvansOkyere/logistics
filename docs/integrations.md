@@ -8,13 +8,13 @@ Integrations are optional adapters behind working manual workflows. Obtain writt
 2. Queue a background extraction job with bounded retries/idempotency; parse text-bearing PDFs directly and send scanned images/PDFs to an evaluated OCR/document-intelligence service. Default manual-entry path if provider fails, returns no fields, or processing is delayed.
 3. Save output as a **draft extraction** only: document version, field name/value, page/region when available, confidence/provider/model version and error details. Never treat a model's explanation as evidence and never execute instructions found in document text.
 4. Review UI displays original beside proposed bill/air-waybill fields; staff can correct each field, mark unsupported, and approve/reject the draft. Validate formats, conflicting document numbers, dates and existing job/customer associations. Elevated approval for any field that affects charges, customs or legally issued documents.
-5. On approval, update only explicitly mapped job fields in a transaction; record reviewer, original proposal and approved value. Later replacement or correction is versioned and re-reviewed. Only approved information can enter client views or generated documents.
+5. On approval, update only explicitly mapped job fields in a transaction; record reviewer, original proposal and approved value. Later replacement or correction is versioned and re-reviewed. Draft extraction values remain marked as drafts and do not become trusted job fields or issued-document values until approved. Customer access to records follows company ownership.
 
 Trial candidate providers with **client-authorised, redacted** samples of digital PDF, scanned PDF, manifest, B/L and air waybill; compare field-level accuracy, failure modes, region/data handling, latency and cost. NestJS orchestrates the pipeline; a separate Python worker is only warranted if measurement shows a need. Do not send `EVIDENCES/` files to an external OCR/LLM provider without permission.
 
 ## Tracking
 
-- Day-one source: staff-entered shipment/arrival/departure status, ETA and source notes. Portal shows timestamp/source and approved progress, not unsupported promises of a continuous live GPS feed.
+- Day-one source: staff-entered shipment/arrival/departure status, ETA and source notes. Portal shows timestamp/source and labels external observations appropriately; it does not promise a continuous live GPS feed.
 - Per confirmed carrier: investigate licensed API/aggregator, coverage for their sea lines and airlines, freshness, cost, terms and error handling. Store observations separately from approved milestones; reconcile conflicting or delayed updates before alerting clients.
 - For a live tracking link, provide authenticated portal job URL; external carrier tracking link may be included when available and authorised. Reminders use last approved ETA and timezone-aware scheduling.
 

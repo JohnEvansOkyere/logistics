@@ -54,4 +54,4 @@ This records money received outside the app; it must not imply bank verification
 
 ## Customer visibility
 
-Invoice, waybill, receipt, and any additional customer document remain scoped to an active membership for that company. A record must be explicitly marked client-visible before the portal may show it. Internal costs, staff notes, unpublished drafts, and unapproved extraction data stay hidden by default. The exact set of additional customer-visible record types remains to confirm under D04.
+Customer access to invoices, waybills, receipts, and all other business records follows explicit company membership: users see all records belonging to their assigned company or companies, and no records belonging to other companies. Do not gate company-owned records behind a per-document publication flag or document-type allowlist. BJH-only administrative records are not customer-company records.

@@ -1,12 +1,10 @@
 import Link from "next/link";
 import { RequestInbox } from "./RequestInbox";
 import styles from "./quotation.module.css";
-import { sampleQuoteRequests } from "./sampleQuoteRequests";
 
 export const metadata = {
   title: "Quotation requests | BJH Logistics",
-  description:
-    "Synthetic quotation-request inbox prototype for local UI review.",
+  description: "Local quote-request inbox for BJH Logistics staff.",
 };
 
 export default function QuotationsPage() {
@@ -18,25 +16,28 @@ export default function QuotationsPage() {
 
       <header className={styles.pageHeader}>
         <div>
-          <p className={styles.eyebrow}>STAFF WORKSPACE · UI PROTOTYPE</p>
+          <p className={styles.eyebrow}>STAFF WORKSPACE · LOCAL ENGINE</p>
           <h1>Quotation requests</h1>
           <p className={styles.description}>
-            A local preview of the staff request inbox and review screen.
+            Review requests submitted to the local business API.
           </p>
         </div>
         <span className={styles.localBadge}>LOCAL DEVELOPMENT</span>
       </header>
 
-      <aside className={styles.sampleNotice} aria-label="Sample data notice">
+      <aside
+        className={styles.sampleNotice}
+        aria-label="Local development notice"
+      >
         <span aria-hidden="true">i</span>
         <p>
-          <strong>Synthetic request examples only.</strong> No client requests,
-          pricing, issued quotations, or job records are loaded. This page is
-          not connected to an API or Supabase.
+          <strong>Local development only.</strong> Requests are saved in local
+          SQLite. Use synthetic details; pricing, issued quotations, and job
+          records are not part of this slice.
         </p>
       </aside>
 
-      <RequestInbox requests={sampleQuoteRequests} />
+      <RequestInbox />
     </main>
   );
 }

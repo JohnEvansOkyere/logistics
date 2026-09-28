@@ -1,5 +1,14 @@
-import { Inject, Injectable, OnModuleDestroy } from "@nestjs/common";
-import { DatabaseHealth, DatabasePort } from "./database.port";
+import {
+  Inject,
+  Injectable,
+  OnModuleDestroy,
+  ServiceUnavailableException,
+} from "@nestjs/common";
+import {
+  DatabaseHealth,
+  DatabasePort,
+  QuoteRequestRecord,
+} from "./database.port";
 
 export const POSTGRES_POOL = Symbol("POSTGRES_POOL");
 
@@ -19,6 +28,26 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
     } catch {
       return { status: "error", provider: "postgresql" };
     }
+  }
+
+  async createQuoteRequest(
+    _request: QuoteRequestRecord,
+  ): Promise<QuoteRequestRecord> {
+    throw new ServiceUnavailableException(
+      "PostgreSQL business persistence is not configured",
+    );
+  }
+
+  async listQuoteRequests(): Promise<QuoteRequestRecord[]> {
+    throw new ServiceUnavailableException(
+      "PostgreSQL business persistence is not configured",
+    );
+  }
+
+  async findQuoteRequest(_id: string): Promise<QuoteRequestRecord | null> {
+    throw new ServiceUnavailableException(
+      "PostgreSQL business persistence is not configured",
+    );
   }
 
   async onModuleDestroy(): Promise<void> {
