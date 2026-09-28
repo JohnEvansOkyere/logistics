@@ -19,3 +19,9 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **What was decided:** Start P02 with local SQLite persistence for quote requests and a connected staff inbox/detail form; do not include authentication, pricing, quote acceptance, or job creation in this slice.
 **Why:** It turns the existing local-only intake preview into the first runnable business flow while D03/D12 pricing and job-number rules remain open.
 **What was rejected:** Starting with authentication or treating this request-intake slice as the full quote-to-job engine.
+
+## 2026-09-28, Customer record creation behavior
+
+**What was decided:** Model customer companies and contacts separately in local SQLite; create a company with its initial contact; search across company name, contact name and email. Same-name company submissions create distinct records rather than auto-merging.
+**Why:** This supports P01 while avoiding silent merging without an agreed duplicate-resolution rule.
+**What was rejected:** Automatic company matching/merging during intake.

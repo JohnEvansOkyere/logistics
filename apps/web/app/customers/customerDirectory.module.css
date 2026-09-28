@@ -101,6 +101,99 @@
   padding: 22px 22px 8px;
 }
 
+.customerForm {
+  border: 1px solid #dfe7ee;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgb(20 48 72 / 4%);
+  padding: 22px;
+}
+
+.customerFormFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 17px;
+}
+
+.customerFormField {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 7px;
+  color: #354e63;
+  font-size: 0.73rem;
+  font-weight: 700;
+}
+
+.customerFormField > span {
+  color: #a94d3d;
+}
+
+.customerFormField input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #bdccd9;
+  border-radius: 7px;
+  background: #fff;
+  color: var(--brand-ink);
+  padding: 10px 11px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 400;
+}
+
+.customerFormField input:focus {
+  border-color: var(--brand-primary);
+  outline: 3px solid rgb(11 63 174 / 12%);
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+  border-top: 1px solid #e5ebf0;
+  padding-top: 16px;
+}
+
+.formCancel,
+.formSubmit {
+  min-height: 38px;
+  border-radius: 7px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 0.73rem;
+  font-weight: 700;
+}
+
+.formCancel {
+  color: #405a70;
+  text-decoration: none;
+}
+
+.formSubmit {
+  border: 1px solid var(--brand-primary);
+  background: var(--brand-primary);
+  color: #fff;
+  cursor: pointer;
+}
+
+.formSubmit:hover {
+  background: #082f86;
+}
+
+.formSubmit:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.formError {
+  margin: 14px 0 0;
+  color: #a94d3d;
+  font-size: 0.75rem;
+}
+
 .searchHeader {
   display: flex;
   align-items: flex-start;
@@ -122,14 +215,19 @@
   font-size: 0.75rem;
 }
 
-.sampleCount {
+.newCustomerLink {
   flex: 0 0 auto;
-  border-radius: 999px;
-  background: #f1f4f7;
-  color: #657787;
-  padding: 6px 9px;
-  font-size: 0.65rem;
+  border-radius: 7px;
+  background: var(--brand-primary);
+  color: #fff;
+  padding: 8px 11px;
+  font-size: 0.72rem;
   font-weight: 700;
+  text-decoration: none;
+}
+
+.newCustomerLink:hover {
+  background: #082f86;
 }
 
 .searchRow {
@@ -315,13 +413,16 @@
     padding: 17px 14px 5px;
   }
 
-  .searchHeader {
-    display: block;
+  .customerForm {
+    padding: 16px 14px;
   }
 
-  .sampleCount {
-    display: inline-block;
-    margin-top: 11px;
+  .customerFormFields {
+    grid-template-columns: 1fr;
+  }
+
+  .searchHeader {
+    display: block;
   }
 
   .tableScroll {
