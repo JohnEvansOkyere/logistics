@@ -217,6 +217,10 @@
   text-decoration: underline;
 }
 
+.historyList p {
+  margin: 4px 0 0;
+}
+
 a:focus-visible {
   outline: 3px solid var(--brand-secondary);
   outline-offset: 3px;

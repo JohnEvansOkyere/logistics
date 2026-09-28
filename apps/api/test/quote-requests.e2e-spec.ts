@@ -240,3 +240,148 @@ test("request association rejects unknown customer companies", async () => {
 
   assert.equal(linkResponse.status, 404);
 });
+
+test("quote drafts require an explicitly associated request", async () => {
+  const requestResponse = await staffFetch(`${baseUrl}/api/v1/quote-requests`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      companyName: "Draft Gate Demo Ltd",
+      contactName: "Casey Demo",
+      email: "casey@example.test",
+      message: "Synthetic draft gate request",
+    }),
+  });
+  const request = (await requestResponse.json()) as { id: string };
+
+  const getResponse = await staffFetch(
+    `${baseUrl}/api/v1/quote-requests/${request.id}/draft`,
+  );
+  assert.equal(getResponse.status, 409);
+
+  const saveResponse = await staffFetch(
+    `${baseUrl}/api/v1/quote-requests/${request.id}/draft`,
+    {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ content: "Synthetic quote draft" }),
+    },
+  );
+  assert.equal(saveResponse.status, 409);
+});
+
+test("quote draft edits append immutable revisions and persist in customer history", async () => {
+  const customerResponse = await staffFetch(`${baseUrl}/api/v1/customers`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      companyName: "Draft History Demo Ltd",
+      contactName: "Jamie Demo",
+      email: "jamie@example.test",
+    }),
+  });
+  const customer = (await customerResponse.json()) as { id: string };
+
+  const requestResponse = await staffFetch(`${baseUrl}/api/v1/quote-requests`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      companyName: "Draft History Demo Ltd",
+      contactName: "Jamie Demo",
+      email: "jamie@example.test",
+      message: "Synthetic revision request",
+    }),
+  });
+  const request = (await requestResponse.json()) as { id: string };
+  const linkResponse = await staffFetch(
+    `${baseUrl}/api/v1/quote-requests/${request.id}/customer`,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ customerCompanyId: customer.id }),
+    },
+  );
+  assert.equal(linkResponse.status, 200);
+
+  const emptyDraftResponse = await staffFetch(
+    `${baseUrl}/api/v1/quote-requests/${request.id}/draft`,
+  );
+  assert.equal(emptyDraftResponse.status, 200);
+  assert.deepEqual(await emptyDraftResponse.json(), { draft: null });
+
+  const invalidResponse = await staffFetch(
+    `${baseUrl}/api/v1/quote-requests/${request.id}/draft`,
+    {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ content: "  " }),
+    },
+  );
+  assert.equal(invalidResponse.status, 400);
+
+  const save = (content: string) =>
+    staffFetch(`${baseUrl}/api/v1/quote-requests/${request.id}/draft`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ content }),
+    });
+  const firstResponse = await save("Synthetic version one");
+  assert.equal(firstResponse.status, 200);
+  const first = (await firstResponse.json()) as {
+    id: string;
+    content: string;
+    revisions: Array<{
+      id: string;
+      revisionNumber: number;
+      content: string;
+      createdAt: string;
+    }>;
+  };
+  assert.equal(first.revisions.length, 1);
+  assert.equal(first.revisions[0].revisionNumber, 1);
+  assert.equal(first.revisions[0].content, "Synthetic version one");
+
+  const secondResponse = await save("Synthetic revised version two");
+  assert.equal(secondResponse.status, 200);
+  const second = (await secondResponse.json()) as typeof first;
+  assert.equal(second.id, first.id);
+  assert.equal(second.content, "Synthetic revised version two");
+  assert.deepEqual(
+    second.revisions.map(({ revisionNumber, content }) => ({
+      revisionNumber,
+      content,
+    })),
+    [
+      { revisionNumber: 2, content: "Synthetic revised version two" },
+      { revisionNumber: 1, content: "Synthetic version one" },
+    ],
+  );
+  assert.notEqual(second.revisions[0].id, second.revisions[1].id);
+
+  const historyResponse = await staffFetch(
+    `${baseUrl}/api/v1/quote-requests?customerCompanyId=${customer.id}`,
+  );
+  const history = (await historyResponse.json()) as Array<{
+    id: string;
+    quoteDraftRevisionCount: number;
+    quoteDraftUpdatedAt: string | null;
+  }>;
+  assert.equal(history[0].id, request.id);
+  assert.equal(history[0].quoteDraftRevisionCount, 2);
+  assert.equal(
+    Date.parse(history[0].quoteDraftUpdatedAt ?? ""),
+    Date.parse(second.revisions[0].createdAt),
+  );
+
+  await application.close();
+  await startApplication();
+  const persistedResponse = await staffFetch(
+    `${baseUrl}/api/v1/quote-requests/${request.id}/draft`,
+  );
+  assert.equal(persistedResponse.status, 200);
+  const persisted = (
+    (await persistedResponse.json()) as { draft: typeof first }
+  ).draft;
+  assert.equal(persisted.content, "Synthetic revised version two");
+  assert.equal(persisted.revisions.length, 2);
+});

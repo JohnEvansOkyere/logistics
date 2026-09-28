@@ -37,3 +37,9 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **What was decided:** Staff explicitly links a quote request to a customer company from the request detail view; the company profile then shows its linked requests.
 **Why:** This connects P01 and P02 without inferring that a request and customer are the same solely because their names match.
 **What was rejected:** Automatic request-to-customer matching by company-name text.
+
+## 2026-09-28, Quote draft content and revisions
+
+**What was decided:** The local draft slice stores one editable plain-text body per explicitly customer-associated quote request. Each save appends an immutable numbered content snapshot; request and customer history expose revision count and latest save time. Drafts cannot be read or saved before explicit association.
+**Why:** This provides editable, traceable local work while D03 and D06 still govern approved pricing, tax, terms, numbering, and issued-document structure.
+**What was rejected:** Inventing structured rates, currency/tax fields, legal terms, quote issuance or acceptance, or job creation in this slice.

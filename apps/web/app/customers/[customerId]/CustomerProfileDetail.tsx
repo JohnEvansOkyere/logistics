@@ -158,6 +158,11 @@ export function CustomerProfileDetail() {
                         >
                           {request.message}
                         </Link>
+                        <p>
+                          {request.quoteDraftRevisionCount > 0
+                            ? `Quote draft · ${request.quoteDraftRevisionCount} ${request.quoteDraftRevisionCount === 1 ? "revision" : "revisions"}`
+                            : "No quote draft saved"}
+                        </p>
                       </li>
                     ))}
                   </ul>

@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from "@nestjs/common";
@@ -33,6 +34,16 @@ export class QuoteRequestsController {
   @Get(":id")
   get(@Param("id") id: string) {
     return this.requests.get(id);
+  }
+
+  @Get(":id/draft")
+  async getDraft(@Param("id") id: string) {
+    return { draft: await this.requests.getDraft(id) };
+  }
+
+  @Put(":id/draft")
+  saveDraft(@Param("id") id: string, @Body() body: unknown) {
+    return this.requests.saveDraft(id, body);
   }
 
   @Patch(":id/customer")

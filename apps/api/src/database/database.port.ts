@@ -13,6 +13,24 @@ export interface QuoteRequestRecord {
   createdAt: string;
   customerCompanyId: string | null;
   customerCompanyName: string | null;
+  quoteDraftRevisionCount: number;
+  quoteDraftUpdatedAt: string | null;
+}
+
+export interface QuoteDraftRevisionRecord {
+  id: string;
+  revisionNumber: number;
+  content: string;
+  createdAt: string;
+}
+
+export interface QuoteDraftRecord {
+  id: string;
+  requestId: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+  revisions: QuoteDraftRevisionRecord[];
 }
 
 export interface CustomerContactRecord {
@@ -49,6 +67,12 @@ export abstract class DatabasePort {
     requestId: string,
     customerCompanyId: string,
   ): Promise<QuoteRequestRecord | null>;
+  abstract findQuoteDraft(requestId: string): Promise<QuoteDraftRecord | null>;
+  abstract saveQuoteDraft(
+    requestId: string,
+    content: string,
+    savedAt: string,
+  ): Promise<QuoteDraftRecord>;
   abstract createCustomer(
     customer: CustomerCompanyRecord,
   ): Promise<CustomerCompanyRecord>;

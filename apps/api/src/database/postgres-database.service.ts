@@ -8,6 +8,7 @@ import {
   DatabaseHealth,
   DatabasePort,
   CustomerCompanyRecord,
+  QuoteDraftRecord,
   QuoteRequestRecord,
   StaffRoleKey,
 } from "./database.port";
@@ -58,6 +59,22 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
     _requestId: string,
     _customerCompanyId: string,
   ): Promise<QuoteRequestRecord | null> {
+    throw new ServiceUnavailableException(
+      "PostgreSQL business persistence is not configured",
+    );
+  }
+
+  async findQuoteDraft(_requestId: string): Promise<QuoteDraftRecord | null> {
+    throw new ServiceUnavailableException(
+      "PostgreSQL business persistence is not configured",
+    );
+  }
+
+  async saveQuoteDraft(
+    _requestId: string,
+    _content: string,
+    _savedAt: string,
+  ): Promise<QuoteDraftRecord> {
     throw new ServiceUnavailableException(
       "PostgreSQL business persistence is not configured",
     );

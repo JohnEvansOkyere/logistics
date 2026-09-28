@@ -1,15 +1,25 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
-import { DatabasePort, QuoteRequestRecord } from "../database/database.port";
+import {
+  DatabasePort,
+  QuoteDraftRecord,
+  QuoteRequestRecord,
+} from "../database/database.port";
 
 type QuoteRequestInput = Omit<
   QuoteRequestRecord,
-  "id" | "createdAt" | "customerCompanyId" | "customerCompanyName"
+  | "id"
+  | "createdAt"
+  | "customerCompanyId"
+  | "customerCompanyName"
+  | "quoteDraftRevisionCount"
+  | "quoteDraftUpdatedAt"
 >;
 
 @Injectable()
@@ -25,6 +35,8 @@ export class QuoteRequestsService {
       createdAt: new Date().toISOString(),
       customerCompanyId: null,
       customerCompanyName: null,
+      quoteDraftRevisionCount: 0,
+      quoteDraftUpdatedAt: null,
     });
   }
 
@@ -74,6 +86,50 @@ export class QuoteRequestsService {
       throw new NotFoundException("Quote request was not found");
     }
 
+    return request;
+  }
+
+  async getDraft(requestId: string): Promise<QuoteDraftRecord | null> {
+    await this.requireAssociatedRequest(requestId);
+    return this.database.findQuoteDraft(requestId);
+  }
+
+  async saveDraft(
+    requestId: string,
+    input: unknown,
+  ): Promise<QuoteDraftRecord> {
+    await this.requireAssociatedRequest(requestId);
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      throw new BadRequestException("A quote draft object is required");
+    }
+
+    const content = (input as Record<string, unknown>).content;
+    if (
+      typeof content !== "string" ||
+      !content.trim() ||
+      content.length > 20000
+    ) {
+      throw new BadRequestException(
+        "content must contain 1 to 20000 characters",
+      );
+    }
+
+    return this.database.saveQuoteDraft(
+      requestId,
+      content.trim(),
+      new Date().toISOString(),
+    );
+  }
+
+  private async requireAssociatedRequest(
+    requestId: string,
+  ): Promise<QuoteRequestRecord> {
+    const request = await this.get(requestId);
+    if (!request.customerCompanyId) {
+      throw new ConflictException(
+        "Link the quote request to a customer company before drafting",
+      );
+    }
     return request;
   }
 

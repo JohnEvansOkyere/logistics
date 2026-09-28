@@ -9,11 +9,34 @@ export type QuoteRequest = {
   createdAt: string;
   customerCompanyId: string | null;
   customerCompanyName: string | null;
+  quoteDraftRevisionCount: number;
+  quoteDraftUpdatedAt: string | null;
+};
+
+export type QuoteDraftRevision = {
+  id: string;
+  revisionNumber: number;
+  content: string;
+  createdAt: string;
+};
+
+export type QuoteDraft = {
+  id: string;
+  requestId: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+  revisions: QuoteDraftRevision[];
 };
 
 export type NewQuoteRequest = Omit<
   QuoteRequest,
-  "id" | "createdAt" | "customerCompanyId" | "customerCompanyName"
+  | "id"
+  | "createdAt"
+  | "customerCompanyId"
+  | "customerCompanyName"
+  | "quoteDraftRevisionCount"
+  | "quoteDraftUpdatedAt"
 >;
 
 const apiBaseUrl =
@@ -76,6 +99,33 @@ export async function associateQuoteRequestCustomer(
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ customerCompanyId }),
+      },
+    ),
+  );
+}
+
+export async function getQuoteDraft(
+  requestId: string,
+): Promise<QuoteDraft | null> {
+  const response = await readResponse<{ draft: QuoteDraft | null }>(
+    await authenticatedFetch(
+      `${quoteRequestsUrl}/${encodeURIComponent(requestId)}/draft`,
+    ),
+  );
+  return response.draft;
+}
+
+export async function saveQuoteDraft(
+  requestId: string,
+  content: string,
+): Promise<QuoteDraft> {
+  return readResponse<QuoteDraft>(
+    await authenticatedFetch(
+      `${quoteRequestsUrl}/${encodeURIComponent(requestId)}/draft`,
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ content }),
       },
     ),
   );

@@ -7,6 +7,7 @@ import {
   DatabaseHealth,
   DatabasePort,
   CustomerCompanyRecord,
+  QuoteDraftRecord,
   QuoteRequestRecord,
   StaffRoleKey,
 } from "./database.port";
@@ -84,7 +85,12 @@ export class SqliteDatabaseService
            request.message,
            request.created_at,
            request.customer_company_id,
-           company.company_name AS customer_company_name
+           company.company_name AS customer_company_name,
+           (SELECT COUNT(*) FROM quote_draft_revision AS revision
+             JOIN quote_draft AS draft ON draft.id = revision.quote_draft_id
+             WHERE draft.quote_request_id = request.id) AS quote_draft_revision_count,
+           (SELECT draft.updated_at FROM quote_draft AS draft
+             WHERE draft.quote_request_id = request.id) AS quote_draft_updated_at
          FROM quote_request AS request
          LEFT JOIN customer_company AS company
            ON company.id = request.customer_company_id
@@ -110,7 +116,12 @@ export class SqliteDatabaseService
            request.message,
            request.created_at,
            request.customer_company_id,
-           company.company_name AS customer_company_name
+           company.company_name AS customer_company_name,
+           (SELECT COUNT(*) FROM quote_draft_revision AS revision
+             JOIN quote_draft AS draft ON draft.id = revision.quote_draft_id
+             WHERE draft.quote_request_id = request.id) AS quote_draft_revision_count,
+           (SELECT draft.updated_at FROM quote_draft AS draft
+             WHERE draft.quote_request_id = request.id) AS quote_draft_updated_at
          FROM quote_request AS request
          LEFT JOIN customer_company AS company
            ON company.id = request.customer_company_id
@@ -130,6 +141,91 @@ export class SqliteDatabaseService
       .run(customerCompanyId, requestId);
 
     return result.changes === 0 ? null : this.findQuoteRequest(requestId);
+  }
+
+  async findQuoteDraft(requestId: string): Promise<QuoteDraftRecord | null> {
+    const draft = this.connection
+      .prepare(
+        `SELECT id, quote_request_id, content, created_at, updated_at
+         FROM quote_draft WHERE quote_request_id = ?`,
+      )
+      .get(requestId) as QuoteDraftRow | undefined;
+
+    if (!draft) {
+      return null;
+    }
+
+    const revisions = this.connection
+      .prepare(
+        `SELECT id, revision_number, content, created_at
+         FROM quote_draft_revision
+         WHERE quote_draft_id = ?
+         ORDER BY revision_number DESC`,
+      )
+      .all(draft.id) as QuoteDraftRevisionRow[];
+
+    return {
+      id: draft.id,
+      requestId: draft.quote_request_id,
+      content: draft.content,
+      createdAt: draft.created_at,
+      updatedAt: draft.updated_at,
+      revisions: revisions.map((revision) => ({
+        id: revision.id,
+        revisionNumber: revision.revision_number,
+        content: revision.content,
+        createdAt: revision.created_at,
+      })),
+    };
+  }
+
+  async saveQuoteDraft(
+    requestId: string,
+    content: string,
+    savedAt: string,
+  ): Promise<QuoteDraftRecord> {
+    const draftId = randomUUID();
+    const revisionId = randomUUID();
+    this.connection.transaction(() => {
+      this.connection
+        .prepare(
+          `INSERT INTO quote_draft (id, quote_request_id, content, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT (quote_request_id) DO UPDATE SET
+             content = excluded.content,
+             updated_at = excluded.updated_at`,
+        )
+        .run(draftId, requestId, content, savedAt, savedAt);
+
+      const draft = this.connection
+        .prepare("SELECT id FROM quote_draft WHERE quote_request_id = ?")
+        .get(requestId) as { id: string };
+      const revisionNumber = this.connection
+        .prepare(
+          `SELECT COALESCE(MAX(revision_number), 0) + 1 AS next_revision
+           FROM quote_draft_revision WHERE quote_draft_id = ?`,
+        )
+        .get(draft.id) as { next_revision: number };
+      this.connection
+        .prepare(
+          `INSERT INTO quote_draft_revision
+            (id, quote_draft_id, revision_number, content, created_at)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(
+          revisionId,
+          draft.id,
+          revisionNumber.next_revision,
+          content,
+          savedAt,
+        );
+    })();
+
+    const saved = await this.findQuoteDraft(requestId);
+    if (!saved) {
+      throw new Error("Saved quote draft could not be loaded");
+    }
+    return saved;
   }
 
   async createCustomer(
@@ -296,6 +392,8 @@ export class SqliteDatabaseService
     created_at: string;
     customer_company_id: string | null;
     customer_company_name: string | null;
+    quote_draft_revision_count: number;
+    quote_draft_updated_at: string | null;
   }): QuoteRequestRecord {
     return {
       id: row.id,
@@ -306,6 +404,8 @@ export class SqliteDatabaseService
       createdAt: row.created_at,
       customerCompanyId: row.customer_company_id,
       customerCompanyName: row.customer_company_name,
+      quoteDraftRevisionCount: row.quote_draft_revision_count,
+      quoteDraftUpdatedAt: row.quote_draft_updated_at,
     };
   }
 
@@ -333,4 +433,21 @@ type QuoteRequestRow = {
   created_at: string;
   customer_company_id: string | null;
   customer_company_name: string | null;
+  quote_draft_revision_count: number;
+  quote_draft_updated_at: string | null;
+};
+
+type QuoteDraftRow = {
+  id: string;
+  quote_request_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type QuoteDraftRevisionRow = {
+  id: string;
+  revision_number: number;
+  content: string;
+  created_at: string;
 };

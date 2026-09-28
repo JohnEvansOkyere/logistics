@@ -7,9 +7,11 @@ import { listCustomers } from "../../../customers/customerApi";
 import type { CustomerCompany } from "../../../customers/customerApi";
 import {
   associateQuoteRequestCustomer,
+  getQuoteDraft,
   getQuoteRequest,
+  saveQuoteDraft,
 } from "../../quoteRequestApi";
-import type { QuoteRequest } from "../../quoteRequestApi";
+import type { QuoteDraft, QuoteRequest } from "../../quoteRequestApi";
 import styles from "../../quotation.module.css";
 
 type LoadState = "loading" | "ready" | "error";
@@ -24,6 +26,11 @@ export function QuoteRequestDetail() {
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [linkError, setLinkError] = useState("");
   const [linking, setLinking] = useState(false);
+  const [draft, setDraft] = useState<QuoteDraft | null>(null);
+  const [draftContent, setDraftContent] = useState("");
+  const [draftState, setDraftState] = useState<LoadState>("loading");
+  const [draftError, setDraftError] = useState("");
+  const [savingDraft, setSavingDraft] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -33,6 +40,31 @@ export function QuoteRequestDetail() {
         if (active) {
           setRequest(result);
           setLoadState("ready");
+          if (result.customerCompanyId) {
+            setDraftState("loading");
+            getQuoteDraft(requestId)
+              .then((savedDraft) => {
+                if (active) {
+                  setDraft(savedDraft);
+                  setDraftContent(savedDraft?.content ?? "");
+                  setDraftState("ready");
+                }
+              })
+              .catch((cause: unknown) => {
+                if (active) {
+                  setDraftError(
+                    cause instanceof Error
+                      ? cause.message
+                      : "The quote draft could not be loaded",
+                  );
+                  setDraftState("error");
+                }
+              });
+          } else {
+            setDraft(null);
+            setDraftContent("");
+            setDraftState("ready");
+          }
         }
       })
       .catch((cause: unknown) => {
@@ -82,9 +114,25 @@ export function QuoteRequestDetail() {
     setLinking(true);
     setLinkError("");
     try {
-      setRequest(
-        await associateQuoteRequestCustomer(requestId, selectedCustomerId),
+      const linkedRequest = await associateQuoteRequestCustomer(
+        requestId,
+        selectedCustomerId,
       );
+      setRequest(linkedRequest);
+      setDraftState("loading");
+      try {
+        const savedDraft = await getQuoteDraft(requestId);
+        setDraft(savedDraft);
+        setDraftContent(savedDraft?.content ?? "");
+        setDraftState("ready");
+      } catch (cause) {
+        setDraftError(
+          cause instanceof Error
+            ? cause.message
+            : "The quote draft could not be loaded",
+        );
+        setDraftState("error");
+      }
     } catch (cause) {
       setLinkError(
         cause instanceof Error
@@ -93,6 +141,37 @@ export function QuoteRequestDetail() {
       );
     } finally {
       setLinking(false);
+    }
+  }
+
+  async function saveDraft() {
+    if (savingDraft || !draftContent.trim()) {
+      return;
+    }
+
+    setSavingDraft(true);
+    setDraftError("");
+    try {
+      const savedDraft = await saveQuoteDraft(requestId, draftContent);
+      setDraft(savedDraft);
+      setDraftContent(savedDraft.content);
+      setRequest((current) =>
+        current
+          ? {
+              ...current,
+              quoteDraftRevisionCount: savedDraft.revisions.length,
+              quoteDraftUpdatedAt: savedDraft.updatedAt,
+            }
+          : current,
+      );
+    } catch (cause) {
+      setDraftError(
+        cause instanceof Error
+          ? cause.message
+          : "The quote draft could not be saved",
+      );
+    } finally {
+      setSavingDraft(false);
     }
   }
 
@@ -219,6 +298,68 @@ export function QuoteRequestDetail() {
                 <p className={styles.customerLinkError} role="alert">
                   {linkError}
                 </p>
+              )}
+            </section>
+            <section
+              className={styles.customerLinkPanel}
+              aria-labelledby="quote-draft-title"
+            >
+              <h3 id="quote-draft-title">Quote draft</h3>
+              {!request.customerCompanyId ? (
+                <p>Link this request to a customer record before drafting.</p>
+              ) : draftState === "loading" ? (
+                <p role="status">Loading quote draft…</p>
+              ) : draftState === "error" ? (
+                <p role="alert">{draftError}</p>
+              ) : (
+                <>
+                  <label htmlFor="quote-draft-content">Draft content</label>
+                  <textarea
+                    id="quote-draft-content"
+                    maxLength={20000}
+                    onChange={(event) => setDraftContent(event.target.value)}
+                    rows={8}
+                    value={draftContent}
+                  />
+                  <button
+                    className={styles.secondaryButton}
+                    disabled={!draftContent.trim() || savingDraft}
+                    onClick={() => void saveDraft()}
+                    type="button"
+                  >
+                    {savingDraft
+                      ? "Saving…"
+                      : draft
+                        ? "Save new revision"
+                        : "Save quote draft"}
+                  </button>
+                  {draftError && <p role="alert">{draftError}</p>}
+                  {draft && (
+                    <div aria-label="Quote draft revisions">
+                      <h4>Saved revisions</h4>
+                      <ol>
+                        {draft.revisions.map((revision) => (
+                          <li key={revision.id}>
+                            Revision {revision.revisionNumber} ·{" "}
+                            {new Intl.DateTimeFormat("en-GH", {
+                              dateStyle: "medium",
+                              timeStyle: "short",
+                              timeZone: "Africa/Accra",
+                            }).format(new Date(revision.createdAt))}
+                            <details>
+                              <summary>View saved content</summary>
+                              <p>{revision.content}</p>
+                            </details>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+                  <p>
+                    Draft only. Saving does not issue or accept a quote or
+                    create a job.
+                  </p>
+                </>
               )}
             </section>
           </article>
