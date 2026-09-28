@@ -12,6 +12,7 @@ import {
   TEST_CUSTOMER_B_TOKEN,
   TEST_SUPER_ADMIN_ID,
   TEST_SUPER_ADMIN_TOKEN,
+  TEST_UNASSIGNED_TOKEN,
   TEST_UNASSIGNED_USER_ID,
 } from "./test-application";
 import { createTestApplication } from "./test-application";
@@ -195,6 +196,81 @@ test("customer memberships scope customer searches, records, requests and drafts
   assert.equal(((await staffCanSearchBoth.json()) as unknown[]).length, 2);
 });
 
+test("department staff can read shared records but cannot edit or read drafts", async () => {
+  const customers = await call("/api/v1/customers", TEST_UNASSIGNED_TOKEN);
+  assert.equal(customers.status, 200);
+  assert.equal(((await customers.json()) as unknown[]).length, 2);
+
+  const requests = await call("/api/v1/quote-requests", TEST_UNASSIGNED_TOKEN);
+  assert.equal(requests.status, 200);
+  assert.equal(((await requests.json()) as unknown[]).length, 2);
+  assert.equal(
+    (await call(`/api/v1/quote-requests/${requestB}`, TEST_UNASSIGNED_TOKEN))
+      .status,
+    200,
+  );
+
+  assert.equal(
+    (
+      await call(
+        `/api/v1/quote-requests/${requestA}/draft`,
+        TEST_UNASSIGNED_TOKEN,
+      )
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await call("/api/v1/customers", TEST_UNASSIGNED_TOKEN, {
+        method: "POST",
+        body: JSON.stringify({
+          companyName: "Unauthorized Synthetic Co",
+          contactName: "Synthetic User",
+          email: "unauthorized@example.test",
+        }),
+      })
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await call("/api/v1/quote-requests", TEST_UNASSIGNED_TOKEN, {
+        method: "POST",
+        body: JSON.stringify({
+          companyName: "Unauthorized Synthetic Co",
+          contactName: "Synthetic User",
+          email: "unauthorized@example.test",
+          message: "Synthetic request",
+        }),
+      })
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await call(
+        `/api/v1/quote-requests/${requestA}/customer`,
+        TEST_UNASSIGNED_TOKEN,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ customerCompanyId: companyA }),
+        },
+      )
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await call(
+        `/api/v1/quote-requests/${requestA}/draft`,
+        TEST_UNASSIGNED_TOKEN,
+        { method: "PUT", body: JSON.stringify({ content: "Unauthorized" }) },
+      )
+    ).status,
+    403,
+  );
+});
+
 test("membership revocation removes access and preserves history", async () => {
   const revoked = await call(
     `/api/v1/admin/company-memberships/${TEST_CUSTOMER_A_ID}/${companyA}`,
@@ -220,7 +296,7 @@ test("membership revocation removes access and preserves history", async () => {
   assert.ok(memberships[0].revokedAt);
 
   assert.equal(
-    (await call("/api/v1/customers", "test-unassigned-user-token")).status,
+    (await call("/api/v1/customers", TEST_CUSTOMER_A_TOKEN)).status,
     403,
   );
 });

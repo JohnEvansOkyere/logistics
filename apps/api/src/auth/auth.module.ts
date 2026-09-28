@@ -8,6 +8,7 @@ import { AdminStaffService } from "./admin-staff.service";
 import {
   CompanyScopeGuard,
   SupabaseIdentityGuard,
+  StaffCompanyReadGuard,
   SuperAdminGuard,
 } from "./auth.guards";
 import { AuthService } from "./auth.service";
@@ -32,6 +33,7 @@ import {
     SupabaseStaffAuthDirectory,
     { provide: STAFF_AUTH_DIRECTORY, useExisting: SupabaseStaffAuthDirectory },
     SupabaseIdentityGuard,
+    StaffCompanyReadGuard,
     SuperAdminGuard,
     CompanyScopeGuard,
   ],
@@ -40,6 +42,7 @@ import {
     SupabaseIdentityGuard,
     SuperAdminGuard,
     CompanyScopeGuard,
+    StaffCompanyReadGuard,
   ],
 })
 export class AuthModule {}

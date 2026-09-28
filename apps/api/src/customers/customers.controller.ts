@@ -10,8 +10,8 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import {
-  CompanyScopeGuard,
   SupabaseIdentityGuard,
+  StaffCompanyReadGuard,
   SuperAdminGuard,
 } from "../auth/auth.guards";
 import type { AuthenticatedRequest } from "../auth/auth.guards";
@@ -31,7 +31,7 @@ export class CustomersController {
   }
 
   @Get()
-  @UseGuards(CompanyScopeGuard)
+  @UseGuards(StaffCompanyReadGuard)
   list(
     @Query("search") search: string | undefined,
     @Req() request: AuthenticatedRequest,
@@ -40,7 +40,7 @@ export class CustomersController {
   }
 
   @Get(":id")
-  @UseGuards(CompanyScopeGuard)
+  @UseGuards(StaffCompanyReadGuard)
   get(@Param("id") id: string, @Req() request: AuthenticatedRequest) {
     return this.customers.get(id, request.allowedCompanyIds);
   }

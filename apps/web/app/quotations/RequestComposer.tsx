@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createQuoteRequest } from "./quoteRequestApi";
+import { useStaffAccess } from "../auth/useStaffAccess";
 import styles from "./quotation.module.css";
 
 type RequestDraft = {
@@ -20,6 +21,7 @@ const emptyDraft: RequestDraft = {
 };
 
 export function RequestComposer() {
+  const { status, isSuperAdmin } = useStaffAccess();
   const router = useRouter();
   const [draft, setDraft] = useState(emptyDraft);
   const [preview, setPreview] = useState<RequestDraft | null>(null);
@@ -29,6 +31,21 @@ export function RequestComposer() {
   const contactInput = useRef<HTMLInputElement>(null);
   const emailInput = useRef<HTMLInputElement>(null);
   const messageInput = useRef<HTMLTextAreaElement>(null);
+
+  if (status === "loading") {
+    return <p role="status">Checking staff access…</p>;
+  }
+  if (!isSuperAdmin) {
+    return (
+      <section className={styles.composerPanel}>
+        <p role="status">
+          {status === "unavailable"
+            ? "Staff access could not be checked. Try again when the API is available."
+            : "Only the super admin can create quote requests."}
+        </p>
+      </section>
+    );
+  }
 
   function previewRequest() {
     const fields = [

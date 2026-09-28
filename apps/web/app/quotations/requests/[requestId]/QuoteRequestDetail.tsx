@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { listCustomers } from "../../../customers/customerApi";
 import type { CustomerCompany } from "../../../customers/customerApi";
+import { useStaffAccess } from "../../../auth/useStaffAccess";
 import {
   associateQuoteRequestCustomer,
   getQuoteDraft,
@@ -17,6 +18,7 @@ import styles from "../../quotation.module.css";
 type LoadState = "loading" | "ready" | "error";
 
 export function QuoteRequestDetail() {
+  const staffAccess = useStaffAccess();
   const { requestId } = useParams<{ requestId: string }>();
   const [request, setRequest] = useState<QuoteRequest | null>(null);
   const [customers, setCustomers] = useState<CustomerCompany[]>([]);
@@ -41,6 +43,18 @@ export function QuoteRequestDetail() {
           setRequest(result);
           setLoadState("ready");
           if (result.customerCompanyId) {
+            if (staffAccess.status === "loading") return;
+            if (staffAccess.status === "unavailable") {
+              setDraftError("Staff access could not be checked.");
+              setDraftState("error");
+              return;
+            }
+            if (staffAccess.isDepartmentStaff) {
+              setDraft(null);
+              setDraftContent("");
+              setDraftState("ready");
+              return;
+            }
             setDraftState("loading");
             getQuoteDraft(requestId)
               .then((savedDraft) => {
@@ -81,7 +95,7 @@ export function QuoteRequestDetail() {
     return () => {
       active = false;
     };
-  }, [requestId]);
+  }, [requestId, staffAccess.isDepartmentStaff, staffAccess.status]);
 
   useEffect(() => {
     let active = true;
@@ -260,6 +274,10 @@ export function QuoteRequestDetail() {
                     {request.customerCompanyName}
                   </Link>
                 </p>
+              ) : !staffAccess.isSuperAdmin ? (
+                <p>
+                  Only the super admin can link requests to customer records.
+                </p>
               ) : customerLoadError ? (
                 <p role="alert">{customerLoadError}</p>
               ) : customers.length === 0 ? (
@@ -305,7 +323,12 @@ export function QuoteRequestDetail() {
               aria-labelledby="quote-draft-title"
             >
               <h3 id="quote-draft-title">Quote draft</h3>
-              {!request.customerCompanyId ? (
+              {staffAccess.isDepartmentStaff ? (
+                <p>
+                  Draft content is hidden from department staff until request
+                  assignment is available.
+                </p>
+              ) : !request.customerCompanyId ? (
                 <p>Link this request to a customer record before drafting.</p>
               ) : draftState === "loading" ? (
                 <p role="status">Loading quote draft…</p>
@@ -318,21 +341,24 @@ export function QuoteRequestDetail() {
                     id="quote-draft-content"
                     maxLength={20000}
                     onChange={(event) => setDraftContent(event.target.value)}
+                    readOnly={!staffAccess.isSuperAdmin}
                     rows={8}
                     value={draftContent}
                   />
-                  <button
-                    className={styles.secondaryButton}
-                    disabled={!draftContent.trim() || savingDraft}
-                    onClick={() => void saveDraft()}
-                    type="button"
-                  >
-                    {savingDraft
-                      ? "Saving…"
-                      : draft
-                        ? "Save new revision"
-                        : "Save quote draft"}
-                  </button>
+                  {staffAccess.isSuperAdmin && (
+                    <button
+                      className={styles.secondaryButton}
+                      disabled={!draftContent.trim() || savingDraft}
+                      onClick={() => void saveDraft()}
+                      type="button"
+                    >
+                      {savingDraft
+                        ? "Saving…"
+                        : draft
+                          ? "Save new revision"
+                          : "Save quote draft"}
+                    </button>
+                  )}
                   {draftError && <p role="alert">{draftError}</p>}
                   {draft && (
                     <div aria-label="Quote draft revisions">

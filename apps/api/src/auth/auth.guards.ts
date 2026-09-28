@@ -94,3 +94,32 @@ export class CompanyScopeGuard implements CanActivate {
     return true;
   }
 }
+
+@Injectable()
+export class StaffCompanyReadGuard implements CanActivate {
+  constructor(@Inject(DatabasePort) private readonly database: DatabasePort) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    if (!request.authUser) throw new UnauthorizedException();
+
+    const roles = await this.database.getActiveStaffRoles(
+      request.authUser.userId,
+    );
+    if (roles.length > 0) {
+      request.allowedCompanyIds = undefined;
+      return true;
+    }
+
+    const companyIds = await this.database.getActiveCustomerCompanyIds(
+      request.authUser.userId,
+    );
+    if (companyIds.length === 0) {
+      throw new ForbiddenException(
+        "An active staff role or customer-company membership is required",
+      );
+    }
+    request.allowedCompanyIds = companyIds;
+    return true;
+  }
+}

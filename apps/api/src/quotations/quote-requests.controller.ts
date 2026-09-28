@@ -14,6 +14,7 @@ import {
 import {
   CompanyScopeGuard,
   SupabaseIdentityGuard,
+  StaffCompanyReadGuard,
   SuperAdminGuard,
 } from "../auth/auth.guards";
 import type { AuthenticatedRequest } from "../auth/auth.guards";
@@ -34,7 +35,7 @@ export class QuoteRequestsController {
   }
 
   @Get()
-  @UseGuards(CompanyScopeGuard)
+  @UseGuards(StaffCompanyReadGuard)
   list(
     @Query("customerCompanyId") customerCompanyId: string | undefined,
     @Req() request: AuthenticatedRequest,
@@ -43,7 +44,7 @@ export class QuoteRequestsController {
   }
 
   @Get(":id")
-  @UseGuards(CompanyScopeGuard)
+  @UseGuards(StaffCompanyReadGuard)
   get(@Param("id") id: string, @Req() request: AuthenticatedRequest) {
     return this.requests.get(id, request.allowedCompanyIds);
   }

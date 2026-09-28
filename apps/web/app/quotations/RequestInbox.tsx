@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { listQuoteRequests } from "./quoteRequestApi";
 import type { QuoteRequest } from "./quoteRequestApi";
+import { useStaffAccess } from "../auth/useStaffAccess";
 import styles from "./quotation.module.css";
 
 type LoadState = "loading" | "ready" | "error";
 
 export function RequestInbox() {
+  const { isSuperAdmin } = useStaffAccess();
   const [requests, setRequests] = useState<QuoteRequest[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [loadError, setLoadError] = useState("");
@@ -59,9 +61,14 @@ export function RequestInbox() {
           <p>Review submitted quote requests.</p>
         </div>
         <div className={styles.inboxActions}>
-          <Link className={styles.composerLink} href="/quotations/new-request">
-            New request <span aria-hidden="true">→</span>
-          </Link>
+          {isSuperAdmin && (
+            <Link
+              className={styles.composerLink}
+              href="/quotations/new-request"
+            >
+              New request <span aria-hidden="true">→</span>
+            </Link>
+          )}
           <span className={styles.sampleCount}>
             {requests.length} {requests.length === 1 ? "request" : "requests"}
           </span>

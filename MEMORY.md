@@ -103,3 +103,9 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **What was decided:** The super admin directly creates staff accounts, chooses their initial passwords, and manually provides sign-in details. Staff administration supports password replacement and reversible suspension/reactivation; it does not send invitations. Reusing an account keeps all activity attributed to that account, not the person using it.
 **Why:** The user specified administrator-managed account creation and control rather than invitation-based onboarding.
 **What was rejected:** Requiring invitees to accept an email and set up their own account.
+
+## 2026-09-28, Department staff read access
+
+**What was decided:** Department reps can read all customer profiles and quote-request inbox/details. Customer users remain scoped to active company memberships. Department reps cannot read quote draft content or create, link, or edit records until request assignment exists; the super admin keeps those actions and approves departmental work.
+**Why:** Shared customer context supports triage, while draft and write access must wait for department assignment so one role does not prepare another department's work.
+**What was rejected:** Denying department staff all shared customer/request reads, or giving them unassigned draft and write access across departments.

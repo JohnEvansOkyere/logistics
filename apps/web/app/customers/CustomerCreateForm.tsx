@@ -5,15 +5,35 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { createCustomer } from "./customerApi";
+import { useStaffAccess } from "../auth/useStaffAccess";
 import styles from "./customerDirectory.module.css";
 
 export function CustomerCreateForm() {
+  const { status, isSuperAdmin } = useStaffAccess();
   const router = useRouter();
   const [companyName, setCompanyName] = useState("");
   const [contactName, setContactName] = useState("");
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  if (status === "loading") {
+    return <p role="status">Checking staff access…</p>;
+  }
+  if (!isSuperAdmin) {
+    return (
+      <section className={styles.customerForm}>
+        <p role="status">
+          {status === "unavailable"
+            ? "Staff access could not be checked. Try again when the API is available."
+            : "Only the super admin can create customer profiles."}
+        </p>
+        <Link className={styles.formCancel} href="/customers">
+          Back to customers
+        </Link>
+      </section>
+    );
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
