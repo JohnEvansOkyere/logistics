@@ -1,5 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import Database from "better-sqlite3";
+import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import {
@@ -7,6 +8,7 @@ import {
   DatabasePort,
   CustomerCompanyRecord,
   QuoteRequestRecord,
+  StaffRoleKey,
 } from "./database.port";
 import { runSqliteMigrations } from "./sqlite-migrations";
 
@@ -208,6 +210,49 @@ export class SqliteDatabaseService
       .all(id) as CustomerRow[];
 
     return this.groupCustomers(rows)[0] ?? null;
+  }
+
+  async hasActiveSuperAdmin(): Promise<boolean> {
+    return Boolean(
+      this.connection
+        .prepare(
+          `SELECT 1 FROM staff_role_assignment
+           WHERE role_key = 'super_admin' AND revoked_at IS NULL
+           LIMIT 1`,
+        )
+        .get(),
+    );
+  }
+
+  async claimInitialSuperAdmin(userId: string): Promise<boolean> {
+    const result = this.connection
+      .prepare(
+        `INSERT INTO staff_role_assignment
+          (assignment_id, user_id, role_key, assigned_at)
+         SELECT @assignmentId, @userId, 'super_admin', @assignedAt
+         WHERE NOT EXISTS (
+           SELECT 1 FROM staff_role_assignment
+           WHERE role_key = 'super_admin' AND revoked_at IS NULL
+         )`,
+      )
+      .run({
+        assignmentId: randomUUID(),
+        userId,
+        assignedAt: new Date().toISOString(),
+      });
+
+    return result.changes === 1;
+  }
+
+  async getActiveStaffRoles(userId: string): Promise<StaffRoleKey[]> {
+    const rows = this.connection
+      .prepare(
+        `SELECT role_key FROM staff_role_assignment
+         WHERE user_id = ? AND revoked_at IS NULL`,
+      )
+      .all(userId) as Array<{ role_key: StaffRoleKey }>;
+
+    return rows.map(({ role_key }) => role_key);
   }
 
   private groupCustomers(rows: CustomerRow[]): CustomerCompanyRecord[] {

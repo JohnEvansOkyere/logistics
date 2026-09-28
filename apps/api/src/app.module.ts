@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { AuthModule } from "./auth/auth.module";
 import { DatabaseModule } from "./database/database.module";
 import { HealthController } from "./health.controller";
 import { CustomersController } from "./customers/customers.controller";
@@ -7,7 +8,7 @@ import { QuoteRequestsController } from "./quotations/quote-requests.controller"
 import { QuoteRequestsService } from "./quotations/quote-requests.service";
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, AuthModule],
   controllers: [HealthController, QuoteRequestsController, CustomersController],
   providers: [QuoteRequestsService, CustomersService],
 })

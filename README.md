@@ -1,6 +1,6 @@
 # BJH Logistics operations platform
 
-Status: **local development foundation**. The repository has a minimal Next.js web app and NestJS API workspace. The API uses an ignored SQLite database by default and persists local quote requests, customer company/contact records, and staff-selected request-to-company links. If `DATABASE_URL` is set, Nest uses a PostgreSQL pool for a readiness-only `SELECT 1` check; PostgreSQL business persistence is not implemented. An optional, database-focused local Supabase setup separately exercises migrations and a synthetic RLS probe. Supabase PostgreSQL remains the production target. These paths do not verify API authorization or production company-isolation behavior.
+Status: **local development foundation**. The repository has a minimal Next.js web app and NestJS API workspace. The API uses an ignored SQLite database by default and persists local quote requests, customer company/contact records, staff-selected request-to-company links, and a temporary super-admin bootstrap role. If `DATABASE_URL` is set, Nest uses a PostgreSQL pool for a readiness-only `SELECT 1` check; PostgreSQL business and role persistence are not implemented. An optional, database-focused local Supabase setup separately exercises migrations and a synthetic RLS probe. Supabase PostgreSQL remains the production target. These paths do not verify API company-isolation behavior.
 
 The product is a job-file system for a Ghana-based freight forwarder: quotations, import/export clearance, air/sea shipments, trucking, warehouse services, billing records, documents, staff tasks, client updates, and a client portal. **Staff record external payments; the app does not take payments.** Client messages use **email and SMS** for the initial production release; WhatsApp is a later enhancement.
 
@@ -39,15 +39,28 @@ For the optional hosted PostgreSQL readiness probe, keep `DATABASE_URL` and `DAT
 
 Open <http://127.0.0.1:3000/documents-preview> to review the synthetic quotation, draft invoice, transport-document field layout, and payment receipt. Use the browser's Print command for one preview per page. These are layout samples only: they use placeholder amounts and do not issue invoices, carrier forms, or receipts.
 
-Run checks from the repository root with `corepack pnpm lint`, `corepack pnpm format:check`, `corepack pnpm typecheck`, `corepack pnpm test`, `corepack pnpm test:e2e`, and `corepack pnpm build`. API tests use a fresh temporary SQLite file and verify the latest migration plus customer/quote-request validation, search, explicit linking, retrieval and restart persistence.
+Run checks from the repository root with `corepack pnpm lint`, `corepack pnpm format:check`, `corepack pnpm typecheck`, `corepack pnpm test`, `corepack pnpm test:e2e`, and `corepack pnpm build`. API tests use a fresh temporary SQLite file and verify the latest migration, one-time super-admin bootstrap, role-guard denials, customer/quote-request validation, search, explicit linking, retrieval and restart persistence.
 
 Track verified milestones in [CHECKLIST.md](CHECKLIST.md): its evidence log records completed commands, while unchecked Phase 1 boxes mean the broader production/foundation requirement is still incomplete. The optional PostgreSQL migration/RLS check is documented below and remains separate from the SQLite-backed app.
 
 The SQLite adapter and its migrations are development scaffolding only. The local SQLite business slice currently persists quote requests, customer companies with contacts, and explicit request-to-company links; it does not yet implement priced quotations, jobs, shipments, invoices, receipts, or documents. The local PostgreSQL migrations establish the private `app` schema plus staff-role assignments, role-change audit events, customer-company memberships, and company-owned customer record access. They do not implement the business model. The optional Nest PostgreSQL provider currently checks readiness only; it does not use the schema for business operations. Before PostgreSQL business persistence, add reviewed migrations for the agreed schema, least-privilege API grants, and independently tested API authorization. Do not treat local database tests as proof of production business access controls.
 
+### Local super-admin test account
+
+Start only the local Supabase stack; do **not** reset it to create an account:
+
+```sh
+corepack pnpm supabase:start
+corepack pnpm exec supabase status
+```
+
+Copy the local Project URL and publishable key from `supabase status` into `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in `.env`, and leave `DATABASE_URL` empty so the app uses local SQLite. Run `corepack pnpm dev` and open <http://127.0.0.1:3000/sign-in>. The first authenticated local account can claim `super_admin` once. Later signups cannot claim that role; admin-managed staff account creation is a later step. Auth users live in the local Supabase Auth database, and this testing role assignment lives in ignored SQLite. Do not use a hosted Supabase URL for this test flow.
+
+Set `SUPER_ADMIN_BOOTSTRAP_ENABLED=true` only in local `.env`; bootstrap is disabled automatically when `NODE_ENV=production`. Use the sign-up form for the first local administrator, then sign in with that account to exercise the customer and quotation endpoints. The API rejects requests without a valid Supabase access token and an active local `super_admin` role.
+
 ### Optional local PostgreSQL and access-control check
 
-Requires Docker with about 7 GB of available memory. The Supabase CLI is pinned in the workspace; the local configuration does not link or log in to a hosted project. The local PostgreSQL service is for migration and SQL-test verification. Supabase Auth is not wired to either app; no application authentication has been implemented. If `DATABASE_URL` is set, API access to PostgreSQL is limited to the read-only readiness probe.
+Requires Docker with about 7 GB of available memory. The Supabase CLI is pinned in the workspace; the local configuration does not link or log in to a hosted project. The local PostgreSQL service is for migration and SQL-test verification. Browser sign-in uses local Supabase Auth; the Nest API verifies Auth claims and checks the temporary SQLite super-admin role. The separate PostgreSQL RLS tests do not verify that API guard or company-level API isolation. If `DATABASE_URL` is set, API business operations remain unavailable; PostgreSQL access is currently limited to the read-only readiness probe.
 
 ```sh
 corepack pnpm supabase:start

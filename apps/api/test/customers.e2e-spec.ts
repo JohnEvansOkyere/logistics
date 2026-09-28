@@ -1,28 +1,26 @@
 import "reflect-metadata";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
-import { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
-import { NestFactory } from "@nestjs/core";
+import type { INestApplication } from "@nestjs/common";
+import { createTestApplication, staffFetch } from "./test-application";
 
 let temporaryDirectory: string;
+let application: INestApplication;
 let baseUrl: string;
-let application: Awaited<ReturnType<typeof NestFactory.create>>;
 const originalDatabasePath = process.env.DATABASE_PATH;
 const originalDatabaseUrl = process.env.DATABASE_URL;
 
 async function startApplication(): Promise<void> {
-  const { AppModule } = await import("../src/app.module");
-  application = await NestFactory.create(AppModule, { logger: false });
-  await application.listen(0, "127.0.0.1");
-  const address = application.getHttpServer().address() as AddressInfo;
-  baseUrl = `http://127.0.0.1:${address.port}`;
+  const started = await createTestApplication();
+  application = started.application;
+  baseUrl = started.baseUrl;
 }
 
 async function createCustomer(input: unknown): Promise<Response> {
-  return fetch(`${baseUrl}/api/v1/customers`, {
+  return staffFetch(`${baseUrl}/api/v1/customers`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
@@ -79,14 +77,14 @@ test("customers can be created, searched, and retrieved with contacts", async ()
   assert.ok(Number.isFinite(Date.parse(created.createdAt)));
 
   for (const search of ["northstar", "alex demo", "northstar-demo.test"]) {
-    const listResponse = await fetch(
+    const listResponse = await staffFetch(
       `${baseUrl}/api/v1/customers?search=${encodeURIComponent(search)}`,
     );
     assert.equal(listResponse.status, 200);
     assert.deepEqual(await listResponse.json(), [created]);
   }
 
-  const detailResponse = await fetch(
+  const detailResponse = await staffFetch(
     `${baseUrl}/api/v1/customers/${created.id}`,
   );
   assert.equal(detailResponse.status, 200);
@@ -109,7 +107,7 @@ test("same-name customer submissions remain separate records", async () => {
   const secondCustomer = (await second.json()) as { id: string };
   assert.notEqual(firstCustomer.id, secondCustomer.id);
 
-  const searchResponse = await fetch(
+  const searchResponse = await staffFetch(
     `${baseUrl}/api/v1/customers?search=Repeated%20Demo`,
   );
   const matches = (await searchResponse.json()) as Array<{ id: string }>;
@@ -124,12 +122,12 @@ test("invalid customers and unknown customer IDs fail safely", async () => {
   });
   assert.equal(invalidResponse.status, 400);
 
-  const oversizeSearch = await fetch(
+  const oversizeSearch = await staffFetch(
     `${baseUrl}/api/v1/customers?search=${"x".repeat(201)}`,
   );
   assert.equal(oversizeSearch.status, 400);
 
-  const missingResponse = await fetch(
+  const missingResponse = await staffFetch(
     `${baseUrl}/api/v1/customers/unknown-customer`,
   );
   assert.equal(missingResponse.status, 404);
@@ -146,7 +144,7 @@ test("customer companies and contacts persist after an API restart", async () =>
   await application.close();
   await startApplication();
 
-  const detailResponse = await fetch(
+  const detailResponse = await staffFetch(
     `${baseUrl}/api/v1/customers/${created.id}`,
   );
   assert.equal(detailResponse.status, 200);

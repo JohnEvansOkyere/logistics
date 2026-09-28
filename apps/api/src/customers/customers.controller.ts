@@ -6,10 +6,13 @@ import {
   Param,
   Post,
   Query,
+  UseGuards,
 } from "@nestjs/common";
+import { SupabaseIdentityGuard, SuperAdminGuard } from "../auth/auth.guards";
 import { CustomersService } from "./customers.service";
 
 @Controller("api/v1/customers")
+@UseGuards(SupabaseIdentityGuard, SuperAdminGuard)
 export class CustomersController {
   constructor(
     @Inject(CustomersService) private readonly customers: CustomersService,

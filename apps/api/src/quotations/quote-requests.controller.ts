@@ -7,10 +7,13 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from "@nestjs/common";
+import { SupabaseIdentityGuard, SuperAdminGuard } from "../auth/auth.guards";
 import { QuoteRequestsService } from "./quote-requests.service";
 
 @Controller("api/v1/quote-requests")
+@UseGuards(SupabaseIdentityGuard, SuperAdminGuard)
 export class QuoteRequestsController {
   constructor(
     @Inject(QuoteRequestsService)

@@ -1,0 +1,130 @@
+.page {
+  display: grid;
+  width: min(100% - 32px, 480px);
+  min-height: 100vh;
+  align-content: center;
+  gap: 16px;
+  margin: 0 auto;
+  padding: 32px 0;
+}
+
+.backLink {
+  justify-self: start;
+  color: var(--brand-primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.signInCard {
+  border: 1px solid #dfe7ee;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgb(20 48 72 / 4%);
+  padding: 28px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--brand-primary);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.signInCard h1 {
+  margin: 0;
+  color: #152e47;
+  font-size: 1.65rem;
+}
+
+.description {
+  margin: 10px 0 22px;
+  color: var(--brand-muted);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.form {
+  display: grid;
+  gap: 16px;
+}
+
+.form label {
+  display: grid;
+  gap: 7px;
+  color: #354e63;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.form input {
+  min-height: 42px;
+  border: 1px solid #bdccd9;
+  border-radius: 7px;
+  padding: 9px 11px;
+  color: var(--brand-ink);
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.form input:focus {
+  border-color: var(--brand-primary);
+  outline: 3px solid rgb(11 63 174 / 12%);
+}
+
+.form > button {
+  min-height: 42px;
+  border: 1px solid var(--brand-primary);
+  border-radius: 7px;
+  background: var(--brand-primary);
+  color: #fff;
+  padding: 9px 12px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.form > button:hover {
+  background: #082f86;
+}
+
+.form > button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.error,
+.notice {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.error {
+  color: #a94d3d;
+}
+
+.notice {
+  color: #367050;
+}
+
+.modeButton {
+  margin-top: 15px;
+  border: 0;
+  background: transparent;
+  color: var(--brand-primary);
+  padding: 5px 0;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.localNote {
+  margin: 0;
+  color: var(--brand-muted);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}

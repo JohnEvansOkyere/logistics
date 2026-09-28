@@ -9,6 +9,7 @@ import {
   DatabasePort,
   CustomerCompanyRecord,
   QuoteRequestRecord,
+  StaffRoleKey,
 } from "./database.port";
 
 export const POSTGRES_POOL = Symbol("POSTGRES_POOL");
@@ -77,6 +78,24 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
   }
 
   async findCustomer(_id: string): Promise<CustomerCompanyRecord | null> {
+    throw new ServiceUnavailableException(
+      "PostgreSQL business persistence is not configured",
+    );
+  }
+
+  async hasActiveSuperAdmin(): Promise<boolean> {
+    throw new ServiceUnavailableException(
+      "PostgreSQL business persistence is not configured",
+    );
+  }
+
+  async claimInitialSuperAdmin(_userId: string): Promise<boolean> {
+    throw new ServiceUnavailableException(
+      "PostgreSQL business persistence is not configured",
+    );
+  }
+
+  async getActiveStaffRoles(_userId: string): Promise<StaffRoleKey[]> {
     throw new ServiceUnavailableException(
       "PostgreSQL business persistence is not configured",
     );

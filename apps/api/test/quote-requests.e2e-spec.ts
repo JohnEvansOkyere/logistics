@@ -1,25 +1,23 @@
 import "reflect-metadata";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
-import { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
-import { NestFactory } from "@nestjs/core";
+import type { INestApplication } from "@nestjs/common";
+import { createTestApplication, staffFetch } from "./test-application";
 
 let temporaryDirectory: string;
 let databasePath: string;
 let baseUrl: string;
-let application: Awaited<ReturnType<typeof NestFactory.create>>;
+let application: INestApplication;
 const originalDatabasePath = process.env.DATABASE_PATH;
 const originalDatabaseUrl = process.env.DATABASE_URL;
 
 async function startApplication(): Promise<void> {
-  const { AppModule } = await import("../src/app.module");
-  application = await NestFactory.create(AppModule, { logger: false });
-  await application.listen(0, "127.0.0.1");
-  const address = application.getHttpServer().address() as AddressInfo;
-  baseUrl = `http://127.0.0.1:${address.port}`;
+  const started = await createTestApplication();
+  application = started.application;
+  baseUrl = started.baseUrl;
 }
 
 before(async () => {
@@ -48,7 +46,7 @@ after(async () => {
 });
 
 test("a quote request is saved and returned by list and detail endpoints", async () => {
-  const response = await fetch(`${baseUrl}/api/v1/quote-requests`, {
+  const response = await staffFetch(`${baseUrl}/api/v1/quote-requests`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -78,11 +76,11 @@ test("a quote request is saved and returned by list and detail endpoints", async
   );
   assert.ok(Number.isFinite(Date.parse(created.createdAt)));
 
-  const listResponse = await fetch(`${baseUrl}/api/v1/quote-requests`);
+  const listResponse = await staffFetch(`${baseUrl}/api/v1/quote-requests`);
   assert.equal(listResponse.status, 200);
   assert.deepEqual(await listResponse.json(), [created]);
 
-  const detailResponse = await fetch(
+  const detailResponse = await staffFetch(
     `${baseUrl}/api/v1/quote-requests/${created.id}`,
   );
   assert.equal(detailResponse.status, 200);
@@ -113,7 +111,7 @@ test("invalid quote requests are rejected", async () => {
   ];
 
   for (const [index, request] of invalidRequests.entries()) {
-    const response = await fetch(`${baseUrl}/api/v1/quote-requests`, {
+    const response = await staffFetch(`${baseUrl}/api/v1/quote-requests`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(request),
@@ -127,7 +125,7 @@ test("invalid quote requests are rejected", async () => {
 });
 
 test("quote requests persist when the local API restarts", async () => {
-  const response = await fetch(`${baseUrl}/api/v1/quote-requests`, {
+  const response = await staffFetch(`${baseUrl}/api/v1/quote-requests`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -142,7 +140,7 @@ test("quote requests persist when the local API restarts", async () => {
   await application.close();
   await startApplication();
 
-  const readResponse = await fetch(
+  const readResponse = await staffFetch(
     `${baseUrl}/api/v1/quote-requests/${created.id}`,
   );
   assert.equal(readResponse.status, 200);
@@ -150,7 +148,7 @@ test("quote requests persist when the local API restarts", async () => {
 });
 
 test("unknown quote request IDs return not found", async () => {
-  const response = await fetch(
+  const response = await staffFetch(
     `${baseUrl}/api/v1/quote-requests/unknown-request`,
   );
 
@@ -158,7 +156,7 @@ test("unknown quote request IDs return not found", async () => {
 });
 
 test("staff can explicitly link requests to customers and view request history", async () => {
-  const customerResponse = await fetch(`${baseUrl}/api/v1/customers`, {
+  const customerResponse = await staffFetch(`${baseUrl}/api/v1/customers`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -169,7 +167,7 @@ test("staff can explicitly link requests to customers and view request history",
   });
   const customer = (await customerResponse.json()) as { id: string };
 
-  const requestResponse = await fetch(`${baseUrl}/api/v1/quote-requests`, {
+  const requestResponse = await staffFetch(`${baseUrl}/api/v1/quote-requests`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -181,7 +179,7 @@ test("staff can explicitly link requests to customers and view request history",
   });
   const request = (await requestResponse.json()) as { id: string };
 
-  const linkResponse = await fetch(
+  const linkResponse = await staffFetch(
     `${baseUrl}/api/v1/quote-requests/${request.id}/customer`,
     {
       method: "PATCH",
@@ -200,7 +198,7 @@ test("staff can explicitly link requests to customers and view request history",
   await application.close();
   await startApplication();
 
-  const persistedResponse = await fetch(
+  const persistedResponse = await staffFetch(
     `${baseUrl}/api/v1/quote-requests/${request.id}`,
   );
   const persisted = (await persistedResponse.json()) as {
@@ -208,7 +206,7 @@ test("staff can explicitly link requests to customers and view request history",
   };
   assert.equal(persisted.customerCompanyId, customer.id);
 
-  const historyResponse = await fetch(
+  const historyResponse = await staffFetch(
     `${baseUrl}/api/v1/quote-requests?customerCompanyId=${customer.id}`,
   );
   assert.equal(historyResponse.status, 200);
@@ -219,7 +217,7 @@ test("staff can explicitly link requests to customers and view request history",
 });
 
 test("request association rejects unknown customer companies", async () => {
-  const requestResponse = await fetch(`${baseUrl}/api/v1/quote-requests`, {
+  const requestResponse = await staffFetch(`${baseUrl}/api/v1/quote-requests`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -231,7 +229,7 @@ test("request association rejects unknown customer companies", async () => {
   });
   const request = (await requestResponse.json()) as { id: string };
 
-  const linkResponse = await fetch(
+  const linkResponse = await staffFetch(
     `${baseUrl}/api/v1/quote-requests/${request.id}/customer`,
     {
       method: "PATCH",

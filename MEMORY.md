@@ -14,6 +14,12 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **Why:** The user reconfirmed that each company should see all data belonging to it and no other company's data, and that role assignment is administered dynamically.
 **What was rejected:** Repeating questions about role names, staff names, multi-company access, and customer-visible record types; these are superseded by the confirmed access model.
 
+## 2026-09-28, Local super-admin bootstrap
+
+**What was decided:** Use Supabase Auth locally for signup/sign-in. The first authenticated user can claim the single `super_admin` role once; Nest verifies Supabase JWT claims and requires that role for current staff business APIs. Store this temporary bootstrap role in local SQLite; later accounts are to be created and assigned by the super admin.
+**Why:** The user wants to sign up the super admin and use that account for local testing while continuing to build.
+**What was rejected:** An open repeatable super-admin signup or using the hosted Supabase project for the local testing account.
+
 ## 2026-09-28, First business-engine slice
 
 **What was decided:** Start P02 with local SQLite persistence for quote requests and a connected staff inbox/detail form; do not include authentication, pricing, quote acceptance, or job creation in this slice.

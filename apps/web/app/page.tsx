@@ -1,3 +1,5 @@
+import { AuthStatus } from "./auth/AuthStatus";
+
 const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:3001/api";
 
@@ -57,7 +59,7 @@ export default function HomePage() {
           <span className="local-indicator" aria-hidden="true" />
           <div>
             <strong>Local workspace</strong>
-            <p>Sign-in and business data are not connected.</p>
+            <p>Sign in to use the local customer and quote-request engine.</p>
           </div>
         </div>
       </aside>
@@ -68,6 +70,7 @@ export default function HomePage() {
           <a href={`${apiBaseUrl}/health`}>
             Check API health <span aria-hidden="true">↗</span>
           </a>
+          <AuthStatus />
         </header>
 
         <main className="dashboard" id="overview">
@@ -91,8 +94,9 @@ export default function HomePage() {
               i
             </span>
             <p>
-              <strong>No operational data is loaded.</strong> This is a frontend
-              shell; sign-in and business records are not connected.
+              <strong>Local business records are available.</strong> Customer
+              and quote-request workflows use SQLite; jobs, shipments, and
+              billing are not implemented yet.
             </p>
           </section>
 

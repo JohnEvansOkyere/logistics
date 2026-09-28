@@ -1,0 +1,21 @@
+.authStatus {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #64798a;
+  font-size: 0.75rem;
+}
+
+.signOutButton {
+  border: 0;
+  background: transparent;
+  color: var(--brand-primary);
+  padding: 5px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.signOutButton:hover {
+  text-decoration: underline;
+}

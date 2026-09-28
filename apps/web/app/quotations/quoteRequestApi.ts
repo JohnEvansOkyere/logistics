@@ -1,3 +1,5 @@
+import { authenticatedFetch } from "../auth/authenticatedFetch";
+
 export type QuoteRequest = {
   id: string;
   companyName: string;
@@ -41,13 +43,13 @@ export async function listQuoteRequests(
   }
   const queryString = query.size > 0 ? `?${query}` : "";
   return readResponse<QuoteRequest[]>(
-    await fetch(`${quoteRequestsUrl}${queryString}`),
+    await authenticatedFetch(`${quoteRequestsUrl}${queryString}`),
   );
 }
 
 export async function getQuoteRequest(id: string): Promise<QuoteRequest> {
   return readResponse<QuoteRequest>(
-    await fetch(`${quoteRequestsUrl}/${encodeURIComponent(id)}`),
+    await authenticatedFetch(`${quoteRequestsUrl}/${encodeURIComponent(id)}`),
   );
 }
 
@@ -55,7 +57,7 @@ export async function createQuoteRequest(
   request: NewQuoteRequest,
 ): Promise<QuoteRequest> {
   return readResponse<QuoteRequest>(
-    await fetch(quoteRequestsUrl, {
+    await authenticatedFetch(quoteRequestsUrl, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(request),
@@ -68,7 +70,7 @@ export async function associateQuoteRequestCustomer(
   customerCompanyId: string,
 ): Promise<QuoteRequest> {
   return readResponse<QuoteRequest>(
-    await fetch(
+    await authenticatedFetch(
       `${quoteRequestsUrl}/${encodeURIComponent(requestId)}/customer`,
       {
         method: "PATCH",

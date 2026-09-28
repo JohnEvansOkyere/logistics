@@ -25,14 +25,17 @@ export default function CustomersPage() {
         <span className={styles.localBadge}>LOCAL DEVELOPMENT</span>
       </header>
 
-      <aside className={styles.sampleNotice} aria-label="Local development notice">
+      <aside
+        className={styles.sampleNotice}
+        aria-label="Local development notice"
+      >
         <span className={styles.noticeMark} aria-hidden="true">
           !
         </span>
         <p>
-          <strong>Local development only.</strong> The directory uses local
-          SQLite. Use synthetic details; authentication and company access
-          enforcement are not part of this slice.
+          <strong>Local development only.</strong> Sign in with the local
+          super_admin account and use synthetic details. Customer-company
+          membership access is not implemented yet.
         </p>
       </aside>
 

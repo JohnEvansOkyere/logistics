@@ -1,3 +1,5 @@
+import { authenticatedFetch } from "../auth/authenticatedFetch";
+
 export type CustomerContact = {
   id: string;
   name: string;
@@ -41,13 +43,13 @@ export async function listCustomers(
 ): Promise<CustomerCompany[]> {
   const query = new URLSearchParams({ search });
   return readResponse<CustomerCompany[]>(
-    await fetch(`${customersUrl}?${query}`),
+    await authenticatedFetch(`${customersUrl}?${query}`),
   );
 }
 
 export async function getCustomer(id: string): Promise<CustomerCompany> {
   return readResponse<CustomerCompany>(
-    await fetch(`${customersUrl}/${encodeURIComponent(id)}`),
+    await authenticatedFetch(`${customersUrl}/${encodeURIComponent(id)}`),
   );
 }
 
@@ -55,7 +57,7 @@ export async function createCustomer(
   customer: NewCustomer,
 ): Promise<CustomerCompany> {
   return readResponse<CustomerCompany>(
-    await fetch(customersUrl, {
+    await authenticatedFetch(customersUrl, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(customer),
