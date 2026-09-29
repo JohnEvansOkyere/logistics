@@ -88,7 +88,7 @@ Each item: requirement IDs · done when.
 - [ ] **I2** ⚑ OCR for scanned documents only after D05 permission and provider trial on redacted samples.
 - [ ] **I3** ⚑ Carrier/airline tracking adapters for confirmed carriers only (D07).
 - [ ] **I4** Warehousing, light scope (confirmed 2026-09-29): goods received/released per customer, simple location, quantity, no negative stock, basic stock report — no full inventory system · managed by existing staff roles (confirmed).
-- [ ] **I5** Standalone road transport, simple scope: assign driver/truck, waybill, delivery confirmation, charges · work assigned to a driver; ⚑ whether drivers sign in.
+- [ ] **I5** Standalone road transport, simple scope: assign driver/truck, waybill, delivery confirmation, charges · staff assign a driver record (name, phone); drivers do not sign in (confirmed).
 
 ## J — Production readiness (before any real data)
 

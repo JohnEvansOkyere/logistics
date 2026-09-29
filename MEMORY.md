@@ -139,3 +139,9 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **What was decided:** Any active staff role can open a job directly without a quote. Existing staff manage warehousing, with no separate role. Road transport work is assigned to a driver. The super admin creates customer accounts the same way as staff accounts.
 **Why:** Evans answered the open audit questions.
 **What was rejected:** Super-admin-only direct jobs; a dedicated warehouse role; invitation-based customer onboarding.
+
+## 2026-09-29, Drivers are records, not users
+
+**What was decided:** Drivers are stored as name and phone records that staff assign to road trips; they have no sign-in or role.
+**Why:** Evans confirmed staff handle driver assignment; drivers do not need system access.
+**What was rejected:** A driver sign-in for delivery confirmation from a phone.
