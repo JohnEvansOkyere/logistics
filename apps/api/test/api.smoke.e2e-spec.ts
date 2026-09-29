@@ -50,7 +50,7 @@ test("API health reports the version applied to a freshly created SQLite databas
     database: {
       status: "ok",
       provider: "sqlite",
-      schemaVersion: "009_customer_memberships.sql",
+      schemaVersion: "010_quote_request_assignment.sql",
     },
   });
 });

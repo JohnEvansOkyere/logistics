@@ -475,7 +475,9 @@ a:focus-visible {
     display: block;
   }
   .sidebar {
-    position: static;
+    position: sticky;
+    z-index: 20;
+    top: 0;
     display: block;
     width: 100%;
     height: auto;

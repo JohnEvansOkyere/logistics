@@ -12,7 +12,9 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import {
-  CompanyScopeGuard,
+  QuoteDraftReadGuard,
+  QuoteDraftWriteGuard,
+  DepartmentStaffGuard,
   SupabaseIdentityGuard,
   StaffCompanyReadGuard,
   SuperAdminGuard,
@@ -50,7 +52,7 @@ export class QuoteRequestsController {
   }
 
   @Get(":id/draft")
-  @UseGuards(CompanyScopeGuard)
+  @UseGuards(QuoteDraftReadGuard)
   async getDraft(
     @Param("id") id: string,
     @Req() request: AuthenticatedRequest,
@@ -61,7 +63,7 @@ export class QuoteRequestsController {
   }
 
   @Put(":id/draft")
-  @UseGuards(SuperAdminGuard)
+  @UseGuards(QuoteDraftWriteGuard)
   saveDraft(
     @Param("id") id: string,
     @Body() body: unknown,
@@ -74,5 +76,21 @@ export class QuoteRequestsController {
   @UseGuards(SuperAdminGuard)
   associateCustomer(@Param("id") id: string, @Body() body: unknown) {
     return this.requests.associateCustomer(id, body);
+  }
+
+  @Get(":id/assignment")
+  @UseGuards(DepartmentStaffGuard)
+  async getAssignment(@Param("id") id: string) {
+    return { roleKey: await this.requests.getDepartmentAssignment(id) };
+  }
+
+  @Patch(":id/assignment")
+  @UseGuards(SuperAdminGuard)
+  assignDepartment(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.requests.assignDepartment(id, body, request.authUser!.userId);
   }
 }

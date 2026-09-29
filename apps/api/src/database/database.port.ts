@@ -64,6 +64,8 @@ export type StaffRoleKey =
   | "sea_import_rep"
   | "sea_export_rep";
 
+export type DepartmentRoleKey = Exclude<StaffRoleKey, "super_admin">;
+
 export interface StaffRoleAssignmentRecord {
   id: string;
   userId: string;
@@ -90,6 +92,15 @@ export abstract class DatabasePort {
     requestId: string,
     customerCompanyId: string,
   ): Promise<QuoteRequestRecord | null>;
+  abstract getQuoteRequestDepartment(
+    requestId: string,
+  ): Promise<DepartmentRoleKey | null | undefined>;
+  abstract assignQuoteRequestDepartment(
+    requestId: string,
+    roleKey: DepartmentRoleKey | null,
+    assignedBy: string,
+    assignedAt: string,
+  ): Promise<DepartmentRoleKey | null | undefined>;
   abstract findQuoteDraft(requestId: string): Promise<QuoteDraftRecord | null>;
   abstract saveQuoteDraft(
     requestId: string,

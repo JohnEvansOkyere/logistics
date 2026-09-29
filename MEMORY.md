@@ -109,3 +109,15 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **What was decided:** Department reps can read all customer profiles and quote-request inbox/details. Customer users remain scoped to active company memberships. Department reps cannot read quote draft content or create, link, or edit records until request assignment exists; the super admin keeps those actions and approves departmental work.
 **Why:** Shared customer context supports triage, while draft and write access must wait for department assignment so one role does not prepare another department's work.
 **What was rejected:** Denying department staff all shared customer/request reads, or giving them unassigned draft and write access across departments.
+
+## 2026-09-29, Manual quote-request department assignment
+
+**What was decided:** The super admin manually assigns or clears each quote request's air/sea import/export department role. Only active representatives with that assigned role can read or revise the linked quote draft; assignment changes keep actor/time history. Drafts stay unissued for later super-admin review.
+**Why:** This implements the department handoff without inferring service type from free-text requests or granting departments access to one another's drafts.
+**What was rejected:** Automatic routing from request text and assigning work to named staff instead of the existing role model.
+
+## 2026-09-29, Persistent workspace sidebar
+
+**What was decided:** Keep the shared workspace sidebar available across operational pages, highlight the current section, and make it sticky while scrolling on desktop and mobile. Leave sign-in and account setup pages outside the workspace shell.
+**Why:** The user wants navigation to stay within reach while moving among work screens.
+**What was rejected:** Page-specific sidebars that disappear on customer and quotation routes or duplicate across different screens.

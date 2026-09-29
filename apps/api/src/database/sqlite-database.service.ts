@@ -10,6 +10,7 @@ import {
   CustomerMembershipRecord,
   QuoteDraftRecord,
   QuoteRequestRecord,
+  DepartmentRoleKey,
   StaffRoleKey,
   StaffRoleAssignmentRecord,
 } from "./database.port";
@@ -157,6 +158,57 @@ export class SqliteDatabaseService
       .run(customerCompanyId, requestId);
 
     return result.changes === 0 ? null : this.findQuoteRequest(requestId);
+  }
+
+  async getQuoteRequestDepartment(
+    requestId: string,
+  ): Promise<DepartmentRoleKey | null | undefined> {
+    const row = this.connection
+      .prepare(
+        "SELECT assigned_department_role FROM quote_request WHERE id = ?",
+      )
+      .get(requestId) as
+      { assigned_department_role: DepartmentRoleKey | null } | undefined;
+    return row ? row.assigned_department_role : undefined;
+  }
+
+  async assignQuoteRequestDepartment(
+    requestId: string,
+    roleKey: DepartmentRoleKey | null,
+    assignedBy: string,
+    assignedAt: string,
+  ): Promise<DepartmentRoleKey | null | undefined> {
+    const assign = this.connection.transaction(() => {
+      const current = this.connection
+        .prepare(
+          "SELECT assigned_department_role FROM quote_request WHERE id = ?",
+        )
+        .get(requestId) as
+        { assigned_department_role: DepartmentRoleKey | null } | undefined;
+      if (!current) return undefined;
+      if (current.assigned_department_role === roleKey) return roleKey;
+      this.connection
+        .prepare(
+          "UPDATE quote_request SET assigned_department_role = ? WHERE id = ?",
+        )
+        .run(roleKey, requestId);
+      this.connection
+        .prepare(
+          `INSERT INTO quote_request_assignment_history
+          (id, quote_request_id, previous_role, assigned_role, assigned_by, assigned_at)
+          VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          randomUUID(),
+          requestId,
+          current.assigned_department_role,
+          roleKey,
+          assignedBy,
+          assignedAt,
+        );
+      return roleKey;
+    });
+    return assign();
   }
 
   async findQuoteDraft(requestId: string): Promise<QuoteDraftRecord | null> {

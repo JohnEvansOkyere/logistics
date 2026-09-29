@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AuthStatus } from "../../auth/AuthStatus";
-import { SettingsSidebarSection } from "../../SettingsSidebarSection";
 
 const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:3001/api";
@@ -36,69 +35,43 @@ export default function SystemStatusPage() {
   }, []);
 
   return (
-    <div className="workspace-shell">
-      <aside className="sidebar">
-        <Link className="brand" href="/" aria-label="BJH Logistics overview">
-          <span className="brand-mark" aria-hidden="true">
-            BJH
-          </span>
-          <span className="brand-copy">
-            <strong>BJH Logistics</strong>
-            <small>Operations</small>
-          </span>
-        </Link>
-        <p className="nav-heading">WORKSPACE</p>
-        <nav className="workspace-nav" aria-label="Staff workspace">
-          <Link className="nav-link" href="/">
-            Overview
-          </Link>
-          <Link className="nav-link" href="/customers">
-            Customers
-          </Link>
-          <Link className="nav-link" href="/quotations">
-            Quotations
-          </Link>
-        </nav>
-        <SettingsSidebarSection active />
-      </aside>
-      <div className="workspace-main">
-        <header className="topbar">
-          <div className="breadcrumb">
-            <Link href="/settings">Settings</Link>
-            <span aria-hidden="true">/</span>
-            <strong>System status</strong>
+    <>
+      <header className="topbar">
+        <div className="breadcrumb">
+          <Link href="/settings">Settings</Link>
+          <span aria-hidden="true">/</span>
+          <strong>System status</strong>
+        </div>
+        <AuthStatus />
+      </header>
+      <main className="dashboard">
+        <section className="welcome-row" aria-labelledby="status-title">
+          <div>
+            <p className="eyebrow">SETTINGS</p>
+            <h1 id="status-title">System status</h1>
+            <p className="welcome-copy">Current API and database health.</p>
           </div>
-          <AuthStatus />
-        </header>
-        <main className="dashboard">
-          <section className="welcome-row" aria-labelledby="status-title">
-            <div>
-              <p className="eyebrow">SETTINGS</p>
-              <h1 id="status-title">System status</h1>
-              <p className="welcome-copy">Current API and database health.</p>
-            </div>
-          </section>
-          <section className="work-panel" aria-live="polite">
-            {health ? (
-              <>
-                <h2>API: {health.status ?? "Unknown"}</h2>
-                <p className="welcome-copy">
-                  Database: {health.database?.status ?? "Unknown"}
-                  {health.database?.provider
-                    ? ` (${health.database.provider})`
-                    : ""}
-                </p>
-              </>
-            ) : error ? (
-              <p role="status">
-                System status is unavailable. The API did not respond.
+        </section>
+        <section className="work-panel" aria-live="polite">
+          {health ? (
+            <>
+              <h2>API: {health.status ?? "Unknown"}</h2>
+              <p className="welcome-copy">
+                Database: {health.database?.status ?? "Unknown"}
+                {health.database?.provider
+                  ? ` (${health.database.provider})`
+                  : ""}
               </p>
-            ) : (
-              <p role="status">Checking system status…</p>
-            )}
-          </section>
-        </main>
-      </div>
-    </div>
+            </>
+          ) : error ? (
+            <p role="status">
+              System status is unavailable. The API did not respond.
+            </p>
+          ) : (
+            <p role="status">Checking system status…</p>
+          )}
+        </section>
+      </main>
+    </>
   );
 }

@@ -6,6 +6,7 @@ import {
   CustomerMembershipRecord,
   QuoteDraftRecord,
   QuoteRequestRecord,
+  DepartmentRoleKey,
   StaffRoleKey,
   StaffRoleAssignmentRecord,
 } from "./database.port";
@@ -140,6 +141,60 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       return null;
     }
     return this.findQuoteRequest(requestId);
+  }
+
+  async getQuoteRequestDepartment(
+    requestId: string,
+  ): Promise<DepartmentRoleKey | null | undefined> {
+    const result = await this.pool.query(
+      `SELECT assigned_department_role FROM app.quote_request WHERE request_id::text = $1`,
+      [requestId],
+    );
+    if (!result.rows[0]) return undefined;
+    return result.rows[0].assigned_department_role as DepartmentRoleKey | null;
+  }
+
+  async assignQuoteRequestDepartment(
+    requestId: string,
+    roleKey: DepartmentRoleKey | null,
+    assignedBy: string,
+    assignedAt: string,
+  ): Promise<DepartmentRoleKey | null | undefined> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const currentResult = await client.query(
+        `SELECT assigned_department_role FROM app.quote_request WHERE request_id::text = $1 FOR UPDATE`,
+        [requestId],
+      );
+      if (!currentResult.rows[0]) {
+        await client.query("COMMIT");
+        return undefined;
+      }
+      const previousRole = currentResult.rows[0]
+        .assigned_department_role as DepartmentRoleKey | null;
+      if (previousRole === roleKey) {
+        await client.query("COMMIT");
+        return roleKey;
+      }
+      await client.query(
+        `UPDATE app.quote_request SET assigned_department_role = $2 WHERE request_id::text = $1`,
+        [requestId, roleKey],
+      );
+      await client.query(
+        `INSERT INTO app.quote_request_assignment_history
+          (request_id, previous_role, assigned_role, assigned_by, assigned_at)
+         VALUES ($1::uuid, $2, $3, $4::uuid, $5)`,
+        [requestId, previousRole, roleKey, assignedBy, assignedAt],
+      );
+      await client.query("COMMIT");
+      return roleKey;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async findQuoteDraft(requestId: string): Promise<QuoteDraftRecord | null> {

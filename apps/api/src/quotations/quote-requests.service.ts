@@ -8,6 +8,7 @@ import {
 import { randomUUID } from "node:crypto";
 import {
   DatabasePort,
+  DepartmentRoleKey,
   QuoteDraftRecord,
   QuoteRequestRecord,
 } from "../database/database.port";
@@ -96,6 +97,49 @@ export class QuoteRequestsService {
     }
 
     return request;
+  }
+
+  async getDepartmentAssignment(
+    requestId: string,
+  ): Promise<DepartmentRoleKey | null> {
+    const role = await this.database.getQuoteRequestDepartment(requestId);
+    if (role === undefined)
+      throw new NotFoundException("Quote request was not found");
+    return role;
+  }
+
+  async assignDepartment(
+    requestId: string,
+    input: unknown,
+    assignedBy: string,
+  ): Promise<{ roleKey: DepartmentRoleKey | null }> {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      throw new BadRequestException("A department role is required");
+    }
+    const roleKey = (input as Record<string, unknown>).roleKey;
+    const departmentRoles: DepartmentRoleKey[] = [
+      "air_import_rep",
+      "air_export_rep",
+      "sea_import_rep",
+      "sea_export_rep",
+    ];
+    if (
+      roleKey !== null &&
+      !departmentRoles.includes(roleKey as DepartmentRoleKey)
+    ) {
+      throw new BadRequestException(
+        "roleKey must be a department role or null",
+      );
+    }
+    const result = await this.database.assignQuoteRequestDepartment(
+      requestId,
+      roleKey as DepartmentRoleKey | null,
+      assignedBy,
+      new Date().toISOString(),
+    );
+    if (result === undefined)
+      throw new NotFoundException("Quote request was not found");
+    return { roleKey: result };
   }
 
   async getDraft(

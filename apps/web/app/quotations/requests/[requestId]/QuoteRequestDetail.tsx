@@ -8,11 +8,17 @@ import type { CustomerCompany } from "../../../customers/customerApi";
 import { useStaffAccess } from "../../../auth/useStaffAccess";
 import {
   associateQuoteRequestCustomer,
+  assignQuoteRequestDepartment,
   getQuoteDraft,
+  getQuoteRequestAssignment,
   getQuoteRequest,
   saveQuoteDraft,
 } from "../../quoteRequestApi";
-import type { QuoteDraft, QuoteRequest } from "../../quoteRequestApi";
+import type {
+  DepartmentRoleKey,
+  QuoteDraft,
+  QuoteRequest,
+} from "../../quoteRequestApi";
 import styles from "../../quotation.module.css";
 
 type LoadState = "loading" | "ready" | "error";
@@ -33,6 +39,12 @@ export function QuoteRequestDetail() {
   const [draftState, setDraftState] = useState<LoadState>("loading");
   const [draftError, setDraftError] = useState("");
   const [savingDraft, setSavingDraft] = useState(false);
+  const [assignedRole, setAssignedRole] = useState<DepartmentRoleKey | null>(
+    null,
+  );
+  const [selectedRole, setSelectedRole] = useState("");
+  const [assignmentError, setAssignmentError] = useState("");
+  const [savingAssignment, setSavingAssignment] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -47,12 +59,6 @@ export function QuoteRequestDetail() {
             if (staffAccess.status === "unavailable") {
               setDraftError("Staff access could not be checked.");
               setDraftState("error");
-              return;
-            }
-            if (staffAccess.isDepartmentStaff) {
-              setDraft(null);
-              setDraftContent("");
-              setDraftState("ready");
               return;
             }
             setDraftState("loading");
@@ -96,6 +102,22 @@ export function QuoteRequestDetail() {
       active = false;
     };
   }, [requestId, staffAccess.isDepartmentStaff, staffAccess.status]);
+
+  useEffect(() => {
+    if (staffAccess.status !== "ready" || !staffAccess.roles.length) return;
+    getQuoteRequestAssignment(requestId)
+      .then((role) => {
+        setAssignedRole(role);
+        setSelectedRole(role ?? "");
+      })
+      .catch((cause: unknown) => {
+        setAssignmentError(
+          cause instanceof Error
+            ? cause.message
+            : "Assignment could not be loaded",
+        );
+      });
+  }, [requestId, staffAccess.roles.length, staffAccess.status]);
 
   useEffect(() => {
     let active = true;
@@ -189,6 +211,30 @@ export function QuoteRequestDetail() {
     }
   }
 
+  async function saveAssignment() {
+    if (savingAssignment) return;
+    setSavingAssignment(true);
+    setAssignmentError("");
+    try {
+      const role = selectedRole ? (selectedRole as DepartmentRoleKey) : null;
+      await assignQuoteRequestDepartment(requestId, role);
+      setAssignedRole(role);
+      if (!role) {
+        setDraft(null);
+        setDraftContent("");
+        setDraftState("ready");
+      }
+    } catch (cause) {
+      setAssignmentError(
+        cause instanceof Error
+          ? cause.message
+          : "Assignment could not be saved",
+      );
+    } finally {
+      setSavingAssignment(false);
+    }
+  }
+
   return (
     <main className={styles.page}>
       <Link className={styles.backLink} href="/quotations">
@@ -262,6 +308,49 @@ export function QuoteRequestDetail() {
               <h3 id="message-title">Request message</h3>
               <p>{request.message}</p>
             </section>
+            {staffAccess.roles.length > 0 && (
+              <section
+                className={styles.customerLinkPanel}
+                aria-labelledby="department-assignment-title"
+              >
+                <h3 id="department-assignment-title">Department assignment</h3>
+                <p>
+                  {assignedRole
+                    ? `Assigned to ${assignedRole.replaceAll("_", " ")}.`
+                    : "Not assigned."}
+                </p>
+                {staffAccess.isSuperAdmin && (
+                  <div className={styles.customerLinkActions}>
+                    <label htmlFor="request-department">
+                      Assign department
+                    </label>
+                    <select
+                      id="request-department"
+                      value={selectedRole}
+                      onChange={(event) => setSelectedRole(event.target.value)}
+                    >
+                      <option value="">Unassigned</option>
+                      <option value="air_import_rep">Air import</option>
+                      <option value="air_export_rep">Air export</option>
+                      <option value="sea_import_rep">Sea import</option>
+                      <option value="sea_export_rep">Sea export</option>
+                    </select>
+                    <button
+                      className={styles.secondaryButton}
+                      disabled={
+                        savingAssignment ||
+                        selectedRole === (assignedRole ?? "")
+                      }
+                      onClick={() => void saveAssignment()}
+                      type="button"
+                    >
+                      {savingAssignment ? "Saving…" : "Save assignment"}
+                    </button>
+                  </div>
+                )}
+                {assignmentError && <p role="alert">{assignmentError}</p>}
+              </section>
+            )}
             <section
               className={styles.customerLinkPanel}
               aria-labelledby="customer-link-title"
@@ -323,12 +412,7 @@ export function QuoteRequestDetail() {
               aria-labelledby="quote-draft-title"
             >
               <h3 id="quote-draft-title">Quote draft</h3>
-              {staffAccess.isDepartmentStaff ? (
-                <p>
-                  Draft content is hidden from department staff until request
-                  assignment is available.
-                </p>
-              ) : !request.customerCompanyId ? (
+              {!request.customerCompanyId ? (
                 <p>Link this request to a customer record before drafting.</p>
               ) : draftState === "loading" ? (
                 <p role="status">Loading quote draft…</p>
@@ -341,11 +425,15 @@ export function QuoteRequestDetail() {
                     id="quote-draft-content"
                     maxLength={20000}
                     onChange={(event) => setDraftContent(event.target.value)}
-                    readOnly={!staffAccess.isSuperAdmin}
+                    readOnly={
+                      !staffAccess.isSuperAdmin &&
+                      !staffAccess.roles.includes(assignedRole ?? "")
+                    }
                     rows={8}
                     value={draftContent}
                   />
-                  {staffAccess.isSuperAdmin && (
+                  {(staffAccess.isSuperAdmin ||
+                    staffAccess.roles.includes(assignedRole ?? "")) && (
                     <button
                       className={styles.secondaryButton}
                       disabled={!draftContent.trim() || savingDraft}

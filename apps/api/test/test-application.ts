@@ -13,6 +13,8 @@ export const TEST_SUPER_ADMIN_TOKEN = "test-super-admin-token";
 export const TEST_UNASSIGNED_TOKEN = "test-unassigned-user-token";
 export const TEST_SUPER_ADMIN_ID = "50000000-0000-4000-8000-000000000001";
 export const TEST_UNASSIGNED_USER_ID = "50000000-0000-4000-8000-000000000002";
+export const TEST_MATCHING_TOKEN = "test-matching-department-token";
+export const TEST_MATCHING_USER_ID = "50000000-0000-4000-8000-000000000006";
 export const TEST_CUSTOMER_A_TOKEN = "test-customer-a-token";
 export const TEST_CUSTOMER_A_ID = "50000000-0000-4000-8000-000000000003";
 export const TEST_CUSTOMER_B_TOKEN = "test-customer-b-token";
@@ -26,6 +28,10 @@ const testIdentities = new Map([
   [
     TEST_UNASSIGNED_TOKEN,
     { userId: TEST_UNASSIGNED_USER_ID, email: "staff@example.test" },
+  ],
+  [
+    TEST_MATCHING_TOKEN,
+    { userId: TEST_MATCHING_USER_ID, email: "air-import@example.test" },
   ],
   [
     TEST_CUSTOMER_A_TOKEN,

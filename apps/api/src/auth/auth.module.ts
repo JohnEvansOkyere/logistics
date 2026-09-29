@@ -7,6 +7,9 @@ import { AdminStaffController } from "./admin-staff.controller";
 import { AdminStaffService } from "./admin-staff.service";
 import {
   CompanyScopeGuard,
+  DepartmentStaffGuard,
+  QuoteDraftReadGuard,
+  QuoteDraftWriteGuard,
   SupabaseIdentityGuard,
   StaffCompanyReadGuard,
   SuperAdminGuard,
@@ -36,12 +39,18 @@ import {
     StaffCompanyReadGuard,
     SuperAdminGuard,
     CompanyScopeGuard,
+    DepartmentStaffGuard,
+    QuoteDraftReadGuard,
+    QuoteDraftWriteGuard,
   ],
   exports: [
     SupabaseAuthVerifier,
     SupabaseIdentityGuard,
     SuperAdminGuard,
     CompanyScopeGuard,
+    DepartmentStaffGuard,
+    QuoteDraftReadGuard,
+    QuoteDraftWriteGuard,
     StaffCompanyReadGuard,
   ],
 })

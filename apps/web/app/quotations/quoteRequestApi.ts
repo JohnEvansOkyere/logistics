@@ -1,5 +1,8 @@
 import { authenticatedFetch } from "../auth/authenticatedFetch";
 
+export type DepartmentRoleKey =
+  "air_import_rep" | "air_export_rep" | "sea_import_rep" | "sea_export_rep";
+
 export type QuoteRequest = {
   id: string;
   companyName: string;
@@ -127,6 +130,33 @@ export async function saveQuoteDraft(
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ content }),
+      },
+    ),
+  );
+}
+
+export async function getQuoteRequestAssignment(
+  requestId: string,
+): Promise<DepartmentRoleKey | null> {
+  const response = await readResponse<{ roleKey: DepartmentRoleKey | null }>(
+    await authenticatedFetch(
+      `${quoteRequestsUrl}/${encodeURIComponent(requestId)}/assignment`,
+    ),
+  );
+  return response.roleKey;
+}
+
+export async function assignQuoteRequestDepartment(
+  requestId: string,
+  roleKey: DepartmentRoleKey | null,
+): Promise<void> {
+  await readResponse<{ roleKey: DepartmentRoleKey | null }>(
+    await authenticatedFetch(
+      `${quoteRequestsUrl}/${encodeURIComponent(requestId)}/assignment`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ roleKey }),
       },
     ),
   );
