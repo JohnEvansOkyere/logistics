@@ -175,3 +175,9 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **What was decided:** Job reads are scoped: super admin sees all jobs, department reps only jobs on their own service lines, customers only their active companies' jobs. Reps may open jobs only for their own line. File-number sequence pads to 4 digits.
 **Why:** B3 asks for department scoping by role; the checklist marks rep-own-line as an assumption, and it is the narrowest option consistent with the existing draft-access model.
 **What was rejected:** Letting every rep see every job (as they can for customers and quote requests) until Evans/the client confirms; that would be a one-line widening later.
+
+## 2026-09-29, Sea-import milestones derived from client messages; branch pushed
+
+**What was decided:** B5 milestone template for sea import is taken from the client's own description (14 keys in `packages/contracts`), recorded in any order in an append-only `milestone_event` table (corrections are new events). Other service lines have no template and refuse milestones. Work was pushed to branch `chore/foundation-hardening-and-jobs`.
+**Why:** Evans said the workflow should come from the client's messages rather than the earlier draft; it also unblocks B5.
+**What was rejected:** Enforcing strict step order (real jobs overlap); inventing templates for the other lines; auto-recording a "file registered" milestone (the job's open time already is that).

@@ -53,4 +53,25 @@ export class JobsController {
   get(@Param("id") id: string, @Req() request: AuthenticatedRequest) {
     return this.jobs.get(id, scopeOf(request));
   }
+
+  @Get(":id/milestones")
+  @UseGuards(JobScopeGuard)
+  timeline(@Param("id") id: string, @Req() request: AuthenticatedRequest) {
+    return this.jobs.getTimeline(id, scopeOf(request));
+  }
+
+  @Post(":id/milestones")
+  @UseGuards(DepartmentStaffGuard, JobScopeGuard)
+  recordMilestone(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.jobs.recordMilestone(
+      id,
+      body,
+      request.authUser!.userId,
+      scopeOf(request),
+    );
+  }
 }

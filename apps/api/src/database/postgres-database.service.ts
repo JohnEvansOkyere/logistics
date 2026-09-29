@@ -6,6 +6,7 @@ import {
   CustomerMembershipRecord,
   JobRecord,
   JobScope,
+  MilestoneEventRecord,
   ServiceLine,
   QuoteDraftRecord,
   QuoteRequestRecord,
@@ -458,6 +459,64 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       openedBy: String(row.opened_by),
       openedAt: this.toIsoString(row.opened_at),
       closedAt: row.closed_at ? this.toIsoString(row.closed_at) : null,
+    };
+  }
+
+  async appendMilestoneEvent(event: {
+    jobId: string;
+    milestoneKey: string;
+    occurredAt: string;
+    recordedBy: string;
+    note: string | null;
+    correctionOf: string | null;
+  }): Promise<MilestoneEventRecord | "correction_target_not_found"> {
+    if (event.correctionOf) {
+      const target = await this.pool.query(
+        `SELECT 1 FROM app.milestone_event
+         WHERE event_id = $1::uuid AND job_id = $2::uuid`,
+        [event.correctionOf, event.jobId],
+      );
+      if (target.rows.length === 0) return "correction_target_not_found";
+    }
+    const result = await this.pool.query(
+      `INSERT INTO app.milestone_event
+        (job_id, milestone_key, occurred_at, recorded_by, note, correction_of)
+       VALUES ($1::uuid, $2, $3::timestamptz, $4::uuid, $5, $6::uuid)
+       RETURNING *`,
+      [
+        event.jobId,
+        event.milestoneKey,
+        event.occurredAt,
+        event.recordedBy,
+        event.note,
+        event.correctionOf,
+      ],
+    );
+    return this.mapMilestoneEvent(result.rows[0]);
+  }
+
+  async listMilestoneEvents(jobId: string): Promise<MilestoneEventRecord[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM app.milestone_event
+       WHERE job_id = $1::uuid ORDER BY occurred_at, recorded_at, event_id`,
+      [jobId],
+    );
+    return result.rows.map((row) => this.mapMilestoneEvent(row));
+  }
+
+  private mapMilestoneEvent(
+    row: Record<string, unknown>,
+  ): MilestoneEventRecord {
+    return {
+      id: String(row.event_id),
+      jobId: String(row.job_id),
+      milestoneKey: String(row.milestone_key),
+      occurredAt: this.toIsoString(row.occurred_at),
+      recordedAt: this.toIsoString(row.recorded_at),
+      recordedBy: String(row.recorded_by),
+      source: row.source as MilestoneEventRecord["source"],
+      note: row.note ? String(row.note) : null,
+      correctionOf: row.correction_of ? String(row.correction_of) : null,
     };
   }
 

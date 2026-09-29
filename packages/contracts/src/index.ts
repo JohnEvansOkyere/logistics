@@ -127,6 +127,88 @@ export const jobCreateInputSchema = z.object(
 );
 export type JobCreateInput = z.infer<typeof jobCreateInputSchema>;
 
+export interface MilestoneDefinition {
+  key: string;
+  label: string;
+}
+
+/**
+ * Sea import sequence as the client described it (D02 draft, client-derived;
+ * order and mandatory evidence still to be validated by the operations lead).
+ * Milestones are not enforced in order: real jobs overlap.
+ */
+export const seaImportMilestones: readonly MilestoneDefinition[] = [
+  { key: "cargo_arrived", label: "Cargo arrived; customer updated" },
+  {
+    key: "customs_declaration_submitted",
+    label: "Documents entered with customs",
+  },
+  { key: "duties_assessed", label: "Customs tax / duties generated" },
+  { key: "customer_invoice_issued", label: "Bill issued to customer" },
+  { key: "customer_payment_recorded", label: "Customer payment recorded" },
+  {
+    key: "port_charges_paid",
+    label: "Port, terminal and other charges paid",
+  },
+  {
+    key: "container_released_by_line",
+    label: "Container released by shipping line",
+  },
+  { key: "terminal_booked", label: "Terminal charges booked" },
+  { key: "customs_inspection_completed", label: "Customs inspection done" },
+  {
+    key: "customs_released",
+    label: "Customs released; delivery authorisation received",
+  },
+  { key: "container_dispatched", label: "Container loaded and dispatched" },
+  {
+    key: "delivery_note_signed",
+    label: "Delivered; delivery note signed by consignee",
+  },
+  {
+    key: "empty_container_returned",
+    label: "Empty container returned to terminal",
+  },
+  { key: "eir_received", label: "EIR (equipment condition) received" },
+];
+
+/** Service lines without an agreed template have none yet. */
+export const milestoneTemplates: Record<
+  ServiceLine,
+  readonly MilestoneDefinition[]
+> = {
+  sea_import: seaImportMilestones,
+  sea_export: [],
+  air_import: [],
+  air_export: [],
+};
+
+export const milestoneEventInputSchema = z.object(
+  {
+    milestoneKey: requiredText("milestoneKey", 80),
+    occurredAt: z
+      .string({ error: "occurredAt must be a date and time" })
+      .refine((value) => !Number.isNaN(Date.parse(value)), {
+        error: "occurredAt must be a date and time",
+      })
+      .nullish()
+      .transform((value) => (value ? new Date(value).toISOString() : null)),
+    note: z
+      .string({ error: "note must be text" })
+      .transform((value) => value.trim())
+      .refine((value) => value.length <= 2000, {
+        error: "note must be at most 2000 characters",
+      })
+      .nullish()
+      .transform((value) => value || null),
+    correctionOf: uuidField("correctionOf")
+      .nullish()
+      .transform((value) => value ?? null),
+  },
+  objectError("A milestone object is required"),
+);
+export type MilestoneEventInput = z.infer<typeof milestoneEventInputSchema>;
+
 /**
  * Parses untrusted input with a contract schema. Returns the parsed value or
  * the first issue's message, so callers can raise their own HTTP error.

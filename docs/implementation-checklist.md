@@ -27,7 +27,7 @@ Each item: requirement IDs · done when.
 - [x] **B2** Migration: `job` (file number unique, service/direction/mode, customer company, owner role, status, dates), `number_sequence` with transactional allocation · concurrent-create test yields unique numbers.
 - [x] **B3** Job API: create directly without a quote (confirmed: any staff role; reps within their own service line — assumption), list/search, detail; company scoping for customers; department scoping by role · cross-company and wrong-department denial tests.
 - [ ] **B4** `job_party` (shipper, consignee, notify, agents) and `shipment_reference` with **master/house hierarchy** (MBL/HBL, MAWB/HAWB, booking, container + seal) · one master → many houses supported; search by any reference.
-- [ ] **B5** ⚑ Milestone template for **sea import** (D02 draft from `docs/workflows.md`); `milestone_event` append-only with actor, time, source, note · events can't be edited/deleted; correction = new event.
+- [x] **B5** Milestone template for **sea import** (D02 draft from `docs/workflows.md`); `milestone_event` append-only with actor, time, source, note · events can't be edited/deleted; correction = new event.
 - [ ] **B6** Job status transitions (`open → in_progress → on_hold → ready_to_close → closed/cancelled`), reopen needs reason + super admin · invalid transition tests.
 - [ ] **B7** Web: job list, create form, job detail with timeline and parties/references · browser check at 390px/1280px.
 - [ ] **B8** Audit events for job create/status/owner changes · audit rows asserted in tests.

@@ -50,6 +50,18 @@ export interface JobRecord {
   closedAt: string | null;
 }
 
+export interface MilestoneEventRecord {
+  id: string;
+  jobId: string;
+  milestoneKey: string;
+  occurredAt: string;
+  recordedAt: string;
+  recordedBy: string;
+  source: "manual" | "system";
+  note: string | null;
+  correctionOf: string | null;
+}
+
 /** Undefined fields mean unrestricted; an empty array matches nothing. */
 export interface JobScope {
   companyIds?: string[];
@@ -152,6 +164,15 @@ export abstract class DatabasePort {
   ): Promise<JobRecord>;
   abstract listJobs(search: string, scope: JobScope): Promise<JobRecord[]>;
   abstract findJob(id: string, scope: JobScope): Promise<JobRecord | null>;
+  abstract appendMilestoneEvent(event: {
+    jobId: string;
+    milestoneKey: string;
+    occurredAt: string;
+    recordedBy: string;
+    note: string | null;
+    correctionOf: string | null;
+  }): Promise<MilestoneEventRecord | "correction_target_not_found">;
+  abstract listMilestoneEvents(jobId: string): Promise<MilestoneEventRecord[]>;
   abstract getActiveCustomerCompanyIds(userId: string): Promise<string[]>;
   abstract listCustomerMemberships(
     userId: string,

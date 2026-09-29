@@ -10,6 +10,8 @@ Authorized BJH users configure legal issuer status, tax and related finance sett
 
 ## Sea import
 
+> **Client-derived milestone list (2026-09-29).** The sea-import steps below follow the client's own description of the process (file registered and numbered → arrival tracked and customer updated → documents entered with customs to generate tax → bill issued → customer pays → port/terminal/other charges paid and container released by the shipping line → terminal booked and customs inspection → customs release and delivery authorisation → truck loaded and dispatched → delivery note signed by consignee → empty container returned with EIR → file closed). The implemented milestone keys live in `packages/contracts` (`seaImportMilestones`). Milestones are recorded in any order; mandatory evidence per step and closure overrides (D02) still need operations-lead validation.
+
 1. Receive shipping documents and register job; capture customer, consignee, shipping line, B/L and container(s).
 2. Monitor arrival/ETA and send approved updates.
 3. Record customs declaration/assessment and duties; prepare customer invoice including service charges and pass-through charges.
