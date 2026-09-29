@@ -16,7 +16,9 @@ We are planning **email and SMS** for customer updates in the first release. **W
 ## Quotations, invoices, and payment records
 
 5. Who prepares and approves quotations and invoices? Should the system **create your official invoices**, or only store invoices prepared elsewhere? Can you share blank or safely redacted examples of a quotation and invoice?
+   > **Answer (2026-09-29, Evans):** The system creates BJH's invoices. The quotation format is in the supplied examples (charge lines by 20ft/40ft container with fixed, per-B/L, per-container or at-cost pricing, plus required documents, timeline and terms). Preparation and approval are unchanged: the department prepares, the super admin approves.
 6. What currencies do you quote and invoice in? How do you handle exchange rates, VAT or other taxes, due dates, discounts, and corrected or cancelled invoices? Your accounts person can help answer this.
+   > **Answer (2026-09-29, Evans):** Currencies, tax lines (VAT/levies), payment terms and quote/invoice number prefixes are configured in the system's Settings; it does not matter who enters them. BJH invoices do **not** go through the GRA e-VAT system.
 7. Staff will record money received **outside** the system; customers will not pay through the system. Who may add or correct a payment record? Do you accept part-payments, and what proof or reference must be kept?
 
 ## Paperwork and document processing

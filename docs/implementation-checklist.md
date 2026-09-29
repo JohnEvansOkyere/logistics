@@ -43,27 +43,27 @@ Each item: requirement IDs · done when.
 
 ## D — Structured quotations · P02
 
-- [ ] **D1** ⚑ Replace free-text draft with `quote_version` + `quote_line` (basis: fixed / per B/L / per container / at cost; container size; minor-unit amount; ISO currency); keep notes field · migration + API tests.
-- [ ] **D2** Rep prepares → super admin approves → issued version is immutable · edit of issued version rejected.
-- [ ] **D3** Record acceptance/rejection against a specific version (actor, time) · D12 behaviour tested.
-- [ ] **D4** Accepted quote → at most one job (idempotent under retry) · concurrent-accept test yields one job.
+- [x] **D1** Replace free-text draft with `quote_version` + `quote_line` (basis: fixed / per B/L / per container / at cost; container size; minor-unit amount; ISO currency); keep notes field · migration + API tests. _(2026-09-29: layout follows the two EVIDENCES sample quotations; a line carries one amount or a 20ft and a 40ft amount; the old free-text draft is kept alongside, not removed. Web screens typechecked and built, not yet checked in a browser.)_
+- [x] **D2** Rep prepares and issues directly to the customer (no approval step, per Evans 2026-09-29); the super admin sees every quote, draft and action; issued version is immutable · edit of issued version rejected. _(2026-09-29: DB triggers and API both refuse edits; a change is a new version.)_
+- [x] **D3** Record acceptance/rejection against a specific version (actor, time) · D12 behaviour tested. _(2026-09-29: any rep on the quote's service line or the super admin records it on the client's behalf, with the client's named signatory; only the latest issued version can be decided; append-only. Web form typechecked and built, not yet checked in a browser.)_
+- [x] **D4** Accepted quote → at most one job (idempotent under retry) · concurrent-accept test yields one job. _(2026-09-29: accepting opens the job in the same transaction; four simultaneous accepts return the same decision and job. The e2e harness shares one connection, so true parallel connections are covered by the database uniqueness tests, not the HTTP test.)_
 - [ ] **D5** Quote PDF from approved template, marked draft until D03 settings configured · preview matches `/documents-preview` layout.
 
 ## E — Remaining shipment flows and ETA · P04, P05
 
 - [x] **E1** Sea export milestone template (D02).
 - [x] **E2** Air import and air export templates; no EIR requirement for air (D02).
-- [ ] **E3** Manual ETA entry with source and correction history; exceptions (missing docs, damage, delay) as tasks · correction never overwrites history.
-- [ ] **E4** Tasks per job assigned to role, with due dates · list "my department's open tasks".
+- [x] **E3** Manual ETA entry with source and correction history; exceptions (missing docs, damage, delay) as tasks · correction never overwrites history. _(2026-09-29: API, migration and tests done; the web ETA and task sections are typechecked but not yet checked in a browser.)_
+- [x] **E4** Tasks per job assigned to role, with due dates · list "my department's open tasks". _(2026-09-29: `GET /api/v1/tasks?assignedRole=` lists open work, scoped to the caller's service lines; web check pending as above.)_
 
 ## F — Finance records · P06
 
-- [ ] **F1** ⚑ Issuer/tax/currency settings screen (D03) — VAT/levies, currencies, numbering; no hard-coded values · settings required before any invoice issues.
+- [ ] **F1** Issuer/tax/currency settings screen (D03) — VAT/levies, currencies, numbering; no hard-coded values · settings required before any invoice issues.
 - [ ] **F2** Charges: quoted vs actual; disbursements linked to supplier-invoice documents; exchange rate captured per transaction.
 - [ ] **F3** Customer invoice versions with unique numbering, due date, tax lines from settings; corrections via revision/credit · issued invoice immutable.
 - [ ] **F4** Staff-recorded external payments (partial/multiple), method/reference/evidence, reversal with reason; outstanding balance derived from ledger · arithmetic + over-allocation tests; money in minor units only.
 - [ ] **F5** Receipt PDF (conventional receipt, D06) · never implies bank verification.
-- [ ] **F6** ⚑ D15: confirm whether BJH invoices must go through GRA e-VAT.
+- [x] **F6** D15 answered by Evans 2026-09-29: BJH invoices do not go through GRA e-VAT; no integration needed.
 
 ## G — Delivery paperwork and closure · P07
 
@@ -85,14 +85,14 @@ Each item: requirement IDs · done when.
 ## I — Later services and automation · P05, P09, P12, P13
 
 - [ ] **I1** ⚑ Text-layer extraction for B/L / HAWB PDFs → draft fields → human review → approved apply (D09).
-- [ ] **I2** ⚑ OCR for scanned documents only after D05 permission and provider trial on redacted samples.
+- [ ] **I2** ⚑ OCR for scanned documents only after Evans permits it and a provider trial on redacted samples.
 - [ ] **I3** ⚑ Carrier/airline tracking adapters for confirmed carriers only (D07).
 - [ ] **I4** Warehousing, light scope (confirmed 2026-09-29): goods received/released per customer, simple location, quantity, no negative stock, basic stock report — no full inventory system · managed by existing staff roles (confirmed).
 - [ ] **I5** Standalone road transport, simple scope: assign driver/truck, waybill, delivery confirmation, charges · staff assign a driver record (name, phone); drivers do not sign in (confirmed).
 
 ## J — Production readiness (before any real data)
 
-- [ ] **J1** ⚑ Hosting provider/region, staging + production projects (D05, D11).
+- [ ] **J1** ⚑ Hosting provider/region, staging + production projects (D11).
 - [ ] **J2** Least-privilege API DB role; verify isolation on staging.
 - [ ] **J3** Backup **and Storage** restore drill with agreed RPO/RTO.
 - [ ] **J4** Monitoring, alerts, runbooks; MFA for admin accounts.
@@ -103,7 +103,7 @@ Each item: requirement IDs · done when.
 
 ## Client questions to send / chase
 
-- D01, D02, D05 (high) — from `questions.md`.
+- D01, D02, D05 cancelled by Evans 2026-09-29 (full system; workflows from client messages; company owns its data). Nothing outstanding from `questions.md` blocks the build.
 - **New D14:** Does BJH issue house B/Ls / house AWBs / manifests itself, and should the system generate them? Numbering format?
-- **New D15:** Are BJH customer invoices required to be GRA e-VAT invoices?
+- ~~**New D15:** Are BJH customer invoices required to be GRA e-VAT invoices?~~ Answered 2026-09-29: no.
 - Confirm R1 communications = app email/SMS + manual log (WhatsApp later), and R1 tracking = staff-entered ETA.

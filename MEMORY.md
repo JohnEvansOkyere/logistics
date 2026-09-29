@@ -187,3 +187,35 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **What was decided:** Reopening a closed/cancelled job and overriding closure are done by the rep for the job's service line (super admin also may), with a written reason; not super-admin-only. No evidence gates (D02 evidence questions were removed by Evans). All authenticated API activity, including denied attempts, goes to an append-only activity log readable only by the super admin (bodies/queries never stored).
 **Why:** Evans said the person in charge of the department should hold those powers and that the admin must see everything users do.
 **What was rejected:** Super-admin-only reopen (the earlier checklist wording); logging request bodies (could hold passwords); a separate "department head" role for now — if several staff share one rep role they all hold these powers, so a distinct head role may be needed later.
+
+## 2026-09-29, Quote structure, business settings, no GRA
+
+**What was decided:** Structured quote versions follow the EVIDENCES samples (currency, lines with basis fixed/per B/L/per container/at cost, optional 20ft/40ft size, minor-unit amounts, notes). Issuer/currency/tax/prefix/terms live in a Settings screen (super admin edits, every change kept as a revision; who edits doesn't matter to the client). BJH invoices do not go through GRA e-VAT (D15 closed). The old free-text draft stays alongside for now rather than being deleted. Evans authorised pushing the branch.
+**Why:** Evans answered D1, F1 and F6 and asked for the answers to be recorded in the questions.
+**What was rejected:** Hard-coded currencies/taxes (D03); a GRA e-VAT integration; deleting the free-text draft tables without confirmation.
+
+## 2026-09-29, D01, D02 and D05 cancelled; build the full system
+
+**What was decided:** D01 (first-release job types), D02 (workflow sequence/evidence) and D05 (data ownership/retention) are cancelled. The whole system is in scope; workflows come from the client's extracted messages; the company owns its data. Work now proceeds through everything left in `docs/implementation-checklist.md`.
+**Why:** Evans said the full system is being built, the sequences are in the client messages, and a customs system's data belongs to the company.
+**What was rejected:** Asking the client to phase job types or validate sequences. Kept as safe defaults (not questions): no third-party OCR of real documents without Evans's permission, and no deployment from an agent session. Region and backup targets remain engineering choices at production setup.
+
+## 2026-09-29, ETA is an append-only history; tasks are role-assigned and internal
+
+**What was decided:** The job's ETA is the newest row of an append-only `eta_event` history (each with a source and optional note; a correction is a new row). Tasks (including exceptions: missing documents, damage, delay) are assigned to a staff role with an optional due date, can be completed once, and are visible to staff only, not customers. Tasks and ETA changes are blocked on closed/cancelled jobs until reopened.
+**Why:** E3/E4 require corrections that never overwrite history and a "my department's open tasks" list; customers seeing internal exceptions was not asked for.
+**What was rejected:** Editing an ETA in place; customer visibility of tasks (can be opened later, one-line change); reopening a completed task (a new task is created instead).
+
+
+## 2026-09-29, Quote structure follows the EVIDENCES samples; reps issue quotes directly
+
+**What was decided:** (1) A quote version mirrors the two sample quotations: title/subtitle, scope, intro, charge lines grouped in sections (each line: description, basis fixed / per B/L / per container / at cost, optional basis note, and either one amount or a 20ft and a 40ft amount, in minor units), one currency per quote, at-cost note, clearance steps, required documents and note, timeline, terms, and the BJH/client acceptance block. (2) No admin approval: the rep for the quote's service line (or the super admin) issues a version straight to the customer; the super admin sees every quote, draft and action. An issued version is immutable; a change is a new version. (3) Any rep on the quote's service line, or the super admin, records the client's acceptance or rejection against a specific issued version (assumption: "the various reps"); accepting opens the job in the same step, at most one job per quote. (4) The quote number `BJH/Q/{SI|SE|AI|AE}/{YYYY}/{seq}` is allocated when a quote is first issued, not at draft time. The PDF (D5) follows after the Settings screen (F1).
+**Why:** Evans answered D1-D5: match the evidence format, reps can send quotes, admin sees everything, various reps handle decisions.
+**What was rejected:** The earlier "rep prepares, super admin approves" gate (D2); a single flat amount per line (the samples show 20ft and 40ft columns); allocating numbers to drafts (would leave gaps in numbers customers see). Boilerplate defaults (steps, terms) are not hard-coded; they belong in Settings (F1), and a new version starts as a copy of the previous one.
+
+## 2026-09-29, Quote decisions: one per version, accepting opens the job and locks the quote
+
+**What was decided:** A client decision (accepted/rejected, with the client's named signatory and time) is recorded by staff against the latest issued version, once per version, append-only. Accepting opens the job in the same transaction (`job.quote_id` is unique, so at most one job per quote) and repeating the same decision returns the same job. An accepted quote can gain no new version and issue no draft; a rejection does not lock it (the rep can issue a new version). Migrations `...09` and `...10` were applied to the local database only.
+**Why:** D3/D4 answers: various reps handle decisions; accepting opens the job. Locking after acceptance keeps the accepted terms exactly as agreed.
+**What was rejected:** Reversing a decision (a mistaken record needs a new quote version or the super admin's help, not an edit); a separate manual "open job" step after acceptance; letting customers accept themselves before the portal (H) exists.
+
