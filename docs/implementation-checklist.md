@@ -47,7 +47,7 @@ Each item: requirement IDs · done when.
 - [x] **D2** Rep prepares and issues directly to the customer (no approval step, per Evans 2026-09-29); the super admin sees every quote, draft and action; issued version is immutable · edit of issued version rejected. _(2026-09-29: DB triggers and API both refuse edits; a change is a new version.)_
 - [x] **D3** Record acceptance/rejection against a specific version (actor, time) · D12 behaviour tested. _(2026-09-29: any rep on the quote's service line or the super admin records it on the client's behalf, with the client's named signatory; only the latest issued version can be decided; append-only. Web form typechecked and built, not yet checked in a browser.)_
 - [x] **D4** Accepted quote → at most one job (idempotent under retry) · concurrent-accept test yields one job. _(2026-09-29: accepting opens the job in the same transaction; four simultaneous accepts return the same decision and job. The e2e harness shares one connection, so true parallel connections are covered by the database uniqueness tests, not the HTTP test.)_
-- [ ] **D5** Quote PDF from approved template, marked draft until D03 settings configured · preview matches `/documents-preview` layout.
+- [x] **D5** Quote PDF from approved template, marked draft until D03 settings configured · preview matches `/documents-preview` layout. _(2026-09-29: `GET /api/v1/quotes/:id/pdf?version=N`; layout follows the preview page and was checked by rendering pages to images; marked DRAFT until the version is issued and settings exist. Not yet done: a logo (the supplied logo is client material that may not be committed), and a stored copy at issue time, so a PDF regenerated later uses the settings current then. "Approved template" is my reading of the two sample quotations; the client has not signed off the layout.)_
 
 ## E — Remaining shipment flows and ETA · P04, P05
 
@@ -59,7 +59,7 @@ Each item: requirement IDs · done when.
 ## F — Finance records · P06
 
 - [x] **F1** Issuer/tax/currency settings screen (D03) — VAT/levies, currencies, numbering; no hard-coded values · settings required before any invoice issues. _(2026-09-29: settings, revisions, currency restriction and quote-number prefix done and tested. "Required before any invoice issues" is enforced when invoices are built (F3). Web form typechecked and built, not yet checked in a browser.)_
-- [ ] **F2** Charges: quoted vs actual; disbursements linked to supplier-invoice documents; exchange rate captured per transaction.
+- [x] **F2** Charges: quoted vs actual; disbursements linked to supplier-invoice documents; exchange rate captured per transaction. _(2026-09-29: charges with quoted amounts, append-only actual amounts, supplier-document link (optional, flagged when missing), exchange rate and converted amount fixed per entry, copy from the accepted quote. Web section typechecked and built, not yet checked in a browser.)_
 - [ ] **F3** Customer invoice versions with unique numbering, due date, tax lines from settings; corrections via revision/credit · issued invoice immutable.
 - [ ] **F4** Staff-recorded external payments (partial/multiple), method/reference/evidence, reversal with reason; outstanding balance derived from ledger · arithmetic + over-allocation tests; money in minor units only.
 - [ ] **F5** Receipt PDF (conventional receipt, D06) · never implies bank verification.

@@ -1,6 +1,7 @@
 import { Inject, Injectable, OnModuleDestroy } from "@nestjs/common";
 import type {
   BusinessSettings,
+  ChargeKind,
   DocumentType,
   QuoteDecision,
   QuoteBasis,
@@ -30,6 +31,8 @@ import {
   EtaEventRecord,
   JobTaskRecord,
   BusinessSettingsRevisionRecord,
+  ChargeActualRecord,
+  JobChargeRecord,
   QuoteDecisionRecord,
   QuoteLineRecord,
   QuoteRecord,
@@ -117,6 +120,7 @@ const jobSelect = `
     job.customer_company_id,
     company.company_name AS customer_company_name,
     job.quote_request_id,
+    job.quote_id,
     job.status,
     job.opened_by,
     job.opened_at,
@@ -528,6 +532,7 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       quoteRequestId: row.quote_request_id
         ? String(row.quote_request_id)
         : null,
+      quoteId: row.quote_id ? String(row.quote_id) : null,
       status: row.status as JobRecord["status"],
       openedBy: String(row.opened_by),
       openedAt: this.toIsoString(row.opened_at),
@@ -1575,8 +1580,6 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
     lines: Array<Record<string, unknown>>,
   ): QuoteVersionRecord {
     const optional = (value: unknown) => (value ? String(value) : null);
-    const minor = (value: unknown) =>
-      value === null || value === undefined ? null : Number(value);
     return {
       id: String(row.version_id),
       versionNumber: Number(row.version_number),
@@ -1597,17 +1600,24 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       updatedAt: this.toIsoString(row.updated_at),
       issuedBy: optional(row.issued_by),
       issuedAt: row.issued_at ? this.toIsoString(row.issued_at) : null,
-      lines: lines.map((line): QuoteLineRecord => ({
-        id: String(line.line_id),
-        position: Number(line.position),
-        section: optional(line.section),
-        description: String(line.description),
-        basis: line.basis as QuoteBasis,
-        basisNote: optional(line.basis_note),
-        amountMinor: minor(line.amount_minor),
-        amount20ftMinor: minor(line.amount_20ft_minor),
-        amount40ftMinor: minor(line.amount_40ft_minor),
-      })),
+      lines: lines.map((line) => this.mapQuoteLine(line)),
+    };
+  }
+
+  private mapQuoteLine(line: Record<string, unknown>): QuoteLineRecord {
+    const optional = (value: unknown) => (value ? String(value) : null);
+    const minor = (value: unknown) =>
+      value === null || value === undefined ? null : Number(value);
+    return {
+      id: String(line.line_id),
+      position: Number(line.position),
+      section: optional(line.section),
+      description: String(line.description),
+      basis: line.basis as QuoteBasis,
+      basisNote: optional(line.basis_note),
+      amountMinor: minor(line.amount_minor),
+      amount20ftMinor: minor(line.amount_20ft_minor),
+      amount40ftMinor: minor(line.amount_40ft_minor),
     };
   }
 
@@ -1668,6 +1678,215 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       settings: row.settings as BusinessSettings,
       changedBy: String(row.changed_by),
       changedAt: this.toIsoString(row.changed_at),
+    };
+  }
+
+  async createJobCharge(charge: {
+    jobId: string;
+    kind: ChargeKind;
+    description: string;
+    currency: string;
+    quantity: number;
+    unitQuotedMinor: number | null;
+    quoteLineId: string | null;
+    createdBy: string;
+  }): Promise<JobChargeRecord | null> {
+    const result = await this.pool.query(
+      `INSERT INTO app.job_charge
+        (job_id, kind, description, currency, quantity, unit_quoted_minor,
+         quote_line_id, created_by)
+       VALUES ($1::uuid, $2, $3, $4, $5, $6, $7::uuid, $8::uuid)
+       ON CONFLICT (job_id, quote_line_id)
+         WHERE quote_line_id IS NOT NULL AND removed_at IS NULL
+       DO NOTHING
+       RETURNING *`,
+      [
+        charge.jobId,
+        charge.kind,
+        charge.description,
+        charge.currency,
+        charge.quantity,
+        charge.unitQuotedMinor,
+        charge.quoteLineId,
+        charge.createdBy,
+      ],
+    );
+    return result.rows.length > 0
+      ? this.mapJobCharge(result.rows[0], [])
+      : null;
+  }
+
+  async listJobCharges(jobId: string): Promise<JobChargeRecord[]> {
+    const charges = await this.pool.query(
+      `SELECT * FROM app.job_charge
+       WHERE job_id = $1::uuid AND removed_at IS NULL
+       ORDER BY created_at, charge_id`,
+      [jobId],
+    );
+    const actuals = await this.pool.query(
+      `SELECT actual.* FROM app.job_charge_actual AS actual
+       JOIN app.job_charge AS charge ON charge.charge_id = actual.charge_id
+       WHERE charge.job_id = $1::uuid AND charge.removed_at IS NULL
+       ORDER BY actual.recorded_at, actual.actual_id`,
+      [jobId],
+    );
+    return charges.rows.map((row) =>
+      this.mapJobCharge(
+        row,
+        actuals.rows.filter((actual) => actual.charge_id === row.charge_id),
+      ),
+    );
+  }
+
+  async removeJobCharge(
+    jobId: string,
+    chargeId: string,
+    removedBy: string,
+  ): Promise<"removed" | "not_found" | "has_actuals"> {
+    const existing = await this.pool.query(
+      `SELECT EXISTS (
+         SELECT 1 FROM app.job_charge_actual WHERE charge_id = charge.charge_id
+       ) AS has_actuals
+       FROM app.job_charge AS charge
+       WHERE charge.charge_id = $2::uuid AND charge.job_id = $1::uuid
+         AND charge.removed_at IS NULL`,
+      [jobId, chargeId],
+    );
+    if (existing.rows.length === 0) return "not_found";
+    if (existing.rows[0].has_actuals) return "has_actuals";
+    await this.pool.query(
+      `UPDATE app.job_charge
+       SET removed_at = clock_timestamp(), removed_by = $3::uuid
+       WHERE charge_id = $2::uuid AND job_id = $1::uuid`,
+      [jobId, chargeId, removedBy],
+    );
+    return "removed";
+  }
+
+  async appendChargeActual(actual: {
+    jobId: string;
+    chargeId: string;
+    amountMinor: number;
+    currency: string;
+    exchangeRate: string | null;
+    convertedMinor: number;
+    rateNote: string | null;
+    supplierDocumentId: string | null;
+    note: string | null;
+    correctionOf: string | null;
+    recordedBy: string;
+  }): Promise<
+    | ChargeActualRecord
+    | "charge_not_found"
+    | "document_invalid"
+    | "correction_not_found"
+  > {
+    const charge = await this.pool.query(
+      `SELECT 1 FROM app.job_charge
+       WHERE charge_id = $2::uuid AND job_id = $1::uuid AND removed_at IS NULL`,
+      [actual.jobId, actual.chargeId],
+    );
+    if (charge.rows.length === 0) return "charge_not_found";
+    if (actual.supplierDocumentId) {
+      const document = await this.pool.query(
+        `SELECT 1 FROM app.document
+         WHERE document_id = $2::uuid AND job_id = $1::uuid
+           AND document_type IN ('supplier_invoice', 'disbursement_evidence')`,
+        [actual.jobId, actual.supplierDocumentId],
+      );
+      if (document.rows.length === 0) return "document_invalid";
+    }
+    if (actual.correctionOf) {
+      const earlier = await this.pool.query(
+        `SELECT 1 FROM app.job_charge_actual
+         WHERE actual_id = $1::uuid AND charge_id = $2::uuid`,
+        [actual.correctionOf, actual.chargeId],
+      );
+      if (earlier.rows.length === 0) return "correction_not_found";
+    }
+    const result = await this.pool.query(
+      `INSERT INTO app.job_charge_actual
+        (charge_id, amount_minor, currency, exchange_rate, converted_minor,
+         rate_note, supplier_document_id, note, correction_of, recorded_by)
+       VALUES ($1::uuid, $2, $3, $4::numeric, $5, $6, $7::uuid, $8, $9::uuid, $10::uuid)
+       RETURNING *`,
+      [
+        actual.chargeId,
+        actual.amountMinor,
+        actual.currency,
+        actual.exchangeRate,
+        actual.convertedMinor,
+        actual.rateNote,
+        actual.supplierDocumentId,
+        actual.note,
+        actual.correctionOf,
+        actual.recordedBy,
+      ],
+    );
+    return this.mapChargeActual(result.rows[0]);
+  }
+
+  async findAcceptedQuoteLines(
+    jobId: string,
+  ): Promise<{ currency: string; lines: QuoteLineRecord[] } | null> {
+    const result = await this.pool.query(
+      `SELECT version.currency, line.*
+       FROM app.job AS job
+       JOIN app.quote_decision AS decision
+         ON decision.quote_id = job.quote_id AND decision.decision = 'accepted'
+       JOIN app.quote_version AS version ON version.version_id = decision.version_id
+       JOIN app.quote_line AS line ON line.version_id = version.version_id
+       WHERE job.job_id = $1::uuid
+       ORDER BY line.position`,
+      [jobId],
+    );
+    if (result.rows.length === 0) return null;
+    return {
+      currency: String(result.rows[0].currency),
+      lines: result.rows.map((row) => this.mapQuoteLine(row)),
+    };
+  }
+
+  private mapJobCharge(
+    row: Record<string, unknown>,
+    actuals: Array<Record<string, unknown>>,
+  ): JobChargeRecord {
+    return {
+      id: String(row.charge_id),
+      jobId: String(row.job_id),
+      kind: row.kind as ChargeKind,
+      description: String(row.description),
+      currency: String(row.currency),
+      quantity: Number(row.quantity),
+      unitQuotedMinor:
+        row.unit_quoted_minor === null ? null : Number(row.unit_quoted_minor),
+      quoteLineId: row.quote_line_id ? String(row.quote_line_id) : null,
+      createdBy: String(row.created_by),
+      createdAt: this.toIsoString(row.created_at),
+      actuals: actuals.map((actual) => this.mapChargeActual(actual)),
+    };
+  }
+
+  private mapChargeActual(row: Record<string, unknown>): ChargeActualRecord {
+    return {
+      id: String(row.actual_id),
+      amountMinor: Number(row.amount_minor),
+      currency: String(row.currency),
+      exchangeRate:
+        row.exchange_rate === null
+          ? null
+          : String(row.exchange_rate)
+              .replace(/(\.\d*?)0+$/, "$1")
+              .replace(/\.$/, ""),
+      convertedMinor: Number(row.converted_minor),
+      rateNote: row.rate_note ? String(row.rate_note) : null,
+      supplierDocumentId: row.supplier_document_id
+        ? String(row.supplier_document_id)
+        : null,
+      note: row.note ? String(row.note) : null,
+      correctionOf: row.correction_of ? String(row.correction_of) : null,
+      recordedBy: String(row.recorded_by),
+      recordedAt: this.toIsoString(row.recorded_at),
     };
   }
 

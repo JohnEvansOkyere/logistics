@@ -7,6 +7,7 @@ import type {
   ServiceLine,
   StaffRoleKey,
   TaskKind,
+  ChargeKind,
 } from "@bjh/contracts";
 import { authenticatedFetch } from "../auth/authenticatedFetch";
 
@@ -17,6 +18,7 @@ export type Job = {
   customerCompanyId: string;
   customerCompanyName: string;
   quoteRequestId: string | null;
+  quoteId: string | null;
   status: JobStatus;
   openedBy: string;
   openedAt: string;
@@ -284,3 +286,82 @@ export const listTasks = (assignedRole: string, status: "open" | "all") =>
       status,
     })}`,
   ).then((response) => readResponse<JobTask[]>(response));
+
+export type ChargeActual = {
+  id: string;
+  amountMinor: number;
+  currency: string;
+  exchangeRate: string | null;
+  convertedMinor: number;
+  rateNote: string | null;
+  supplierDocumentId: string | null;
+  note: string | null;
+  recordedAt: string;
+};
+
+export type JobCharge = {
+  id: string;
+  kind: ChargeKind;
+  description: string;
+  currency: string;
+  quantity: number;
+  unitQuotedMinor: number | null;
+  quotedTotalMinor: number | null;
+  currentActual: ChargeActual | null;
+  actuals: ChargeActual[];
+  varianceMinor: number | null;
+  evidenceMissing: boolean;
+};
+
+export type ChargeTotals = {
+  currency: string;
+  quotedMinor: number;
+  actualMinor: number;
+  chargesWithoutActual: number;
+  disbursementsWithoutEvidence: number;
+};
+
+export const listCharges = (id: string) =>
+  send<{ charges: JobCharge[]; totals: ChargeTotals[] }>(
+    `/${encodeURIComponent(id)}/charges`,
+    "GET",
+  );
+export const addCharge = (
+  id: string,
+  input: {
+    kind: ChargeKind;
+    description: string;
+    currency: string;
+    quantity?: number;
+    unitQuotedMinor?: number;
+  },
+) => send<JobCharge>(`/${encodeURIComponent(id)}/charges`, "POST", input);
+export const removeCharge = (id: string, chargeId: string) =>
+  send<unknown>(
+    `/${encodeURIComponent(id)}/charges/${encodeURIComponent(chargeId)}`,
+    "DELETE",
+  );
+export const importCharges = (id: string, containerSize?: "20ft" | "40ft") =>
+  send<{ created: JobCharge[]; skipped: number }>(
+    `/${encodeURIComponent(id)}/charges/import-from-quote`,
+    "POST",
+    { containerSize },
+  );
+export const recordActual = (
+  id: string,
+  chargeId: string,
+  input: {
+    amountMinor: number;
+    currency: string;
+    exchangeRate?: string;
+    rateNote?: string;
+    supplierDocumentId?: string;
+    note?: string;
+    correctionOf?: string;
+  },
+) =>
+  send<ChargeActual>(
+    `/${encodeURIComponent(id)}/charges/${encodeURIComponent(chargeId)}/actuals`,
+    "POST",
+    input,
+  );

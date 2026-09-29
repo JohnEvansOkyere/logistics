@@ -35,6 +35,7 @@ import type {
   StatusHistory,
   Timeline,
 } from "./jobApi";
+import { JobCharges } from "./JobCharges";
 import { JobEta } from "./JobEta";
 import { JobTasks } from "./JobTasks";
 import styles from "./jobs.module.css";
@@ -538,6 +539,14 @@ export function JobDetail({ jobId }: { jobId: string }) {
 
       <JobEta canEdit={isStaff && !closedJob} jobId={job.id} />
       {isStaff && <JobTasks canEdit={!closedJob} jobId={job.id} />}
+      {isStaff && (
+        <JobCharges
+          canEdit={!closedJob}
+          documents={data.documents}
+          jobId={job.id}
+          quoteId={job.quoteId}
+        />
+      )}
 
       <section className={styles.card} aria-labelledby="documents-title">
         <h2 id="documents-title">Documents</h2>

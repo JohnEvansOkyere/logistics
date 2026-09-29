@@ -14,6 +14,7 @@ import {
   quoteVersionInputSchema,
 } from "@bjh/contracts";
 import { serviceLinesForRoles } from "../auth/auth.guards";
+import { renderQuotePdf } from "./quote-pdf";
 import {
   DatabasePort,
   JobRecord,
@@ -206,5 +207,43 @@ export class QuotesService {
         `currency must be one of the configured currencies: ${current.settings.currencies.join(", ")}`,
       );
     }
+  }
+
+  /**
+   * The quote as a PDF. Customers only reach issued versions (their view of the
+   * quote hides drafts); a copy is marked DRAFT until it is issued and the
+   * business settings are configured.
+   */
+  async pdf(
+    id: string,
+    versionNumber: unknown,
+    scope: JobScope,
+  ): Promise<{ file: Buffer; filename: string }> {
+    const quote = await this.get(id, scope);
+    if (versionNumber !== undefined && typeof versionNumber !== "string") {
+      throw new BadRequestException("version must be a number");
+    }
+    const wanted =
+      versionNumber === undefined ? undefined : Number(versionNumber);
+    if (wanted !== undefined && !Number.isInteger(wanted)) {
+      throw new BadRequestException("version must be a number");
+    }
+    const version =
+      wanted === undefined
+        ? quote.versions[quote.versions.length - 1]
+        : quote.versions.find((item) => item.versionNumber === wanted);
+    if (!version) throw new NotFoundException("Quote version was not found");
+
+    const current = await this.database.getBusinessSettings();
+    const file = await renderQuotePdf({
+      quote,
+      version,
+      settings: current?.settings ?? null,
+    });
+    const base = (quote.quoteNumber ?? "quote-draft").replace(
+      /[^A-Za-z0-9-]+/g,
+      "-",
+    );
+    return { file, filename: `${base}-v${version.versionNumber}.pdf` };
   }
 }

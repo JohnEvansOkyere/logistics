@@ -1,5 +1,6 @@
 import type {
   BusinessSettings,
+  ChargeKind,
   DocumentType,
   QuoteDecision,
   QuoteBasis,
@@ -113,6 +114,8 @@ export interface JobRecord {
   customerCompanyId: string;
   customerCompanyName: string;
   quoteRequestId: string | null;
+  /** The accepted quote this job was opened from, if any. */
+  quoteId: string | null;
   status: JobStatus;
   openedBy: string;
   openedAt: string;
@@ -237,6 +240,36 @@ export interface BusinessSettingsRevisionRecord {
   settings: BusinessSettings;
   changedBy: string;
   changedAt: string;
+}
+
+export interface ChargeActualRecord {
+  id: string;
+  amountMinor: number;
+  currency: string;
+  exchangeRate: string | null;
+  /** The amount in the charge's currency, fixed when it was recorded. */
+  convertedMinor: number;
+  rateNote: string | null;
+  supplierDocumentId: string | null;
+  note: string | null;
+  correctionOf: string | null;
+  recordedBy: string;
+  recordedAt: string;
+}
+
+export interface JobChargeRecord {
+  id: string;
+  jobId: string;
+  kind: ChargeKind;
+  description: string;
+  currency: string;
+  quantity: number;
+  unitQuotedMinor: number | null;
+  quoteLineId: string | null;
+  createdBy: string;
+  createdAt: string;
+  /** Oldest first; the last entry is the current actual amount. */
+  actuals: ChargeActualRecord[];
 }
 
 export interface ActivityEntry {
@@ -514,6 +547,45 @@ export abstract class DatabasePort {
     settings: BusinessSettings,
     changedBy: string,
   ): Promise<BusinessSettingsRevisionRecord>;
+  /** Null when a charge for the same quote line is already on the job. */
+  abstract createJobCharge(charge: {
+    jobId: string;
+    kind: ChargeKind;
+    description: string;
+    currency: string;
+    quantity: number;
+    unitQuotedMinor: number | null;
+    quoteLineId: string | null;
+    createdBy: string;
+  }): Promise<JobChargeRecord | null>;
+  abstract listJobCharges(jobId: string): Promise<JobChargeRecord[]>;
+  abstract removeJobCharge(
+    jobId: string,
+    chargeId: string,
+    removedBy: string,
+  ): Promise<"removed" | "not_found" | "has_actuals">;
+  abstract appendChargeActual(actual: {
+    jobId: string;
+    chargeId: string;
+    amountMinor: number;
+    currency: string;
+    exchangeRate: string | null;
+    convertedMinor: number;
+    rateNote: string | null;
+    supplierDocumentId: string | null;
+    note: string | null;
+    correctionOf: string | null;
+    recordedBy: string;
+  }): Promise<
+    | ChargeActualRecord
+    | "charge_not_found"
+    | "document_invalid"
+    | "correction_not_found"
+  >;
+  /** The accepted version's lines for the quote this job was opened from. */
+  abstract findAcceptedQuoteLines(
+    jobId: string,
+  ): Promise<{ currency: string; lines: QuoteLineRecord[] } | null>;
   abstract recordActivity(entry: ActivityEntry): Promise<void>;
   abstract listActivity(filter: ActivityFilter): Promise<ActivityRecord[]>;
   abstract getActiveCustomerCompanyIds(userId: string): Promise<string[]>;

@@ -6,7 +6,9 @@ import {
   Param,
   Post,
   Put,
+  Query,
   Req,
+  Res,
   UseGuards,
 } from "@nestjs/common";
 import {
@@ -16,6 +18,12 @@ import {
 } from "../auth/auth.guards";
 import type { AuthenticatedRequest } from "../auth/auth.guards";
 import { QuotesService } from "./quotes.service";
+
+/** The part of the Express response the PDF route writes to. */
+interface BinaryResponse {
+  setHeader(name: string, value: string): void;
+  end(body: Buffer): void;
+}
 
 function scopeOf(request: AuthenticatedRequest) {
   return {
@@ -49,6 +57,25 @@ export class QuotesController {
   @UseGuards(JobScopeGuard)
   get(@Param("id") id: string, @Req() request: AuthenticatedRequest) {
     return this.quotes.get(id, scopeOf(request));
+  }
+
+  @Get(":id/pdf")
+  @UseGuards(JobScopeGuard)
+  async pdf(
+    @Param("id") id: string,
+    @Query("version") version: string | undefined,
+    @Req() request: AuthenticatedRequest,
+    @Res() response: BinaryResponse,
+  ): Promise<void> {
+    const { file, filename } = await this.quotes.pdf(
+      id,
+      version,
+      scopeOf(request),
+    );
+    response.setHeader("content-type", "application/pdf");
+    response.setHeader("content-disposition", `inline; filename="${filename}"`);
+    response.setHeader("content-length", String(file.length));
+    response.end(file);
   }
 
   @Put(":id/draft")

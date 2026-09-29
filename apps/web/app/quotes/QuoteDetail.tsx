@@ -9,6 +9,7 @@ import { serviceLineLabels } from "../jobs/jobApi";
 import styles from "../jobs/jobs.module.css";
 import { QuoteEditor } from "./QuoteEditor";
 import {
+  fetchQuotePdf,
   formatMoney,
   getQuote,
   issueQuote,
@@ -192,6 +193,21 @@ export function QuoteDetail({ quoteId }: { quoteId: string }) {
       setEditing(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The action failed");
+    }
+  }
+
+  async function openPdf(versionNumber: number) {
+    // Opened first so the browser treats it as a click, not a pop-up.
+    const tab = window.open("", "_blank");
+    setError("");
+    try {
+      const blob = await fetchQuotePdf(quoteId, versionNumber);
+      const url = URL.createObjectURL(blob);
+      if (tab) tab.location.href = url;
+      else window.location.href = url;
+    } catch (cause) {
+      tab?.close();
+      setError(cause instanceof Error ? cause.message : "The PDF failed");
     }
   }
 
@@ -409,6 +425,15 @@ export function QuoteDetail({ quoteId }: { quoteId: string }) {
       {draft && !editing && isStaff && (
         <section className={styles.card} aria-labelledby="draft-title">
           <h2 id="draft-title">Draft · version {draft.versionNumber}</h2>
+          <div className={styles.actions}>
+            <button
+              className={styles.secondaryButton}
+              onClick={() => void openPdf(draft.versionNumber)}
+              type="button"
+            >
+              Download PDF (marked draft)
+            </button>
+          </div>
           <VersionView version={draft} />
         </section>
       )}
@@ -423,6 +448,15 @@ export function QuoteDetail({ quoteId }: { quoteId: string }) {
             Version {version.versionNumber} · issued{" "}
             {version.issuedAt ? formatDate(version.issuedAt) : ""}
           </h2>
+          <div className={styles.actions}>
+            <button
+              className={styles.secondaryButton}
+              onClick={() => void openPdf(version.versionNumber)}
+              type="button"
+            >
+              Download PDF
+            </button>
+          </div>
           <VersionView version={version} />
         </section>
       ))}

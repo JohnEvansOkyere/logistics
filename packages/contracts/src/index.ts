@@ -808,3 +808,98 @@ export const businessSettingsSchema = z
     }
   });
 export type BusinessSettings = z.infer<typeof businessSettingsSchema>;
+
+export const chargeKinds = ["service", "disbursement"] as const;
+export type ChargeKind = (typeof chargeKinds)[number];
+export const chargeKindLabels: Record<ChargeKind, string> = {
+  service: "Service charge",
+  disbursement: "Disbursement (third-party cost)",
+};
+
+const currencyCode = (field: string) =>
+  z
+    .string({ error: `${field} is required` })
+    .transform((value) => value.trim().toUpperCase())
+    .refine((value) => /^[A-Z]{3}$/.test(value), {
+      error: `${field} must be a 3-letter code such as USD or GHS`,
+    });
+
+export const jobChargeInputSchema = z.object(
+  {
+    kind: z.enum(chargeKinds, {
+      error: `kind must be one of ${chargeKinds.join(", ")}`,
+    }),
+    description: requiredText("description", 300),
+    currency: currencyCode("currency"),
+    quantity: z
+      .number({ error: "quantity must be a whole number" })
+      .int({ error: "quantity must be a whole number" })
+      .min(1, { error: "quantity must be 1 to 10000" })
+      .max(10000, { error: "quantity must be 1 to 10000" })
+      .nullish()
+      .transform((value) => value ?? 1),
+    unitQuotedMinor: minorAmount("unitQuotedMinor"),
+  },
+  objectError("A charge object is required"),
+);
+export type JobChargeInput = z.infer<typeof jobChargeInputSchema>;
+
+/** An exchange rate as text, e.g. "15.2500": positive, up to 8 decimals. */
+export const exchangeRateSchema = z
+  .string({
+    error: "exchangeRate must be a positive number with up to 8 decimals",
+  })
+  .transform((value) => value.trim())
+  .refine((value) => /^\d{1,10}(\.\d{1,8})?$/.test(value), {
+    error: "exchangeRate must be a positive number with up to 8 decimals",
+  })
+  .refine((value) => Number(value) > 0, {
+    error: "exchangeRate must be a positive number with up to 8 decimals",
+  });
+
+export const chargeActualInputSchema = z.object(
+  {
+    amountMinor: z
+      .number({ error: "amountMinor must be a whole number of minor units" })
+      .int({ error: "amountMinor must be a whole number of minor units" })
+      .min(0, { error: "amountMinor cannot be negative" })
+      .max(MAX_MINOR_AMOUNT, { error: "amountMinor is too large" }),
+    currency: currencyCode("currency"),
+    exchangeRate: exchangeRateSchema.nullish().transform((v) => v ?? null),
+    rateNote: optionalText("rateNote", 200),
+    supplierDocumentId: uuidField("supplierDocumentId")
+      .nullish()
+      .transform((value) => value ?? null),
+    note: optionalText("note", 2000),
+    correctionOf: uuidField("correctionOf")
+      .nullish()
+      .transform((value) => value ?? null),
+  },
+  objectError("An actual amount object is required"),
+);
+export type ChargeActualInput = z.infer<typeof chargeActualInputSchema>;
+
+export const chargeImportInputSchema = z.object(
+  {
+    containerSize: z
+      .enum(["20ft", "40ft"], { error: "containerSize must be 20ft or 40ft" })
+      .nullish()
+      .transform((value) => value ?? null),
+  },
+  objectError("An import object is required"),
+);
+export type ChargeImportInput = z.infer<typeof chargeImportInputSchema>;
+
+/**
+ * Converts minor units with an exchange rate, rounding half up, using integer
+ * arithmetic only (money never passes through floating point).
+ */
+export function convertMinor(
+  amountMinor: number,
+  exchangeRate: string,
+): number {
+  const [whole, fraction = ""] = exchangeRate.split(".");
+  const scaled = BigInt(whole + fraction.padEnd(8, "0"));
+  const half = BigInt(50_000_000);
+  return Number((BigInt(amountMinor) * scaled + half) / BigInt(100_000_000));
+}

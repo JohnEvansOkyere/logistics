@@ -145,6 +145,18 @@ export const recordQuoteDecision = (
     job: { id: string; fileNumber: string } | null;
   }>(`/${encodeURIComponent(id)}/decision`, "POST", input);
 
+/** The quote version as a PDF file. */
+export async function fetchQuotePdf(
+  id: string,
+  versionNumber: number,
+): Promise<Blob> {
+  const response = await authenticatedFetch(
+    `${quotesUrl}/${encodeURIComponent(id)}/pdf?version=${versionNumber}`,
+  );
+  if (!response.ok) throw new Error("The PDF could not be created");
+  return response.blob();
+}
+
 /** Minor units to a display string, e.g. 25000 + USD -> "$250.00". */
 export function formatMoney(minor: number, currency: string): string {
   return new Intl.NumberFormat(undefined, {
