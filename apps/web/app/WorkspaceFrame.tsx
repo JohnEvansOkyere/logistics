@@ -12,6 +12,7 @@ export function WorkspaceFrame({ children }: { children: ReactNode }) {
   }
 
   const customersActive = pathname.startsWith("/customers");
+  const jobsActive = pathname.startsWith("/jobs");
   const quotationsActive = pathname.startsWith("/quotations");
   const settingsActive =
     pathname.startsWith("/settings") || pathname === "/admin/users";
@@ -50,6 +51,16 @@ export function WorkspaceFrame({ children }: { children: ReactNode }) {
               ◉
             </span>
             Customers
+          </Link>
+          <Link
+            className={`nav-link${jobsActive ? " active" : ""}`}
+            href="/jobs"
+            aria-current={jobsActive ? "page" : undefined}
+          >
+            <span className="nav-icon" aria-hidden="true">
+              ▤
+            </span>
+            Jobs
           </Link>
           <Link
             className={`nav-link${quotationsActive ? " active" : ""}`}

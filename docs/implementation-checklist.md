@@ -29,7 +29,7 @@ Each item: requirement IDs · done when.
 - [x] **B4** `job_party` (shipper, consignee, notify, agents) and `shipment_reference` with **master/house hierarchy** (MBL/HBL, MAWB/HAWB, booking, container + seal) · one master → many houses supported; search by any reference.
 - [x] **B5** Milestone template for **sea import** (D02 draft from `docs/workflows.md`); `milestone_event` append-only with actor, time, source, note · events can't be edited/deleted; correction = new event.
 - [x] **B6** Job status transitions (`open → in_progress → on_hold → ready_to_close → closed/cancelled`), reopen needs a reason and the department in charge (or super admin) - per Evans 2026-09-29 · invalid transition tests.
-- [ ] **B7** Web: job list, create form, job detail with timeline and parties/references · browser check at 390px/1280px.
+- [x] **B7** Web: job list, create form, job detail with timeline and parties/references · browser check at 390px/1280px. _(2026-09-29: checked in a browser at 1280px and 390px as a sea-import rep: opened a job, recorded a milestone, added a party and a booking; no horizontal page scroll at 390px. Activity log page checked only as a non-admin, which correctly shows the denial.)_
 - [x] **B8** Audit events for job create/status/owner changes · audit rows asserted in tests. _(2026-09-29: covered by the activity log — job create, status, milestone, party and reference requests — plus `job_status_history`; there is no separate owner field because ownership is the service line.)_
 
 ## C — Document archive (Release 1) · P08, P14
