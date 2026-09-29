@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@bjh/contracts": "workspace:*",
     "@supabase/supabase-js": "2.117.2",
     "next": "16.3.6",
     "react": "19.3.0",

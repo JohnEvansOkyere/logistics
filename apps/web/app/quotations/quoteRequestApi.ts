@@ -1,7 +1,8 @@
 import { authenticatedFetch } from "../auth/authenticatedFetch";
 
-export type DepartmentRoleKey =
-  "air_import_rep" | "air_export_rep" | "sea_import_rep" | "sea_export_rep";
+import type { DepartmentRoleKey, QuoteRequestInput } from "@bjh/contracts";
+
+export type { DepartmentRoleKey };
 
 export type QuoteRequest = {
   id: string;
@@ -33,15 +34,7 @@ export type QuoteDraft = {
   revisions: QuoteDraftRevision[];
 };
 
-export type NewQuoteRequest = Omit<
-  QuoteRequest,
-  | "id"
-  | "createdAt"
-  | "customerCompanyId"
-  | "customerCompanyName"
-  | "quoteDraftRevisionCount"
-  | "quoteDraftUpdatedAt"
->;
+export type NewQuoteRequest = QuoteRequestInput;
 
 const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:3001/api";

@@ -1,12 +1,9 @@
 import "reflect-metadata";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
 import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { after, before, test } from "node:test";
 import { AddressInfo } from "node:net";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { DatabasePort } from "../src/database/database.port";
 import { STAFF_AUTH_DIRECTORY } from "../src/auth/staff-admin.port";
 import type {
@@ -14,6 +11,12 @@ import type {
   StaffDirectoryUser,
 } from "../src/auth/staff-admin.port";
 import { SupabaseAuthVerifier } from "../src/auth/supabase-auth-verifier";
+import {
+  beginTestDatabase,
+  endTestDatabase,
+  testPostgresPool,
+} from "./postgres-test-database";
+import { POSTGRES_POOL } from "../src/database/postgres-database.service";
 
 const adminId = "50000000-0000-4000-8000-000000000001";
 const staffId = "50000000-0000-4000-8000-000000000002";
@@ -21,12 +24,9 @@ const invitedId = "50000000-0000-4000-8000-000000000003";
 const adminToken = "test-admin-token";
 const staffToken = "test-staff-token";
 
-let temporaryDirectory: string;
 let application: INestApplication;
 let baseUrl: string;
 let createdAccount: { email: string; password: string } | null;
-const originalDatabasePath = process.env.DATABASE_PATH;
-const originalDatabaseUrl = process.env.DATABASE_URL;
 const originalWebOrigin = process.env.WEB_ORIGIN;
 
 const users = new Map<string, StaffDirectoryUser>([
@@ -83,12 +83,12 @@ const directory: StaffAuthDirectory = {
 
 before(async () => {
   createdAccount = null;
-  temporaryDirectory = await mkdtemp(join(tmpdir(), "bjh-staff-admin-"));
-  process.env.DATABASE_PATH = join(temporaryDirectory, "staff.sqlite");
-  delete process.env.DATABASE_URL;
+  await beginTestDatabase();
   process.env.WEB_ORIGIN = "http://127.0.0.1:3002";
   const { AppModule } = await import("../src/app.module");
   const module = await Test.createTestingModule({ imports: [AppModule] })
+    .overrideProvider(POSTGRES_POOL)
+    .useValue(testPostgresPool)
     .overrideProvider(SupabaseAuthVerifier)
     .useValue({
       async verify(token: string) {
@@ -112,14 +112,9 @@ before(async () => {
 
 after(async () => {
   await application?.close();
-  if (originalDatabasePath === undefined) delete process.env.DATABASE_PATH;
-  else process.env.DATABASE_PATH = originalDatabasePath;
-  if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
-  else process.env.DATABASE_URL = originalDatabaseUrl;
   if (originalWebOrigin === undefined) delete process.env.WEB_ORIGIN;
   else process.env.WEB_ORIGIN = originalWebOrigin;
-  if (temporaryDirectory)
-    await rm(temporaryDirectory, { recursive: true, force: true });
+  await endTestDatabase();
 });
 
 function call(path: string, token?: string, init: RequestInit = {}) {

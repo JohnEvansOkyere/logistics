@@ -1,15 +1,34 @@
 import { Module } from "@nestjs/common";
+import { APP_FILTER } from "@nestjs/core";
+import { ThrottlerModule } from "@nestjs/throttler";
+import { RequestErrorFilter } from "./request-error.filter";
 import { AuthModule } from "./auth/auth.module";
 import { DatabaseModule } from "./database/database.module";
 import { HealthController } from "./health.controller";
+import { JobsController } from "./jobs/jobs.controller";
+import { JobsService } from "./jobs/jobs.service";
 import { CustomersController } from "./customers/customers.controller";
 import { CustomersService } from "./customers/customers.service";
 import { QuoteRequestsController } from "./quotations/quote-requests.controller";
 import { QuoteRequestsService } from "./quotations/quote-requests.service";
 
 @Module({
-  imports: [DatabaseModule, AuthModule],
-  controllers: [HealthController, QuoteRequestsController, CustomersController],
-  providers: [QuoteRequestsService, CustomersService],
+  imports: [
+    ThrottlerModule.forRoot([{ name: "default", ttl: 60_000, limit: 30 }]),
+    DatabaseModule,
+    AuthModule,
+  ],
+  controllers: [
+    HealthController,
+    QuoteRequestsController,
+    CustomersController,
+    JobsController,
+  ],
+  providers: [
+    QuoteRequestsService,
+    CustomersService,
+    JobsService,
+    { provide: APP_FILTER, useClass: RequestErrorFilter },
+  ],
 })
 export class AppModule {}

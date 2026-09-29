@@ -1,3 +1,4 @@
+import type { CustomerInput } from "@bjh/contracts";
 import { authenticatedFetch } from "../auth/authenticatedFetch";
 
 export type CustomerContact = {
@@ -14,11 +15,7 @@ export type CustomerCompany = {
   contacts: CustomerContact[];
 };
 
-export type NewCustomer = {
-  companyName: string;
-  contactName: string;
-  email: string;
-};
+export type NewCustomer = CustomerInput;
 
 const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:3001/api";

@@ -1,0 +1,56 @@
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
+import {
+  DepartmentStaffGuard,
+  JobScopeGuard,
+  SupabaseIdentityGuard,
+} from "../auth/auth.guards";
+import type { AuthenticatedRequest } from "../auth/auth.guards";
+import { JobsService } from "./jobs.service";
+
+function scopeOf(request: AuthenticatedRequest) {
+  return {
+    companyIds: request.allowedCompanyIds,
+    serviceLines: request.allowedServiceLines,
+  };
+}
+
+@Controller("api/v1/jobs")
+@UseGuards(SupabaseIdentityGuard)
+export class JobsController {
+  constructor(@Inject(JobsService) private readonly jobs: JobsService) {}
+
+  @Post()
+  @UseGuards(DepartmentStaffGuard)
+  create(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
+    return this.jobs.create(
+      body,
+      request.authUser!.userId,
+      request.staffRoles!,
+    );
+  }
+
+  @Get()
+  @UseGuards(JobScopeGuard)
+  list(
+    @Query("search") search: string | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.jobs.list(search, scopeOf(request));
+  }
+
+  @Get(":id")
+  @UseGuards(JobScopeGuard)
+  get(@Param("id") id: string, @Req() request: AuthenticatedRequest) {
+    return this.jobs.get(id, scopeOf(request));
+  }
+}

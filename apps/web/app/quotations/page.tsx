@@ -31,9 +31,9 @@ export default function QuotationsPage() {
       >
         <span aria-hidden="true">i</span>
         <p>
-          <strong>Local development only.</strong> Requests are saved in local
-          SQLite. Use synthetic details; pricing, issued quotations, and job
-          records are not part of this slice.
+          <strong>Local development only.</strong> Requests are saved in the
+          local database. Use synthetic details; pricing, issued quotations, and
+          job records are not part of this slice.
         </p>
       </aside>
 

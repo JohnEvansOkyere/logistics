@@ -5,6 +5,13 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import {
+  parseContract,
+  staffCreateInputSchema,
+  staffRoleInputSchema,
+  type StaffCreateInput,
+  type StaffRoleInput,
+} from "@bjh/contracts";
 import { DatabasePort, StaffRoleKey } from "../database/database.port";
 import type { AuthenticatedUser } from "./supabase-auth-verifier";
 import { STAFF_AUTH_DIRECTORY } from "./staff-admin.port";
@@ -211,34 +218,16 @@ export class AdminStaffService {
     return assignment;
   }
 
-  private readRoleInput(body: unknown): {
-    email?: string;
-    roleKey: StaffRoleKey;
-  } {
-    if (!body || typeof body !== "object") {
-      throw new BadRequestException("A roleKey is required");
-    }
-    const record = body as Record<string, unknown>;
-    return {
-      email: typeof record.email === "string" ? record.email : undefined,
-      roleKey: this.parseRole(record.roleKey),
-    };
+  private readRoleInput(body: unknown): StaffRoleInput {
+    const result = parseContract(staffRoleInputSchema, body);
+    if (!result.success) throw new BadRequestException(result.message);
+    return result.data;
   }
 
-  private readCreateInput(body: unknown): {
-    email: string;
-    password: string;
-    roleKey: StaffRoleKey;
-  } {
-    if (!body || typeof body !== "object") {
-      throw new BadRequestException("Email, password and roleKey are required");
-    }
-    const record = body as Record<string, unknown>;
-    return {
-      email: typeof record.email === "string" ? record.email : "",
-      password: typeof record.password === "string" ? record.password : "",
-      roleKey: this.parseRole(record.roleKey),
-    };
+  private readCreateInput(body: unknown): StaffCreateInput {
+    const result = parseContract(staffCreateInputSchema, body);
+    if (!result.success) throw new BadRequestException(result.message);
+    return result.data;
   }
 
   private validatePassword(password: string) {

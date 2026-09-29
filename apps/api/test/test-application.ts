@@ -2,6 +2,8 @@ import { UnauthorizedException } from "@nestjs/common";
 import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { DatabasePort } from "../src/database/database.port";
+import { POSTGRES_POOL } from "../src/database/postgres-database.service";
+import { testPostgresPool } from "./postgres-test-database";
 import { SupabaseAuthVerifier } from "../src/auth/supabase-auth-verifier";
 import { STAFF_AUTH_DIRECTORY } from "../src/auth/staff-admin.port";
 import type {
@@ -87,6 +89,7 @@ const testStaffDirectory: StaffAuthDirectory = {
 export async function createTestApplication(
   options: {
     bootstrapSuperAdmin?: boolean;
+    beforeListen?: (application: INestApplication) => void;
   } = {},
 ): Promise<{ application: INestApplication; baseUrl: string }> {
   const { AppModule } = await import("../src/app.module");
@@ -101,11 +104,14 @@ export async function createTestApplication(
         return identity;
       },
     })
+    .overrideProvider(POSTGRES_POOL)
+    .useValue(testPostgresPool)
     .overrideProvider(STAFF_AUTH_DIRECTORY)
     .useValue(testStaffDirectory)
     .compile();
 
   const application = module.createNestApplication({ logger: false });
+  options.beforeListen?.(application);
   await application.init();
   if (options?.bootstrapSuperAdmin !== false) {
     await application

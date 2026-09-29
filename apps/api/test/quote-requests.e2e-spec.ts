@@ -1,18 +1,12 @@
 import "reflect-metadata";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { after, before, test } from "node:test";
 import type { INestApplication } from "@nestjs/common";
 import { createTestApplication, staffFetch } from "./test-application";
+import { beginTestDatabase, endTestDatabase } from "./postgres-test-database";
 
-let temporaryDirectory: string;
-let databasePath: string;
 let baseUrl: string;
 let application: INestApplication;
-const originalDatabasePath = process.env.DATABASE_PATH;
-const originalDatabaseUrl = process.env.DATABASE_URL;
 
 async function startApplication(): Promise<void> {
   const started = await createTestApplication();
@@ -21,28 +15,13 @@ async function startApplication(): Promise<void> {
 }
 
 before(async () => {
-  temporaryDirectory = await mkdtemp(join(tmpdir(), "bjh-quote-requests-"));
-  databasePath = join(temporaryDirectory, "requests.sqlite");
-  process.env.DATABASE_PATH = databasePath;
-  delete process.env.DATABASE_URL;
+  await beginTestDatabase();
   await startApplication();
 });
 
 after(async () => {
   await application?.close();
-  if (originalDatabasePath === undefined) {
-    delete process.env.DATABASE_PATH;
-  } else {
-    process.env.DATABASE_PATH = originalDatabasePath;
-  }
-  if (originalDatabaseUrl === undefined) {
-    delete process.env.DATABASE_URL;
-  } else {
-    process.env.DATABASE_URL = originalDatabaseUrl;
-  }
-  if (temporaryDirectory) {
-    await rm(temporaryDirectory, { recursive: true, force: true });
-  }
+  await endTestDatabase();
 });
 
 test("a quote request is saved and returned by list and detail endpoints", async () => {

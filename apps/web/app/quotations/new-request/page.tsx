@@ -32,8 +32,8 @@ export default function NewRequestPreviewPage() {
         <span aria-hidden="true">i</span>
         <p>
           <strong>Local development only.</strong> Requests are stored in local
-          SQLite. Use synthetic details. Pricing, quote terms, and job creation
-          are not part of this intake step.
+          database. Use synthetic details. Pricing, quote terms, and job
+          creation are not part of this intake step.
         </p>
       </aside>
 

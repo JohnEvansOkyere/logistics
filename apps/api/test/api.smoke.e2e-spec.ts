@@ -1,24 +1,27 @@
 import "reflect-metadata";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
 import { AddressInfo } from "node:net";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { after, before, test } from "node:test";
-import { NestFactory } from "@nestjs/core";
+import { Test } from "@nestjs/testing";
+import type { INestApplication } from "@nestjs/common";
+import { POSTGRES_POOL } from "../src/database/postgres-database.service";
+import {
+  beginTestDatabase,
+  endTestDatabase,
+  testPostgresPool,
+} from "./postgres-test-database";
 
-let temporaryDirectory: string;
 let baseUrl: string;
-let application: Awaited<ReturnType<typeof NestFactory.create>>;
-const originalDatabasePath = process.env.DATABASE_PATH;
-const originalDatabaseUrl = process.env.DATABASE_URL;
+let application: INestApplication;
 
 before(async () => {
-  temporaryDirectory = await mkdtemp(join(tmpdir(), "bjh-logistics-api-"));
-  process.env.DATABASE_PATH = join(temporaryDirectory, "fresh.sqlite");
-  delete process.env.DATABASE_URL;
+  await beginTestDatabase();
   const { AppModule } = await import("../src/app.module");
-  application = await NestFactory.create(AppModule, { logger: false });
+  const module = await Test.createTestingModule({ imports: [AppModule] })
+    .overrideProvider(POSTGRES_POOL)
+    .useValue(testPostgresPool)
+    .compile();
+  application = module.createNestApplication({ logger: false });
   await application.listen(0, "127.0.0.1");
   const address = application.getHttpServer().address() as AddressInfo;
   baseUrl = `http://127.0.0.1:${address.port}`;
@@ -26,22 +29,10 @@ before(async () => {
 
 after(async () => {
   await application?.close();
-  if (originalDatabasePath === undefined) {
-    delete process.env.DATABASE_PATH;
-  } else {
-    process.env.DATABASE_PATH = originalDatabasePath;
-  }
-  if (originalDatabaseUrl === undefined) {
-    delete process.env.DATABASE_URL;
-  } else {
-    process.env.DATABASE_URL = originalDatabaseUrl;
-  }
-  if (temporaryDirectory) {
-    await rm(temporaryDirectory, { recursive: true, force: true });
-  }
+  await endTestDatabase();
 });
 
-test("API health reports the version applied to a freshly created SQLite database", async () => {
+test("API health reports a healthy local PostgreSQL database", async () => {
   const response = await fetch(`${baseUrl}/api/health`);
 
   assert.equal(response.status, 200);
@@ -49,8 +40,7 @@ test("API health reports the version applied to a freshly created SQLite databas
     status: "ok",
     database: {
       status: "ok",
-      provider: "sqlite",
-      schemaVersion: "010_quote_request_assignment.sql",
+      provider: "postgresql",
     },
   });
 });

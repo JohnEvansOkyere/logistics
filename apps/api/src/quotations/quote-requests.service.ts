@@ -5,6 +5,13 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import {
+  departmentAssignmentInputSchema,
+  parseContract,
+  quoteDraftInputSchema,
+  quoteRequestInputSchema,
+  type QuoteRequestInput,
+} from "@bjh/contracts";
 import { randomUUID } from "node:crypto";
 import {
   DatabasePort,
@@ -12,16 +19,6 @@ import {
   QuoteDraftRecord,
   QuoteRequestRecord,
 } from "../database/database.port";
-
-type QuoteRequestInput = Omit<
-  QuoteRequestRecord,
-  | "id"
-  | "createdAt"
-  | "customerCompanyId"
-  | "customerCompanyName"
-  | "quoteDraftRevisionCount"
-  | "quoteDraftUpdatedAt"
->;
 
 @Injectable()
 export class QuoteRequestsService {
@@ -113,27 +110,12 @@ export class QuoteRequestsService {
     input: unknown,
     assignedBy: string,
   ): Promise<{ roleKey: DepartmentRoleKey | null }> {
-    if (!input || typeof input !== "object" || Array.isArray(input)) {
-      throw new BadRequestException("A department role is required");
-    }
-    const roleKey = (input as Record<string, unknown>).roleKey;
-    const departmentRoles: DepartmentRoleKey[] = [
-      "air_import_rep",
-      "air_export_rep",
-      "sea_import_rep",
-      "sea_export_rep",
-    ];
-    if (
-      roleKey !== null &&
-      !departmentRoles.includes(roleKey as DepartmentRoleKey)
-    ) {
-      throw new BadRequestException(
-        "roleKey must be a department role or null",
-      );
-    }
+    const parsed = parseContract(departmentAssignmentInputSchema, input);
+    if (!parsed.success) throw new BadRequestException(parsed.message);
+    const { roleKey } = parsed.data;
     const result = await this.database.assignQuoteRequestDepartment(
       requestId,
-      roleKey as DepartmentRoleKey | null,
+      roleKey,
       assignedBy,
       new Date().toISOString(),
     );
@@ -156,24 +138,13 @@ export class QuoteRequestsService {
     savedBy: string,
   ): Promise<QuoteDraftRecord> {
     await this.requireAssociatedRequest(requestId);
-    if (!input || typeof input !== "object" || Array.isArray(input)) {
-      throw new BadRequestException("A quote draft object is required");
-    }
-
-    const content = (input as Record<string, unknown>).content;
-    if (
-      typeof content !== "string" ||
-      !content.trim() ||
-      content.length > 20000
-    ) {
-      throw new BadRequestException(
-        "content must contain 1 to 20000 characters",
-      );
-    }
+    const parsed = parseContract(quoteDraftInputSchema, input);
+    if (!parsed.success) throw new BadRequestException(parsed.message);
+    const { content } = parsed.data;
 
     return this.database.saveQuoteDraft(
       requestId,
-      content.trim(),
+      content,
       savedBy,
       new Date().toISOString(),
     );
@@ -193,47 +164,8 @@ export class QuoteRequestsService {
   }
 
   private validate(input: unknown): QuoteRequestInput {
-    if (!input || typeof input !== "object" || Array.isArray(input)) {
-      throw new BadRequestException("A quote request object is required");
-    }
-
-    const values = input as Record<string, unknown>;
-    const companyName = this.requiredText(
-      values.companyName,
-      "companyName",
-      160,
-    );
-    const contactName = this.requiredText(
-      values.contactName,
-      "contactName",
-      160,
-    );
-    const email = this.requiredText(values.email, "email", 254);
-    const message = this.requiredText(values.message, "message", 5000);
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      throw new BadRequestException("email must be a valid email address");
-    }
-
-    return { companyName, contactName, email, message };
-  }
-
-  private requiredText(
-    value: unknown,
-    field: string,
-    maximumLength: number,
-  ): string {
-    if (typeof value !== "string") {
-      throw new BadRequestException(`${field} is required`);
-    }
-
-    const text = value.trim();
-    if (!text || text.length > maximumLength) {
-      throw new BadRequestException(
-        `${field} must contain 1 to ${maximumLength} characters`,
-      );
-    }
-
-    return text;
+    const result = parseContract(quoteRequestInputSchema, input);
+    if (!result.success) throw new BadRequestException(result.message);
+    return result.data;
   }
 }

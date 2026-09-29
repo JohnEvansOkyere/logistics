@@ -1,10 +1,7 @@
 import "reflect-metadata";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
 import type { INestApplication } from "@nestjs/common";
 import { after, before, test } from "node:test";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import {
   TEST_CUSTOMER_A_ID,
   TEST_CUSTOMER_A_TOKEN,
@@ -19,12 +16,10 @@ import {
 } from "./test-application";
 import { createTestApplication } from "./test-application";
 import { DatabasePort } from "../src/database/database.port";
+import { beginTestDatabase, endTestDatabase } from "./postgres-test-database";
 
-let temporaryDirectory: string;
 let application: INestApplication;
 let baseUrl: string;
-const originalDatabasePath = process.env.DATABASE_PATH;
-const originalDatabaseUrl = process.env.DATABASE_URL;
 
 let companyA: string;
 let companyB: string;
@@ -32,9 +27,7 @@ let requestA: string;
 let requestB: string;
 
 before(async () => {
-  temporaryDirectory = await mkdtemp(join(tmpdir(), "bjh-company-access-"));
-  process.env.DATABASE_PATH = join(temporaryDirectory, "company-access.sqlite");
-  delete process.env.DATABASE_URL;
+  await beginTestDatabase();
   const started = await createTestApplication();
   application = started.application;
   baseUrl = started.baseUrl;
@@ -66,13 +59,7 @@ before(async () => {
 
 after(async () => {
   await application?.close();
-  if (originalDatabasePath === undefined) delete process.env.DATABASE_PATH;
-  else process.env.DATABASE_PATH = originalDatabasePath;
-  if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
-  else process.env.DATABASE_URL = originalDatabaseUrl;
-  if (temporaryDirectory) {
-    await rm(temporaryDirectory, { recursive: true, force: true });
-  }
+  await endTestDatabase();
 });
 
 function call(

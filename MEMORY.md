@@ -145,3 +145,33 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **What was decided:** Drivers are stored as name and phone records that staff assign to road trips; they have no sign-in or role.
 **Why:** Evans confirmed staff handle driver assignment; drivers do not need system access.
 **What was rejected:** A driver sign-in for delivery confirmation from a phone.
+
+## 2026-09-29, Release order: job file first
+
+**What was decided:** Build the staff-only job file first (Release 1: jobs with file numbers, milestone timeline, private document archive/search, manual ETA, supplier-invoice upload, staff notes). Then structured quotes/invoices/payments (R2), customer portal and notifications (R3), automation and other services (R4). Work order follows `docs/implementation-checklist.md`.
+**Why:** Evans chose it in response to the audit; it addresses the client's stated pain (finding old job documents) before quote issuance.
+**What was rejected:** Keeping the delivery-plan order that puts quote issuance/acceptance ahead of jobs. `docs/delivery-plan.md` still shows the old order and needs aligning (follow-up).
+
+## 2026-09-29, API tests run on local Postgres in a rolled-back transaction
+
+**What was decided:** API e2e tests use local Supabase PostgreSQL. Each test file opens one outer transaction, truncates the `app` tables, seeds synthetic `auth.users`, and rolls back at the end; the API's BEGIN/COMMIT/ROLLBACK become savepoints on one serialized connection (`apps/api/test/postgres-test-database.ts`). `test:e2e` runs files sequentially. `test` now runs only `*.unit-spec.ts`.
+**Why:** Keeps local dev data untouched, needs no extra database, and gives fresh state per file like the old temp SQLite files. The `.env` `DATABASE_URL` points at a hosted project, so the harness ignores it and requires the local port.
+**What was rejected:** A separate test database (auth schema/FKs make cloning impractical); truncating the dev database (destroys dev data); a `DATABASE_URL` from `.env` (hosted).
+
+## 2026-09-29, Shared request contracts (`@bjh/contracts`)
+
+**What was decided:** `packages/contracts` (zod 4, compiled to `dist` with tsc) holds the request-body schemas for customers, quote requests, quote drafts, department assignment and staff role/create bodies, with the API's existing error wording. API services parse through `parseContract`; web imports the types. Root `typecheck`, `test`, `test:e2e` build contracts first.
+**Why:** Removes hand-written duplicate validation and gives web/API one source for shapes (A7).
+**What was rejected:** Sharing TypeScript source without a build step (Nest's `tsc` build would compile it into the wrong root); class-validator DTOs (would duplicate types for the web).
+
+## 2026-09-29, SQLite retired; job-number format; local migrations authorised
+
+**What was decided:** SQLite adapter, its migrations, `migrate.ts`, `.local/logistics.sqlite` and `better-sqlite3` were deleted (Evans approved the listed set). `DATABASE_URL` is now required. Job numbers use `BJH/{SI|SE|AI|AE}/{YYYY}/{seq}`. Migrations may be applied to the local Supabase database only.
+**Why:** Evans answered these explicitly in-session; one adapter halves feature cost and tests now match the shipping database.
+**What was rejected:** Keeping the `.sqlite` file; simpler `BJH-{YYYY}-{seq}` numbering; applying anything to hosted Supabase.
+
+## 2026-09-29, Job visibility scope (assumption pending client confirmation)
+
+**What was decided:** Job reads are scoped: super admin sees all jobs, department reps only jobs on their own service lines, customers only their active companies' jobs. Reps may open jobs only for their own line. File-number sequence pads to 4 digits.
+**Why:** B3 asks for department scoping by role; the checklist marks rep-own-line as an assumption, and it is the narrowest option consistent with the existing draft-access model.
+**What was rejected:** Letting every rep see every job (as they can for customers and quote requests) until Evans/the client confirms; that would be a one-line widening later.

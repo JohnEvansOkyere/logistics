@@ -4,6 +4,9 @@ import {
   DatabasePort,
   CustomerCompanyRecord,
   CustomerMembershipRecord,
+  JobRecord,
+  JobScope,
+  ServiceLine,
   QuoteDraftRecord,
   QuoteRequestRecord,
   DepartmentRoleKey,
@@ -49,6 +52,22 @@ const quoteRequestSelect = `
   FROM app.quote_request AS request
   LEFT JOIN app.customer_company AS company
     ON company.company_id = request.customer_company_id`;
+
+const jobSelect = `
+  SELECT
+    job.job_id,
+    job.file_number,
+    job.service_line,
+    job.customer_company_id,
+    company.company_name AS customer_company_name,
+    job.quote_request_id,
+    job.status,
+    job.opened_by,
+    job.opened_at,
+    job.closed_at
+  FROM app.job AS job
+  JOIN app.customer_company AS company
+    ON company.company_id = job.customer_company_id`;
 
 const customerSelect = `
   SELECT
@@ -349,6 +368,97 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       [id, companyIds ?? null],
     );
     return this.groupCustomers(result.rows)[0] ?? null;
+  }
+
+  async createJob(
+    input: {
+      customerCompanyId: string;
+      serviceLine: ServiceLine;
+      quoteRequestId: string | null;
+    },
+    openedBy: string,
+    year: number,
+  ): Promise<JobRecord> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const allocated = await client.query(
+        "SELECT app.allocate_job_number($1, $2) AS file_number",
+        [input.serviceLine, year],
+      );
+      const inserted = await client.query(
+        `INSERT INTO app.job
+          (file_number, service_line, customer_company_id, quote_request_id, opened_by)
+         VALUES ($1, $2, $3::uuid, $4::uuid, $5::uuid)
+         RETURNING job_id`,
+        [
+          String(allocated.rows[0].file_number),
+          input.serviceLine,
+          input.customerCompanyId,
+          input.quoteRequestId,
+          openedBy,
+        ],
+      );
+      const created = await client.query(
+        `${jobSelect} WHERE job.job_id = $1::uuid`,
+        [String(inserted.rows[0].job_id)],
+      );
+      await client.query("COMMIT");
+      return this.mapJob(created.rows[0]);
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listJobs(search: string, scope: JobScope): Promise<JobRecord[]> {
+    if (scope.companyIds?.length === 0 || scope.serviceLines?.length === 0) {
+      return [];
+    }
+    const result = await this.pool.query(
+      `${jobSelect}
+       WHERE ($1 = ''
+         OR strpos(lower(job.file_number), lower($1)) > 0
+         OR strpos(lower(company.company_name), lower($1)) > 0)
+         AND ($2::uuid[] IS NULL OR job.customer_company_id = ANY($2::uuid[]))
+         AND ($3::text[] IS NULL OR job.service_line = ANY($3::text[]))
+       ORDER BY job.opened_at DESC, job.file_number DESC`,
+      [search, scope.companyIds ?? null, scope.serviceLines ?? null],
+    );
+    return result.rows.map((row) => this.mapJob(row));
+  }
+
+  async findJob(id: string, scope: JobScope): Promise<JobRecord | null> {
+    if (scope.companyIds?.length === 0 || scope.serviceLines?.length === 0) {
+      return null;
+    }
+    const result = await this.pool.query(
+      `${jobSelect}
+       WHERE job.job_id = $1::uuid
+         AND ($2::uuid[] IS NULL OR job.customer_company_id = ANY($2::uuid[]))
+         AND ($3::text[] IS NULL OR job.service_line = ANY($3::text[]))`,
+      [id, scope.companyIds ?? null, scope.serviceLines ?? null],
+    );
+    return result.rows[0] ? this.mapJob(result.rows[0]) : null;
+  }
+
+  private mapJob(row: Record<string, unknown>): JobRecord {
+    return {
+      id: String(row.job_id),
+      fileNumber: String(row.file_number),
+      serviceLine: row.service_line as ServiceLine,
+      customerCompanyId: String(row.customer_company_id),
+      customerCompanyName: String(row.customer_company_name),
+      quoteRequestId: row.quote_request_id
+        ? String(row.quote_request_id)
+        : null,
+      status: row.status as JobRecord["status"],
+      openedBy: String(row.opened_by),
+      openedAt: this.toIsoString(row.opened_at),
+      closedAt: row.closed_at ? this.toIsoString(row.closed_at) : null,
+    };
   }
 
   async getActiveCustomerCompanyIds(userId: string): Promise<string[]> {

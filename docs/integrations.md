@@ -20,7 +20,7 @@ Trial candidate providers with **client-authorised, redacted** samples of digita
 
 ## Notifications and correspondence
 
-- Initial release: email provider for invitation, quote, invoice and job-status mail; SMS provider for agreed shipment/ETA alerts. Select a provider with Ghana delivery coverage, check sender identity/registration, per-message cost and any local restrictions before promising SMS delivery. Persist consent, intended recipient, message category, provider ID, delivery state and failures. Deduplicate sends by business event; retries must not spam.
+- Initial release: email provider for quote, invoice and job-status mail; SMS provider for agreed shipment/ETA alerts. Select a provider with Ghana delivery coverage, check sender identity/registration, per-message cost and any local restrictions before promising SMS delivery. Persist consent, intended recipient, message category, provider ID, delivery state and failures. Deduplicate sends by business event; retries must not spam.
 - Outbound app-sent messages are stored on the job timeline. Staff may log a manually sent email or SMS exchange with attachment/source; automatic historic message imports are separate opt-in discovery, not guaranteed by these providers. WhatsApp correspondence handling belongs to the later phase.
 - Send safe summary content; links lead to authenticated portal. Check client visibility at enqueue **and** send time and remove personal/sensitive data from logs.
 - Later phase only: official WhatsApp Business Platform/provider, after separate onboarding, client opt-in and template approval where required. It is not a dependency for email/SMS launch.

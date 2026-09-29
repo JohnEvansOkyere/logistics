@@ -8,7 +8,6 @@ import {
   POSTGRES_POOL,
   PostgresDatabaseService,
 } from "./postgres-database.service";
-import { SqliteDatabaseService } from "./sqlite-database.service";
 
 function createPostgresPool(connectionString: string): Pool {
   const logger = new Logger("PostgresPool");
@@ -69,27 +68,28 @@ function createPostgresPool(connectionString: string): Pool {
   return pool;
 }
 
-const connectionString = process.env.DATABASE_URL?.trim();
-const selectedDatabase = connectionString
-  ? PostgresDatabaseService
-  : SqliteDatabaseService;
+function requireDatabaseUrl(): string {
+  const connectionString = process.env.DATABASE_URL?.trim();
+  if (!connectionString) {
+    throw new Error("DATABASE_URL is required (PostgreSQL connection URL)");
+  }
+  return connectionString;
+}
 
-const providers: Provider[] = connectionString
-  ? [
-      {
-        provide: POSTGRES_POOL,
-        useFactory: () => createPostgresPool(connectionString),
-      },
-      PostgresDatabaseService,
-    ]
-  : [SqliteDatabaseService];
+const providers: Provider[] = [
+  {
+    provide: POSTGRES_POOL,
+    useFactory: () => createPostgresPool(requireDatabaseUrl()),
+  },
+  PostgresDatabaseService,
+];
 
 @Module({
   providers: [
     ...providers,
     {
       provide: DatabasePort,
-      useExisting: selectedDatabase,
+      useExisting: PostgresDatabaseService,
     },
   ],
   exports: [DatabasePort],

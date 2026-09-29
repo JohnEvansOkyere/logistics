@@ -4,7 +4,7 @@ These are production acceptance requirements, not claims that controls already e
 
 ## Access and data protection
 
-- Use Supabase Auth with invitation-based staff/client accounts, verified email and secure session handling; administrator MFA and staff MFA before go-live. Server verifies JWT signature, issuer/expiry/audience; never authorize based solely on a self-supplied company ID or email domain.
+- Use Supabase Auth with super-admin-created staff and client accounts (admin-set passwords, no invitations; D04) and secure session handling; administrator MFA and staff MFA before go-live. Server verifies JWT signature, issuer/expiry/audience; never authorize based solely on a self-supplied company ID or email domain.
 - Enforce staff capabilities and client membership on **every** NestJS resource query, mutation, search result, download and signed-link issuance. A company contact must not see another company's job even if they guess an ID. Test cross-company access and revoked membership.
 - Keep business tables in a non-exposed schema with restricted DB grants. If any table is exposed through Supabase Data API, enable/test RLS and least-privilege grants first; service-role/secret keys bypass RLS and stay server-only. Use parameterized queries and controlled migrations.
 - Use private Storage buckets, random object keys, short-lived downloads, validated content types/sizes, scanning/quarantine and retention policy. Encrypt transport and provider credentials; never log tokens, originals, extracted personal fields or signed URLs.

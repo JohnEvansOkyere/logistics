@@ -1,8 +1,5 @@
 import "reflect-metadata";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { after, before, test } from "node:test";
 import type { INestApplication } from "@nestjs/common";
 import {
@@ -11,18 +8,14 @@ import {
   TEST_SUPER_ADMIN_TOKEN,
   TEST_UNASSIGNED_TOKEN,
 } from "./test-application";
+import { beginTestDatabase, endTestDatabase } from "./postgres-test-database";
 
-let temporaryDirectory: string;
 let application: INestApplication;
 let baseUrl: string;
-const originalDatabasePath = process.env.DATABASE_PATH;
-const originalDatabaseUrl = process.env.DATABASE_URL;
 const originalBootstrapEnabled = process.env.SUPER_ADMIN_BOOTSTRAP_ENABLED;
 
 before(async () => {
-  temporaryDirectory = await mkdtemp(join(tmpdir(), "bjh-auth-bootstrap-"));
-  process.env.DATABASE_PATH = join(temporaryDirectory, "auth.sqlite");
-  delete process.env.DATABASE_URL;
+  await beginTestDatabase();
   process.env.SUPER_ADMIN_BOOTSTRAP_ENABLED = "true";
   const started = await createTestApplication({ bootstrapSuperAdmin: false });
   application = started.application;
@@ -31,24 +24,12 @@ before(async () => {
 
 after(async () => {
   await application?.close();
-  if (originalDatabasePath === undefined) {
-    delete process.env.DATABASE_PATH;
-  } else {
-    process.env.DATABASE_PATH = originalDatabasePath;
-  }
-  if (originalDatabaseUrl === undefined) {
-    delete process.env.DATABASE_URL;
-  } else {
-    process.env.DATABASE_URL = originalDatabaseUrl;
-  }
   if (originalBootstrapEnabled === undefined) {
     delete process.env.SUPER_ADMIN_BOOTSTRAP_ENABLED;
   } else {
     process.env.SUPER_ADMIN_BOOTSTRAP_ENABLED = originalBootstrapEnabled;
   }
-  if (temporaryDirectory) {
-    await rm(temporaryDirectory, { recursive: true, force: true });
-  }
+  await endTestDatabase();
 });
 
 test("the first authenticated user can claim the only super-admin role", async () => {

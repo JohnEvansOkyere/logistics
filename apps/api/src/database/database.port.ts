@@ -1,6 +1,6 @@
 export interface DatabaseHealth {
   status: "ok" | "error";
-  provider: "sqlite" | "postgresql";
+  provider: "postgresql";
   schemaVersion?: string;
 }
 
@@ -32,6 +32,28 @@ export interface QuoteDraftRecord {
   createdAt: string;
   updatedAt: string;
   revisions: QuoteDraftRevisionRecord[];
+}
+
+export type ServiceLine =
+  "sea_import" | "sea_export" | "air_import" | "air_export";
+
+export interface JobRecord {
+  id: string;
+  fileNumber: string;
+  serviceLine: ServiceLine;
+  customerCompanyId: string;
+  customerCompanyName: string;
+  quoteRequestId: string | null;
+  status: "open" | "closed" | "cancelled";
+  openedBy: string;
+  openedAt: string;
+  closedAt: string | null;
+}
+
+/** Undefined fields mean unrestricted; an empty array matches nothing. */
+export interface JobScope {
+  companyIds?: string[];
+  serviceLines?: ServiceLine[];
 }
 
 export interface CustomerContactRecord {
@@ -119,6 +141,17 @@ export abstract class DatabasePort {
     id: string,
     companyIds?: string[],
   ): Promise<CustomerCompanyRecord | null>;
+  abstract createJob(
+    input: {
+      customerCompanyId: string;
+      serviceLine: ServiceLine;
+      quoteRequestId: string | null;
+    },
+    openedBy: string,
+    year: number,
+  ): Promise<JobRecord>;
+  abstract listJobs(search: string, scope: JobScope): Promise<JobRecord[]>;
+  abstract findJob(id: string, scope: JobScope): Promise<JobRecord | null>;
   abstract getActiveCustomerCompanyIds(userId: string): Promise<string[]>;
   abstract listCustomerMemberships(
     userId: string,

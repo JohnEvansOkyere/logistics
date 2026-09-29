@@ -1,9 +1,11 @@
 import { Controller, Get, Inject, Post, Req, UseGuards } from "@nestjs/common";
+import { ThrottlerGuard } from "@nestjs/throttler";
 import { SupabaseIdentityGuard } from "./auth.guards";
 import type { AuthenticatedRequest } from "./auth.guards";
 import { AuthService } from "./auth.service";
 
 @Controller("api/v1/auth")
+@UseGuards(ThrottlerGuard)
 export class AuthController {
   constructor(@Inject(AuthService) private readonly auth: AuthService) {}
 

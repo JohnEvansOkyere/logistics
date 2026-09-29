@@ -36,3 +36,6 @@ service-account*.json
 
 # Operating system/editor files
 .DS_Store
+
+# Playwright MCP session output
+.playwright-mcp/

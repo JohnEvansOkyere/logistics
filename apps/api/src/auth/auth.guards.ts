@@ -8,6 +8,7 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { DatabasePort } from "../database/database.port";
+import type { ServiceLine, StaffRoleKey } from "../database/database.port";
 import { SupabaseAuthVerifier } from "./supabase-auth-verifier";
 import type { AuthenticatedUser } from "./supabase-auth-verifier";
 
@@ -15,6 +16,31 @@ export interface AuthenticatedRequest {
   headers: { authorization?: string | string[] };
   authUser?: AuthenticatedUser;
   allowedCompanyIds?: string[];
+  allowedServiceLines?: ServiceLine[];
+  staffRoles?: StaffRoleKey[];
+  customerCompanyIds?: string[];
+}
+
+/** Reads the caller's active staff roles once per request. */
+async function loadStaffRoles(
+  database: DatabasePort,
+  request: AuthenticatedRequest,
+): Promise<StaffRoleKey[]> {
+  request.staffRoles ??= await database.getActiveStaffRoles(
+    request.authUser!.userId,
+  );
+  return request.staffRoles;
+}
+
+/** Reads the caller's active customer-company memberships once per request. */
+async function loadCustomerCompanyIds(
+  database: DatabasePort,
+  request: AuthenticatedRequest,
+): Promise<string[]> {
+  request.customerCompanyIds ??= await database.getActiveCustomerCompanyIds(
+    request.authUser!.userId,
+  );
+  return request.customerCompanyIds;
 }
 
 @Injectable()
@@ -51,9 +77,7 @@ export class SuperAdminGuard implements CanActivate {
       throw new UnauthorizedException();
     }
 
-    const roles = await this.database.getActiveStaffRoles(
-      request.authUser.userId,
-    );
+    const roles = await loadStaffRoles(this.database, request);
     if (!roles.includes("super_admin")) {
       throw new ForbiddenException("An active super_admin role is required");
     }
@@ -70,9 +94,7 @@ export class CompanyScopeGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     if (!request.authUser) throw new UnauthorizedException();
 
-    const roles = await this.database.getActiveStaffRoles(
-      request.authUser.userId,
-    );
+    const roles = await loadStaffRoles(this.database, request);
     if (roles.includes("super_admin")) {
       request.allowedCompanyIds = undefined;
       return true;
@@ -83,9 +105,7 @@ export class CompanyScopeGuard implements CanActivate {
       );
     }
 
-    const companyIds = await this.database.getActiveCustomerCompanyIds(
-      request.authUser.userId,
-    );
+    const companyIds = await loadCustomerCompanyIds(this.database, request);
     if (companyIds.length === 0) {
       throw new ForbiddenException(
         "An active staff role or customer-company membership is required",
@@ -104,17 +124,13 @@ export class StaffCompanyReadGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     if (!request.authUser) throw new UnauthorizedException();
 
-    const roles = await this.database.getActiveStaffRoles(
-      request.authUser.userId,
-    );
+    const roles = await loadStaffRoles(this.database, request);
     if (roles.length > 0) {
       request.allowedCompanyIds = undefined;
       return true;
     }
 
-    const companyIds = await this.database.getActiveCustomerCompanyIds(
-      request.authUser.userId,
-    );
+    const companyIds = await loadCustomerCompanyIds(this.database, request);
     if (companyIds.length === 0) {
       throw new ForbiddenException(
         "An active staff role or customer-company membership is required",
@@ -134,9 +150,7 @@ export class QuoteDraftReadGuard implements CanActivate {
       .switchToHttp()
       .getRequest<AuthenticatedRequest & { params: { id: string } }>();
     if (!request.authUser) throw new UnauthorizedException();
-    const roles = await this.database.getActiveStaffRoles(
-      request.authUser.userId,
-    );
+    const roles = await loadStaffRoles(this.database, request);
     if (roles.includes("super_admin")) return true;
     if (roles.length > 0) {
       const assignedRole = await this.database.getQuoteRequestDepartment(
@@ -149,9 +163,7 @@ export class QuoteDraftReadGuard implements CanActivate {
         "This request is not assigned to your department",
       );
     }
-    const companyIds = await this.database.getActiveCustomerCompanyIds(
-      request.authUser.userId,
-    );
+    const companyIds = await loadCustomerCompanyIds(this.database, request);
     if (!companyIds.length)
       throw new ForbiddenException(
         "An active staff role or customer-company membership is required",
@@ -176,9 +188,7 @@ export class QuoteDraftWriteGuard implements CanActivate {
       .switchToHttp()
       .getRequest<AuthenticatedRequest & { params: { id: string } }>();
     if (!request.authUser) throw new UnauthorizedException();
-    const roles = await this.database.getActiveStaffRoles(
-      request.authUser.userId,
-    );
+    const roles = await loadStaffRoles(this.database, request);
     if (roles.includes("super_admin")) return true;
     const assignedRole = await this.database.getQuoteRequestDepartment(
       request.params.id,
@@ -199,11 +209,41 @@ export class DepartmentStaffGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     if (!request.authUser) throw new UnauthorizedException();
-    const roles = await this.database.getActiveStaffRoles(
-      request.authUser.userId,
-    );
+    const roles = await loadStaffRoles(this.database, request);
     if (!roles.length)
       throw new ForbiddenException("An active staff role is required");
+    return true;
+  }
+}
+
+/** Service lines a department role works on; `super_admin` maps to none. */
+export function serviceLinesForRoles(roles: StaffRoleKey[]): ServiceLine[] {
+  return roles
+    .filter((role) => role !== "super_admin")
+    .map((role) => role.replace(/_rep$/, "") as ServiceLine);
+}
+
+/** Super admins see every job, reps their own service lines, customers their companies. */
+@Injectable()
+export class JobScopeGuard implements CanActivate {
+  constructor(@Inject(DatabasePort) private readonly database: DatabasePort) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    if (!request.authUser) throw new UnauthorizedException();
+    const roles = await loadStaffRoles(this.database, request);
+    if (roles.includes("super_admin")) return true;
+    if (roles.length > 0) {
+      request.allowedServiceLines = serviceLinesForRoles(roles);
+      return true;
+    }
+    const companyIds = await loadCustomerCompanyIds(this.database, request);
+    if (companyIds.length === 0) {
+      throw new ForbiddenException(
+        "An active staff role or customer-company membership is required",
+      );
+    }
+    request.allowedCompanyIds = companyIds;
     return true;
   }
 }
