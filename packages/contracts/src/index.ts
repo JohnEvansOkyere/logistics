@@ -265,6 +265,41 @@ export type ShipmentReferenceInput = z.infer<
   typeof shipmentReferenceInputSchema
 >;
 
+export const documentTypeLabels = {
+  bill_of_lading: "Bill of lading",
+  airway_bill: "Airway bill",
+  commercial_invoice: "Commercial invoice",
+  packing_list: "Packing list",
+  customs_document: "Customs document",
+  delivery_note: "Delivery note / proof of delivery",
+  eir: "EIR (equipment interchange receipt)",
+  supplier_invoice: "Supplier invoice",
+  disbursement_evidence: "Disbursement evidence",
+  office_letter: "Office letter",
+  other: "Other",
+} as const;
+export type DocumentType = keyof typeof documentTypeLabels;
+export const documentTypeKeys = Object.keys(
+  documentTypeLabels,
+) as DocumentType[];
+
+/** Fields sent with an uploaded file; documentId adds a new version to an existing document. */
+export const documentUploadFieldsSchema = z.object(
+  {
+    documentType: z.enum(
+      documentTypeKeys as [DocumentType, ...DocumentType[]],
+      {
+        error: "documentType is required and must be a supported document type",
+      },
+    ),
+    documentId: uuidField("documentId")
+      .nullish()
+      .transform((value) => value ?? null),
+  },
+  { error: "Upload details are required" },
+);
+export type DocumentUploadFields = z.infer<typeof documentUploadFieldsSchema>;
+
 export interface MilestoneDefinition {
   key: string;
   label: string;

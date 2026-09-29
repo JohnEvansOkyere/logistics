@@ -1,4 +1,9 @@
-import type { JobStatus, PartyRole, ReferenceKind } from "@bjh/contracts";
+import type {
+  DocumentType,
+  JobStatus,
+  PartyRole,
+  ReferenceKind,
+} from "@bjh/contracts";
 
 export interface DatabaseHealth {
   status: "ok" | "error";
@@ -68,6 +73,32 @@ export interface ShipmentReferenceRecord {
   parentReferenceId: string | null;
   createdBy: string;
   createdAt: string;
+}
+
+export interface DocumentVersionRecord {
+  id: string;
+  versionNumber: number;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+  sha256: string;
+  uploadedBy: string;
+  uploadedAt: string;
+}
+
+export interface DocumentRecord {
+  id: string;
+  jobId: string;
+  documentType: DocumentType;
+  createdBy: string;
+  createdAt: string;
+  versions: DocumentVersionRecord[];
+}
+
+/** Internal only: the storage key is never returned to API clients. */
+export interface StoredDocumentVersion extends DocumentVersionRecord {
+  objectKey: string;
+  documentId: string;
 }
 
 export interface JobRecord {
@@ -252,6 +283,23 @@ export abstract class DatabasePort {
     referenceId: string,
     removedBy: string,
   ): Promise<boolean | "has_children">;
+  abstract saveDocumentVersion(upload: {
+    jobId: string;
+    documentId: string | null;
+    documentType: DocumentType;
+    filename: string;
+    contentType: string;
+    sizeBytes: number;
+    sha256: string;
+    objectKey: string;
+    uploadedBy: string;
+  }): Promise<DocumentRecord | "document_not_found">;
+  abstract listDocuments(jobId: string): Promise<DocumentRecord[]>;
+  abstract findDocumentVersion(
+    jobId: string,
+    documentId: string,
+    versionNumber?: number,
+  ): Promise<StoredDocumentVersion | null>;
   abstract changeJobStatus(change: {
     jobId: string;
     from: JobStatus;

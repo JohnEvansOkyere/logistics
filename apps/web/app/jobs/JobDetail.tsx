@@ -3,14 +3,22 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import type { JobStatus, PartyRole, ReferenceKind } from "@bjh/contracts";
+import { documentTypeLabels } from "@bjh/contracts";
+import type {
+  DocumentType,
+  JobStatus,
+  PartyRole,
+  ReferenceKind,
+} from "@bjh/contracts";
 import { useStaffAccess } from "../auth/useStaffAccess";
 import {
   addParty,
   addReference,
   changeStatus,
+  getDownloadLink,
   getStatusHistory,
   getTimeline,
+  listDocuments,
   listParties,
   listReferences,
   recordMilestone,
@@ -18,8 +26,15 @@ import {
   removeReference,
   serviceLineLabels,
   statusLabels,
+  uploadDocument,
 } from "./jobApi";
-import type { Party, Reference, StatusHistory, Timeline } from "./jobApi";
+import type {
+  JobDocument,
+  Party,
+  Reference,
+  StatusHistory,
+  Timeline,
+} from "./jobApi";
 import styles from "./jobs.module.css";
 
 const partyRoles: Array<[PartyRole, string]> = [
@@ -53,7 +68,14 @@ type Data = {
   status: StatusHistory;
   parties: Party[];
   references: Reference[];
+  documents: JobDocument[];
 };
+
+function formatSize(bytes: number): string {
+  return bytes < 1024 * 1024
+    ? `${Math.max(1, Math.round(bytes / 1024))} KB`
+    : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
@@ -79,16 +101,22 @@ export function JobDetail({ jobId }: { jobId: string }) {
   const [value, setValue] = useState("");
   const [seal, setSeal] = useState("");
   const [parentId, setParentId] = useState("");
+  const [docType, setDocType] = useState<DocumentType>("other");
+  const [docTarget, setDocTarget] = useState("");
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [fileInputKey, setFileInputKey] = useState(0);
 
   const load = useCallback(async () => {
     try {
-      const [timeline, status, parties, references] = await Promise.all([
-        getTimeline(jobId),
-        getStatusHistory(jobId),
-        listParties(jobId),
-        listReferences(jobId),
-      ]);
-      setData({ timeline, status, parties, references });
+      const [timeline, status, parties, references, documents] =
+        await Promise.all([
+          getTimeline(jobId),
+          getStatusHistory(jobId),
+          listParties(jobId),
+          listReferences(jobId),
+          listDocuments(jobId),
+        ]);
+      setData({ timeline, status, parties, references, documents });
       setLoadError("");
     } catch (cause) {
       setLoadError(
@@ -505,6 +533,122 @@ export function JobDetail({ jobId }: { jobId: string }) {
           </section>
         </div>
       </div>
+
+      <section className={styles.card} aria-labelledby="documents-title">
+        <h2 id="documents-title">Documents</h2>
+        {data.documents.length === 0 ? (
+          <p className={styles.muted}>No documents uploaded.</p>
+        ) : (
+          <ul className={styles.list}>
+            {data.documents.map((document) => (
+              <li key={document.id}>
+                <strong>{documentTypeLabels[document.documentType]}</strong>
+                <ul className={styles.list}>
+                  {document.versions.map((version) => (
+                    <li key={version.versionNumber}>
+                      v{version.versionNumber} · {version.filename} ·{" "}
+                      {formatSize(version.sizeBytes)} ·{" "}
+                      {formatDate(version.uploadedAt)}{" "}
+                      <button
+                        className={styles.secondaryButton}
+                        onClick={() =>
+                          void run(async () => {
+                            const link = await getDownloadLink(
+                              job.id,
+                              document.id,
+                              version.versionNumber,
+                            );
+                            window.open(link.url, "_blank", "noopener");
+                          })
+                        }
+                        type="button"
+                      >
+                        Download
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        )}
+        {isStaff && (
+          <form
+            className={styles.form}
+            onSubmit={(event: FormEvent) => {
+              event.preventDefault();
+              if (!docFile) return;
+              const existing = data.documents.find(
+                (document) => document.id === docTarget,
+              );
+              void run(
+                () =>
+                  uploadDocument(job.id, {
+                    file: docFile,
+                    documentType: existing?.documentType ?? docType,
+                    documentId: existing?.id,
+                  }),
+                () => {
+                  setDocFile(null);
+                  setDocTarget("");
+                  setFileInputKey((current) => current + 1);
+                },
+              );
+            }}
+          >
+            <label className={styles.field}>
+              Add as
+              <select
+                onChange={(event) => setDocTarget(event.target.value)}
+                value={docTarget}
+              >
+                <option value="">A new document</option>
+                {data.documents.map((document) => (
+                  <option key={document.id} value={document.id}>
+                    New version of {documentTypeLabels[document.documentType]} (
+                    {document.versions[document.versions.length - 1].filename})
+                  </option>
+                ))}
+              </select>
+            </label>
+            {!docTarget && (
+              <label className={styles.field}>
+                Document type
+                <select
+                  onChange={(event) =>
+                    setDocType(event.target.value as DocumentType)
+                  }
+                  required
+                  value={docType}
+                >
+                  {(Object.keys(documentTypeLabels) as DocumentType[]).map(
+                    (key) => (
+                      <option key={key} value={key}>
+                        {documentTypeLabels[key]}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+            )}
+            <label className={styles.field}>
+              File (PDF, PNG or JPEG, up to 25 MB)
+              <input
+                accept="application/pdf,image/png,image/jpeg"
+                key={fileInputKey}
+                onChange={(event) =>
+                  setDocFile(event.target.files?.[0] ?? null)
+                }
+                required
+                type="file"
+              />
+            </label>
+            <button className={styles.button} type="submit">
+              Upload document
+            </button>
+          </form>
+        )}
+      </section>
 
       <section className={styles.card} aria-labelledby="history-title">
         <h2 id="history-title">Status history</h2>

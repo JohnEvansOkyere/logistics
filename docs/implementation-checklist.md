@@ -34,12 +34,12 @@ Each item: requirement IDs · done when.
 
 ## C — Document archive (Release 1) · P08, P14
 
-- [ ] **C1** Private Supabase Storage bucket via migration; no public access · pgTAP/storage policy test denies anon/authenticated direct access.
-- [ ] **C2** Upload API: authenticated, job-bound, type/size and magic-byte validation, checksum, random object key, `document` + `document_version` rows · invalid type/oversize rejected.
-- [ ] **C3** Document types incl. **supplier invoice / disbursement evidence** distinct from BJH invoices · type required on upload.
-- [ ] **C4** Download via API authorization → short-lived signed URL · cross-company download denied by known ID.
-- [ ] **C5** Search across file number, customer, B/L/AWB, container, document type, date · synthetic "3-year-old job" retrievable in one search.
-- [ ] **C6** Web: upload/list/download on job detail; global search · browser check.
+- [x] **C1** Private Supabase Storage bucket via migration; no public access · pgTAP/storage policy test denies anon/authenticated direct access.
+- [x] **C2** Upload API: authenticated, job-bound, type/size and magic-byte validation, checksum, random object key, `document` + `document_version` rows · invalid type/oversize rejected.
+- [x] **C3** Document types incl. **supplier invoice / disbursement evidence** distinct from BJH invoices · type required on upload.
+- [x] **C4** Download via API authorization → short-lived signed URL · cross-company download denied by known ID.
+- [x] **C5** Search across file number, customer, B/L/AWB, container, document type, date · synthetic "3-year-old job" retrievable in one search.
+- [x] **C6** Web: upload/list/download on job detail; global search · browser check.
 
 ## D — Structured quotations · P02
 

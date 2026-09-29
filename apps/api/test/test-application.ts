@@ -2,6 +2,11 @@ import { UnauthorizedException } from "@nestjs/common";
 import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { DatabasePort } from "../src/database/database.port";
+import {
+  DOCUMENT_STORAGE,
+  SIGNED_URL_SECONDS,
+} from "../src/documents/document-storage.port";
+import type { DocumentStorage } from "../src/documents/document-storage.port";
 import { POSTGRES_POOL } from "../src/database/postgres-database.service";
 import { testPostgresPool } from "./postgres-test-database";
 import { SupabaseAuthVerifier } from "../src/auth/supabase-auth-verifier";
@@ -10,6 +15,19 @@ import type {
   StaffAuthDirectory,
   StaffDirectoryUser,
 } from "../src/auth/staff-admin.port";
+
+/** In-memory stand-in for private object storage; records what was stored. */
+export const testDocumentStorage: DocumentStorage & {
+  objects: Map<string, { bytes: Buffer; contentType: string }>;
+} = {
+  objects: new Map(),
+  async put(key, bytes, contentType) {
+    this.objects.set(key, { bytes, contentType });
+  },
+  async createSignedUrl(key, expiresInSeconds) {
+    return `https://storage.test/signed/${key}?expires=${expiresInSeconds || SIGNED_URL_SECONDS}`;
+  },
+};
 
 export const TEST_SUPER_ADMIN_TOKEN = "test-super-admin-token";
 export const TEST_UNASSIGNED_TOKEN = "test-unassigned-user-token";
@@ -104,6 +122,8 @@ export async function createTestApplication(
         return identity;
       },
     })
+    .overrideProvider(DOCUMENT_STORAGE)
+    .useValue(testDocumentStorage)
     .overrideProvider(POSTGRES_POOL)
     .useValue(testPostgresPool)
     .overrideProvider(STAFF_AUTH_DIRECTORY)

@@ -6,6 +6,7 @@ function clientErrorStatus(exception: unknown): number | undefined {
   if (exception instanceof HttpException || typeof exception !== "object") {
     return undefined;
   }
+  if ((exception as { code?: unknown }).code === "LIMIT_FILE_SIZE") return 413;
   const status = (exception as { status?: unknown }).status;
   return typeof status === "number" && status >= 400 && status < 500
     ? status

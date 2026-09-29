@@ -1,5 +1,10 @@
 import { Inject, Injectable, OnModuleDestroy } from "@nestjs/common";
-import type { JobStatus, PartyRole, ReferenceKind } from "@bjh/contracts";
+import type {
+  DocumentType,
+  JobStatus,
+  PartyRole,
+  ReferenceKind,
+} from "@bjh/contracts";
 import {
   ActivityEntry,
   ActivityFilter,
@@ -9,7 +14,10 @@ import {
   CustomerCompanyRecord,
   CustomerMembershipRecord,
   JobRecord,
+  DocumentRecord,
+  DocumentVersionRecord,
   JobPartyRecord,
+  StoredDocumentVersion,
   JobScope,
   ShipmentReferenceRecord,
   JobStatusChangeRecord,
@@ -435,6 +443,15 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
            WHERE reference.job_id = job.job_id AND reference.removed_at IS NULL
              AND (strpos(lower(reference.reference_value), lower($1)) > 0
                OR strpos(lower(COALESCE(reference.seal_number, '')), lower($1)) > 0))
+         OR strpos(to_char(job.opened_at, 'YYYY-MM-DD'), $1) > 0
+         OR EXISTS (
+           SELECT 1 FROM app.document AS document
+           LEFT JOIN app.document_version AS version
+             ON version.document_id = document.document_id
+           WHERE document.job_id = job.job_id
+             AND (strpos(lower(replace(document.document_type, '_', ' ')), lower($1)) > 0
+               OR strpos(lower(COALESCE(version.original_filename, '')), lower($1)) > 0
+               OR strpos(to_char(document.created_at, 'YYYY-MM-DD'), $1) > 0))
          OR EXISTS (
            SELECT 1 FROM app.job_party AS party
            WHERE party.job_id = job.job_id AND party.removed_at IS NULL
@@ -609,6 +626,146 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
         : null,
       createdBy: String(row.created_by),
       createdAt: this.toIsoString(row.created_at),
+    };
+  }
+
+  async saveDocumentVersion(upload: {
+    jobId: string;
+    documentId: string | null;
+    documentType: DocumentType;
+    filename: string;
+    contentType: string;
+    sizeBytes: number;
+    sha256: string;
+    objectKey: string;
+    uploadedBy: string;
+  }): Promise<DocumentRecord | "document_not_found"> {
+    const documentId = await this.insertDocumentVersion(upload);
+    if (documentId === "document_not_found") return documentId;
+    const documents = await this.listDocuments(upload.jobId);
+    return documents.find((document) => document.id === documentId)!;
+  }
+
+  private async insertDocumentVersion(upload: {
+    jobId: string;
+    documentId: string | null;
+    documentType: DocumentType;
+    filename: string;
+    contentType: string;
+    sizeBytes: number;
+    sha256: string;
+    objectKey: string;
+    uploadedBy: string;
+  }): Promise<string> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      let documentId = upload.documentId;
+      if (documentId) {
+        const existing = await client.query(
+          `SELECT document_id FROM app.document
+           WHERE document_id = $1::uuid AND job_id = $2::uuid FOR UPDATE`,
+          [documentId, upload.jobId],
+        );
+        if (existing.rows.length === 0) {
+          await client.query("ROLLBACK");
+          return "document_not_found";
+        }
+      } else {
+        const created = await client.query(
+          `INSERT INTO app.document (job_id, document_type, created_by)
+           VALUES ($1::uuid, $2, $3::uuid) RETURNING document_id`,
+          [upload.jobId, upload.documentType, upload.uploadedBy],
+        );
+        documentId = String(created.rows[0].document_id);
+      }
+      await client.query(
+        `INSERT INTO app.document_version
+          (document_id, version_number, original_filename, content_type,
+           size_bytes, sha256, object_key, uploaded_by)
+         VALUES ($1::uuid,
+           (SELECT COALESCE(MAX(version_number), 0) + 1
+            FROM app.document_version WHERE document_id = $1::uuid),
+           $2, $3, $4, $5, $6, $7::uuid)`,
+        [
+          documentId,
+          upload.filename,
+          upload.contentType,
+          upload.sizeBytes,
+          upload.sha256,
+          upload.objectKey,
+          upload.uploadedBy,
+        ],
+      );
+      await client.query("COMMIT");
+      return documentId;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listDocuments(jobId: string): Promise<DocumentRecord[]> {
+    const documents = await this.pool.query(
+      `SELECT * FROM app.document WHERE job_id = $1::uuid ORDER BY created_at, document_id`,
+      [jobId],
+    );
+    const versions = await this.pool.query(
+      `SELECT version.* FROM app.document_version AS version
+       JOIN app.document AS document ON document.document_id = version.document_id
+       WHERE document.job_id = $1::uuid
+       ORDER BY version.document_id, version.version_number`,
+      [jobId],
+    );
+    return documents.rows.map((row) => ({
+      id: String(row.document_id),
+      jobId: String(row.job_id),
+      documentType: row.document_type as DocumentType,
+      createdBy: String(row.created_by),
+      createdAt: this.toIsoString(row.created_at),
+      versions: versions.rows
+        .filter((version) => version.document_id === row.document_id)
+        .map((version) => this.mapDocumentVersion(version)),
+    }));
+  }
+
+  async findDocumentVersion(
+    jobId: string,
+    documentId: string,
+    versionNumber?: number,
+  ): Promise<StoredDocumentVersion | null> {
+    const result = await this.pool.query(
+      `SELECT version.* FROM app.document_version AS version
+       JOIN app.document AS document ON document.document_id = version.document_id
+       WHERE document.document_id = $1::uuid AND document.job_id = $2::uuid
+         AND ($3::int IS NULL OR version.version_number = $3::int)
+       ORDER BY version.version_number DESC LIMIT 1`,
+      [documentId, jobId, versionNumber ?? null],
+    );
+    const row = result.rows[0];
+    return row
+      ? {
+          ...this.mapDocumentVersion(row),
+          objectKey: String(row.object_key),
+          documentId: String(row.document_id),
+        }
+      : null;
+  }
+
+  private mapDocumentVersion(
+    row: Record<string, unknown>,
+  ): DocumentVersionRecord {
+    return {
+      id: String(row.version_id),
+      versionNumber: Number(row.version_number),
+      filename: String(row.original_filename),
+      contentType: String(row.content_type),
+      sizeBytes: Number(row.size_bytes),
+      sha256: String(row.sha256),
+      uploadedBy: String(row.uploaded_by),
+      uploadedAt: this.toIsoString(row.uploaded_at),
     };
   }
 

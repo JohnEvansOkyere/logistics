@@ -1,4 +1,5 @@
 import type {
+  DocumentType,
   JobStatus,
   MilestoneDefinition,
   PartyRole,
@@ -150,4 +151,53 @@ export const removeReference = (id: string, referenceId: string) =>
   send<unknown>(
     `/${encodeURIComponent(id)}/references/${encodeURIComponent(referenceId)}`,
     "DELETE",
+  );
+
+export type JobDocument = {
+  id: string;
+  documentType: DocumentType;
+  createdAt: string;
+  versions: Array<{
+    versionNumber: number;
+    filename: string;
+    contentType: string;
+    sizeBytes: number;
+    uploadedAt: string;
+  }>;
+};
+
+export type DownloadLink = {
+  url: string;
+  expiresInSeconds: number;
+  filename: string;
+};
+
+export const listDocuments = (id: string) =>
+  send<JobDocument[]>(`/${encodeURIComponent(id)}/documents`, "GET");
+
+export async function uploadDocument(
+  id: string,
+  input: { file: File; documentType: DocumentType; documentId?: string },
+): Promise<JobDocument> {
+  const form = new FormData();
+  form.append("documentType", input.documentType);
+  if (input.documentId) form.append("documentId", input.documentId);
+  form.append("file", input.file);
+  // No content-type header: the browser adds the multipart boundary.
+  return readResponse<JobDocument>(
+    await authenticatedFetch(`${jobsUrl}/${encodeURIComponent(id)}/documents`, {
+      method: "POST",
+      body: form,
+    }),
+  );
+}
+
+export const getDownloadLink = (
+  id: string,
+  documentId: string,
+  versionNumber: number,
+) =>
+  send<DownloadLink>(
+    `/${encodeURIComponent(id)}/documents/${encodeURIComponent(documentId)}/download?version=${versionNumber}`,
+    "GET",
   );

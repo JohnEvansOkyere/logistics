@@ -8,6 +8,12 @@ import { RequestErrorFilter } from "./request-error.filter";
 import { AuthModule } from "./auth/auth.module";
 import { DatabaseModule } from "./database/database.module";
 import { HealthController } from "./health.controller";
+import { DocumentsController } from "./documents/documents.controller";
+import { DocumentsService } from "./documents/documents.service";
+import {
+  DOCUMENT_STORAGE,
+  SupabaseDocumentStorage,
+} from "./documents/document-storage.port";
 import { JobDetailsController } from "./jobs/job-details.controller";
 import { JobDetailsService } from "./jobs/job-details.service";
 import { JobsController } from "./jobs/jobs.controller";
@@ -29,6 +35,7 @@ import { QuoteRequestsService } from "./quotations/quote-requests.service";
     CustomersController,
     JobsController,
     JobDetailsController,
+    DocumentsController,
     ActivityController,
   ],
   providers: [
@@ -36,6 +43,8 @@ import { QuoteRequestsService } from "./quotations/quote-requests.service";
     CustomersService,
     JobsService,
     JobDetailsService,
+    DocumentsService,
+    { provide: DOCUMENT_STORAGE, useClass: SupabaseDocumentStorage },
     ActivityLogMiddleware,
     { provide: APP_FILTER, useClass: RequestErrorFilter },
   ],
