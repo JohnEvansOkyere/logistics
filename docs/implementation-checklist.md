@@ -58,7 +58,7 @@ Each item: requirement IDs · done when.
 
 ## F — Finance records · P06
 
-- [ ] **F1** Issuer/tax/currency settings screen (D03) — VAT/levies, currencies, numbering; no hard-coded values · settings required before any invoice issues.
+- [x] **F1** Issuer/tax/currency settings screen (D03) — VAT/levies, currencies, numbering; no hard-coded values · settings required before any invoice issues. _(2026-09-29: settings, revisions, currency restriction and quote-number prefix done and tested. "Required before any invoice issues" is enforced when invoices are built (F3). Web form typechecked and built, not yet checked in a browser.)_
 - [ ] **F2** Charges: quoted vs actual; disbursements linked to supplier-invoice documents; exchange rate captured per transaction.
 - [ ] **F3** Customer invoice versions with unique numbering, due date, tax lines from settings; corrections via revision/credit · issued invoice immutable.
 - [ ] **F4** Staff-recorded external payments (partial/multiple), method/reference/evidence, reversal with reason; outstanding balance derived from ledger · arithmetic + over-allocation tests; money in minor units only.

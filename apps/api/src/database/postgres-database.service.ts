@@ -1,5 +1,6 @@
 import { Inject, Injectable, OnModuleDestroy } from "@nestjs/common";
 import type {
+  BusinessSettings,
   DocumentType,
   QuoteDecision,
   QuoteBasis,
@@ -28,6 +29,7 @@ import {
   MilestoneEventRecord,
   EtaEventRecord,
   JobTaskRecord,
+  BusinessSettingsRevisionRecord,
   QuoteDecisionRecord,
   QuoteLineRecord,
   QuoteRecord,
@@ -1497,7 +1499,10 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       }
       if (!quote.rows[0].quote_number) {
         const allocated = await client.query(
-          "SELECT app.allocate_quote_number($1, $2) AS quote_number",
+          `SELECT app.allocate_quote_number($1, $2, COALESCE(
+             (SELECT settings #>> '{numbering,quotePrefix}'
+              FROM app.business_settings_revision
+              ORDER BY revision_number DESC LIMIT 1), 'BJH/Q')) AS quote_number`,
           [String(quote.rows[0].service_line), year],
         );
         await client.query(
@@ -1603,6 +1608,66 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
         amount20ftMinor: minor(line.amount_20ft_minor),
         amount40ftMinor: minor(line.amount_40ft_minor),
       })),
+    };
+  }
+
+  async getBusinessSettings(): Promise<BusinessSettingsRevisionRecord | null> {
+    const result = await this.pool.query(
+      `SELECT * FROM app.business_settings_revision
+       ORDER BY revision_number DESC LIMIT 1`,
+    );
+    return result.rows.length > 0
+      ? this.mapSettingsRevision(result.rows[0])
+      : null;
+  }
+
+  async listBusinessSettingsRevisions(): Promise<
+    BusinessSettingsRevisionRecord[]
+  > {
+    const result = await this.pool.query(
+      `SELECT * FROM app.business_settings_revision
+       ORDER BY revision_number DESC`,
+    );
+    return result.rows.map((row) => this.mapSettingsRevision(row));
+  }
+
+  async saveBusinessSettings(
+    settings: BusinessSettings,
+    changedBy: string,
+  ): Promise<BusinessSettingsRevisionRecord> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      // Serialises writers so revision numbers never collide.
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtext('app.business_settings_revision'))",
+      );
+      const result = await client.query(
+        `INSERT INTO app.business_settings_revision
+          (revision_number, settings, changed_by)
+         SELECT COALESCE(max(revision_number), 0) + 1, $1::jsonb, $2::uuid
+         FROM app.business_settings_revision
+         RETURNING *`,
+        [JSON.stringify(settings), changedBy],
+      );
+      await client.query("COMMIT");
+      return this.mapSettingsRevision(result.rows[0]);
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private mapSettingsRevision(
+    row: Record<string, unknown>,
+  ): BusinessSettingsRevisionRecord {
+    return {
+      revisionNumber: Number(row.revision_number),
+      settings: row.settings as BusinessSettings,
+      changedBy: String(row.changed_by),
+      changedAt: this.toIsoString(row.changed_at),
     };
   }
 

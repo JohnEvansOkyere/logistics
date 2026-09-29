@@ -219,3 +219,9 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **Why:** D3/D4 answers: various reps handle decisions; accepting opens the job. Locking after acceptance keeps the accepted terms exactly as agreed.
 **What was rejected:** Reversing a decision (a mistaken record needs a new quote version or the super admin's help, not an edit); a separate manual "open job" step after acceptance; letting customers accept themselves before the portal (H) exists.
 
+## 2026-09-29, Business settings are revisioned JSON; they drive quote currency, numbering and defaults
+
+**What was decided:** Settings (issuer, currencies + default, tax lines as basis points, payment terms, quote/invoice/receipt prefixes, quote boilerplate) are stored as append-only revisions; the newest is current. Every staff member reads them, only the super admin saves. Once a revision exists, quotes must use a configured currency, the quote number takes the configured prefix, and the quote editor starts from the defaults. Invoice and receipt prefixes and the tax lines are stored now and used by F3/F5; how levies combine on an invoice is decided with F3.
+**Why:** Evans's earlier answer (D03/F1) put currencies, taxes, prefixes and terms in Settings, edited by the super admin with every change kept.
+**What was rejected:** Hard-coded currencies/terms; a column per setting (jsonb validated by the shared contract is simpler for a single-tenant config); making settings mandatory before any quote (blocking quotes would stall work; invoices are where the requirement bites).
+

@@ -1,4 +1,5 @@
 import type {
+  BusinessSettings,
   DocumentType,
   QuoteDecision,
   QuoteBasis,
@@ -229,6 +230,13 @@ export interface QuoteRecord extends Omit<
   decisions: QuoteDecisionRecord[];
   /** The job opened when the quote was accepted, if any. */
   jobId: string | null;
+}
+
+export interface BusinessSettingsRevisionRecord {
+  revisionNumber: number;
+  settings: BusinessSettings;
+  changedBy: string;
+  changedAt: string;
 }
 
 export interface ActivityEntry {
@@ -498,6 +506,14 @@ export abstract class DatabasePort {
     | "not_latest"
     | "already_decided"
   >;
+  abstract getBusinessSettings(): Promise<BusinessSettingsRevisionRecord | null>;
+  abstract listBusinessSettingsRevisions(): Promise<
+    BusinessSettingsRevisionRecord[]
+  >;
+  abstract saveBusinessSettings(
+    settings: BusinessSettings,
+    changedBy: string,
+  ): Promise<BusinessSettingsRevisionRecord>;
   abstract recordActivity(entry: ActivityEntry): Promise<void>;
   abstract listActivity(filter: ActivityFilter): Promise<ActivityRecord[]>;
   abstract getActiveCustomerCompanyIds(userId: string): Promise<string[]>;

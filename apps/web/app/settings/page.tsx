@@ -25,6 +25,22 @@ export default function SettingsPage() {
         <section className="action-grid" aria-label="Settings pages">
           <article className="action-card">
             <span className="action-icon" aria-hidden="true">
+              ⚙
+            </span>
+            <div className="action-copy">
+              <p className="action-kicker">BUSINESS</p>
+              <h3>Business settings</h3>
+              <p>
+                Issuer details, currencies, tax lines, numbering and quote
+                defaults.
+              </p>
+            </div>
+            <Link className="action-link" href="/settings/business">
+              Open settings <span aria-hidden="true">→</span>
+            </Link>
+          </article>
+          <article className="action-card">
+            <span className="action-icon" aria-hidden="true">
               ♙
             </span>
             <div className="action-copy">

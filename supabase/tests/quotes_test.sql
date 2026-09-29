@@ -8,7 +8,7 @@ SELECT extensions.ok(
   NOT has_table_privilege('anon', 'app.quote', 'SELECT')
   AND NOT has_table_privilege('authenticated', 'app.quote_version', 'SELECT')
   AND NOT has_table_privilege('authenticated', 'app.quote_line', 'SELECT')
-  AND NOT has_function_privilege('authenticated', 'app.allocate_quote_number(text, integer)', 'EXECUTE'),
+  AND NOT has_function_privilege('authenticated', 'app.allocate_quote_number(text, integer, text)', 'EXECUTE'),
   'anon and authenticated have no quote grants'
 );
 SELECT extensions.ok(

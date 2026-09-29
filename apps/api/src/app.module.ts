@@ -25,6 +25,8 @@ import { CustomersController } from "./customers/customers.controller";
 import { CustomersService } from "./customers/customers.service";
 import { QuoteRequestsController } from "./quotations/quote-requests.controller";
 import { QuoteRequestsService } from "./quotations/quote-requests.service";
+import { SettingsController } from "./settings/settings.controller";
+import { SettingsService } from "./settings/settings.service";
 import { QuotesController } from "./quotations/quotes.controller";
 import { QuotesService } from "./quotations/quotes.service";
 
@@ -38,6 +40,7 @@ import { QuotesService } from "./quotations/quotes.service";
     HealthController,
     QuoteRequestsController,
     QuotesController,
+    SettingsController,
     CustomersController,
     JobsController,
     JobDetailsController,
@@ -48,6 +51,7 @@ import { QuotesService } from "./quotations/quotes.service";
   providers: [
     QuoteRequestsService,
     QuotesService,
+    SettingsService,
     CustomersService,
     JobsService,
     JobDetailsService,

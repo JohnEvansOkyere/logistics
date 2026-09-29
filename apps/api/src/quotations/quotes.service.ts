@@ -65,6 +65,7 @@ export class QuotesService {
       }
     }
 
+    await this.requireConfiguredCurrency(parsed.data.version.currency);
     const id = await this.database.createQuote(parsed.data, createdBy);
     return this.get(id, {});
   }
@@ -89,6 +90,7 @@ export class QuotesService {
     this.requireNotAccepted(quote);
     const parsed = parseContract(quoteVersionInputSchema, input);
     if (!parsed.success) throw new BadRequestException(parsed.message);
+    await this.requireConfiguredCurrency(parsed.data.currency);
     const result = await this.database.saveQuoteVersionDraft(
       quote.id,
       parsed.data,
@@ -192,6 +194,16 @@ export class QuotesService {
     if (quote.decisions.some((item) => item.decision === "accepted")) {
       throw new ConflictException(
         "This quote was accepted and can no longer be revised",
+      );
+    }
+  }
+
+  /** Once Settings exist, quotes may only use its configured currencies. */
+  private async requireConfiguredCurrency(currency: string): Promise<void> {
+    const current = await this.database.getBusinessSettings();
+    if (current && !current.settings.currencies.includes(currency)) {
+      throw new BadRequestException(
+        `currency must be one of the configured currencies: ${current.settings.currencies.join(", ")}`,
       );
     }
   }

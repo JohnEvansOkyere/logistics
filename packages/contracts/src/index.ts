@@ -681,3 +681,130 @@ export const quoteDecisionInputSchema = z.object(
   objectError("A quote decision object is required"),
 );
 export type QuoteDecisionInput = z.infer<typeof quoteDecisionInputSchema>;
+
+const PREFIX_PATTERN = /^[A-Za-z0-9][A-Za-z0-9/-]{0,19}$/;
+const prefixField = (field: string) =>
+  z
+    .string({ error: `${field} is required` })
+    .transform((value) => value.trim())
+    .refine((value) => PREFIX_PATTERN.test(value), {
+      error: `${field} must be 1 to 20 letters, digits, "/" or "-"`,
+    });
+
+const optionalEmail = z
+  .string({ error: "email must be text" })
+  .transform((value) => value.trim())
+  .refine((value) => value === "" || EMAIL_PATTERN.test(value), {
+    error: "email must be a valid email address",
+  })
+  .nullish()
+  .transform((value) => value || null);
+
+/**
+ * BJH's business settings. Tax rates are basis points (1500 = 15%); how levies
+ * combine on an invoice is decided with the invoice work (F3), not here.
+ */
+export const businessSettingsSchema = z
+  .object(
+    {
+      issuer: z.object(
+        {
+          name: requiredText("issuer name", 160),
+          address: optionalText("issuer address", 500),
+          phone: optionalText("issuer phone", 80),
+          email: optionalEmail,
+          website: optionalText("issuer website", 200),
+        },
+        objectError("issuer details are required"),
+      ),
+      currencies: z
+        .array(
+          z
+            .string({ error: "currencies must be 3-letter codes" })
+            .transform((value) => value.trim().toUpperCase())
+            .refine((value) => /^[A-Z]{3}$/.test(value), {
+              error: "currencies must be 3-letter codes such as USD or GHS",
+            }),
+          { error: "currencies must be a list of 3-letter codes" },
+        )
+        .min(1, { error: "Configure at least one currency" })
+        .max(10, { error: "At most 10 currencies can be configured" }),
+      defaultCurrency: z
+        .string({ error: "defaultCurrency is required" })
+        .transform((value) => value.trim().toUpperCase()),
+      taxLines: z
+        .array(
+          z.object(
+            {
+              name: requiredText("tax line name", 80),
+              rateBasisPoints: z
+                .number({ error: "rateBasisPoints must be a whole number" })
+                .int({ error: "rateBasisPoints must be a whole number" })
+                .min(0, { error: "rateBasisPoints must be 0 to 10000" })
+                .max(10000, { error: "rateBasisPoints must be 0 to 10000" }),
+            },
+            objectError("A tax line object is required"),
+          ),
+          { error: "taxLines must be a list" },
+        )
+        .max(10, { error: "At most 10 tax lines can be configured" })
+        .nullish()
+        .transform((value) => value ?? []),
+      paymentTermsDays: z
+        .number({ error: "paymentTermsDays must be a whole number" })
+        .int({ error: "paymentTermsDays must be a whole number" })
+        .min(0, { error: "paymentTermsDays must be 0 to 365" })
+        .max(365, { error: "paymentTermsDays must be 0 to 365" })
+        .nullish()
+        .transform((value) => value ?? null),
+      numbering: z.object(
+        {
+          quotePrefix: prefixField("quotePrefix"),
+          invoicePrefix: prefixField("invoicePrefix"),
+          receiptPrefix: prefixField("receiptPrefix"),
+        },
+        objectError("numbering prefixes are required"),
+      ),
+      quoteDefaults: z
+        .object(
+          {
+            intro: optionalText("quote intro", 4000),
+            atCostNote: optionalText("at-cost note", 2000),
+            procedureSteps: textList("procedureSteps", 30, 1000),
+            requiredDocuments: textList("requiredDocuments", 30, 300),
+            documentsNote: optionalText("documents note", 2000),
+            timeline: optionalText("timeline", 2000),
+            terms: textList("terms", 30, 1000),
+          },
+          objectError("quoteDefaults must be an object"),
+        )
+        .nullish()
+        .transform(
+          (value) =>
+            value ?? {
+              intro: null,
+              atCostNote: null,
+              procedureSteps: [],
+              requiredDocuments: [],
+              documentsNote: null,
+              timeline: null,
+              terms: [],
+            },
+        ),
+    },
+    objectError("A settings object is required"),
+  )
+  .superRefine((settings, context) => {
+    if (new Set(settings.currencies).size !== settings.currencies.length) {
+      context.addIssue({
+        code: "custom",
+        message: "currencies must not repeat",
+      });
+    } else if (!settings.currencies.includes(settings.defaultCurrency)) {
+      context.addIssue({
+        code: "custom",
+        message: "defaultCurrency must be one of the configured currencies",
+      });
+    }
+  });
+export type BusinessSettings = z.infer<typeof businessSettingsSchema>;

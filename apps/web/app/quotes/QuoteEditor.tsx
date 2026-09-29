@@ -11,6 +11,7 @@ import { listCustomers } from "../customers/customerApi";
 import type { CustomerCompany } from "../customers/customerApi";
 import { serviceLineLabels } from "../jobs/jobApi";
 import styles from "../jobs/jobs.module.css";
+import { getSettings } from "../settings/business/settingsApi";
 import { createQuote, saveQuoteDraft, toMinor } from "./quoteApi";
 import type { Quote, QuoteVersion, QuoteVersionBody } from "./quoteApi";
 
@@ -96,6 +97,9 @@ export function QuoteEditor({
   const [lines, setLines] = useState<LineDraft[]>(linesFrom(draft));
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [configuredCurrencies, setConfiguredCurrencies] = useState<string[]>(
+    [],
+  );
 
   const allowedLines = isSuperAdmin
     ? serviceLines
@@ -107,6 +111,26 @@ export function QuoteEditor({
       .then(setCustomers)
       .catch(() => setError("Customers could not be loaded"));
   }, [quote]);
+
+  // Configured currencies and, for a new quote, the default text from Settings.
+  useEffect(() => {
+    getSettings()
+      .then(({ current }) => {
+        if (!current) return;
+        const { settings } = current;
+        setConfiguredCurrencies(settings.currencies);
+        if (draft) return;
+        setCurrency(settings.defaultCurrency);
+        setIntro(settings.quoteDefaults.intro ?? "");
+        setAtCostNote(settings.quoteDefaults.atCostNote ?? "");
+        setSteps(settings.quoteDefaults.procedureSteps.join("\n"));
+        setDocuments(settings.quoteDefaults.requiredDocuments.join("\n"));
+        setDocumentsNote(settings.quoteDefaults.documentsNote ?? "");
+        setTimeline(settings.quoteDefaults.timeline ?? "");
+        setTerms(settings.quoteDefaults.terms.join("\n"));
+      })
+      .catch(() => undefined);
+  }, [draft]);
 
   function change(index: number, patch: Partial<LineDraft>) {
     setLines((current) =>
@@ -244,15 +268,31 @@ export function QuoteEditor({
               value={subtitle}
             />
           </label>
-          <label className={styles.field}>
-            Currency (3-letter code, for example USD or GHS)
-            <input
-              maxLength={3}
-              onChange={(event) => setCurrency(event.target.value)}
-              required
-              value={currency}
-            />
-          </label>
+          {configuredCurrencies.length > 0 ? (
+            <label className={styles.field}>
+              Currency
+              <select
+                onChange={(event) => setCurrency(event.target.value)}
+                value={currency}
+              >
+                {configuredCurrencies.map((code) => (
+                  <option key={code} value={code}>
+                    {code}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <label className={styles.field}>
+              Currency (3-letter code, for example USD or GHS)
+              <input
+                maxLength={3}
+                onChange={(event) => setCurrency(event.target.value)}
+                required
+                value={currency}
+              />
+            </label>
+          )}
           <label className={styles.field}>
             Shipment (optional, for example 20ft FCL / 40ft FCL)
             <input
