@@ -44,3 +44,12 @@ The user confirms that the layouts in `EVIDENCES/` are structural references for
 - `prov_of_delivery.pdf` is proof of cargo delivery with an AWB reference, consignee, goods, packages/weight, date/time, recipient name/phone/signature, and carrier stamp. It is not a cash receipt. No standalone customer payment receipt or its photo is present in the local supplied files; `invoice.pdf` says the bank issues a receipt after payment.
 
 The structural notes above do not authorize copying client-specific values or generating legal/financial documents. User-configurable finance settings and the super-admin approval workflow still need implementation and acceptance before issuance.
+
+## Confirmed decisions (2026-09-29, Evans)
+
+- **Direct jobs (closes the open part of D12):** The normal path is quote sent to the client → client accepts → staff open the job. Existing clients can also have a job opened directly with no quote. Who may open a direct job is not yet confirmed.
+- **Single database adapter:** Retire the local SQLite adapter and its migrations. API tests run against local Supabase PostgreSQL; `supabase/migrations/` is the only schema source. Deleting the SQLite code still needs confirmation at the time of the change.
+- **Warehousing and road transport scope (narrows D10):** BJH does light, regular warehousing (not high-volume inventory) and simple driver/truck assignment. Build simple records rather than a full stock-management module. Whether these get dedicated staff roles is not yet confirmed.
+- **Who opens direct jobs:** Users with any active staff role can open a job directly without a quote. Assumption until confirmed: department reps open jobs for their own service line, and the super admin can open any.
+- **Warehouse and road roles:** Existing staff manage warehousing; no separate warehouse role. Road transport work is assigned to a driver. Whether drivers get their own sign-in is not yet confirmed.
+- **Customer accounts (extends D04):** The super admin creates customer-user accounts the same way as staff accounts (admin-set password, no invitation) and links them to their company.

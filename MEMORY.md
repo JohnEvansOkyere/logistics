@@ -121,3 +121,21 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **What was decided:** Keep the shared workspace sidebar available across operational pages, highlight the current section, and make it sticky while scrolling on desktop and mobile. Leave sign-in and account setup pages outside the workspace shell.
 **Why:** The user wants navigation to stay within reach while moving among work screens.
 **What was rejected:** Page-specific sidebars that disappear on customer and quotation routes or duplicate across different screens.
+
+## 2026-09-29, Project audit deliverables kept local
+
+**What was decided:** Write the engineering + shipping audit to `docs/audit-2026-09-29.md` and the ordered work plan to `docs/implementation-checklist.md`; keep `CHECKLIST.md` as the acceptance/evidence ledger. The audit proposes (not decides) a "job file first" release order and retiring the SQLite adapter — both await Evans's decision.
+**Why:** The audit draws on confidential client material, which AGENTS.md forbids uploading without permission; a separate plan avoids rewriting the verified evidence ledger.
+**What was rejected:** Publishing the report as a hosted doc/artifact; rewriting CHECKLIST.md in place.
+
+## 2026-09-29, Retire SQLite; direct jobs; light warehouse/road scope
+
+**What was decided:** (1) Retire the SQLite adapter; API tests move to local Supabase PostgreSQL. (2) Jobs open after a client accepts a quote, or directly without a quote for existing clients. (3) Warehousing and road transport are light: simple goods-in/out and driver/truck assignment, not a full inventory system.
+**Why:** Evans confirmed each in response to the 2026-09-29 audit; dual adapters doubled work, and the client described both quote-led and direct jobs and a small warehouse operation.
+**What was rejected:** Keeping SQLite for focused tests; quote-only job creation; a full stock-ledger warehouse module.
+
+## 2026-09-29, Direct jobs, driver assignment and customer accounts
+
+**What was decided:** Any active staff role can open a job directly without a quote. Existing staff manage warehousing, with no separate role. Road transport work is assigned to a driver. The super admin creates customer accounts the same way as staff accounts.
+**Why:** Evans answered the open audit questions.
+**What was rejected:** Super-admin-only direct jobs; a dedicated warehouse role; invitation-based customer onboarding.
