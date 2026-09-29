@@ -181,3 +181,9 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **What was decided:** B5 milestone template for sea import is taken from the client's own description (14 keys in `packages/contracts`), recorded in any order in an append-only `milestone_event` table (corrections are new events). Other service lines have no template and refuse milestones. Work was pushed to branch `chore/foundation-hardening-and-jobs`.
 **Why:** Evans said the workflow should come from the client's messages rather than the earlier draft; it also unblocks B5.
 **What was rejected:** Enforcing strict step order (real jobs overlap); inventing templates for the other lines; auto-recording a "file registered" milestone (the job's open time already is that).
+
+## 2026-09-29, Department in charge controls reopen/override; admin activity log
+
+**What was decided:** Reopening a closed/cancelled job and overriding closure are done by the rep for the job's service line (super admin also may), with a written reason; not super-admin-only. No evidence gates (D02 evidence questions were removed by Evans). All authenticated API activity, including denied attempts, goes to an append-only activity log readable only by the super admin (bodies/queries never stored).
+**Why:** Evans said the person in charge of the department should hold those powers and that the admin must see everything users do.
+**What was rejected:** Super-admin-only reopen (the earlier checklist wording); logging request bodies (could hold passwords); a separate "department head" role for now — if several staff share one rep role they all hold these powers, so a distinct head role may be needed later.

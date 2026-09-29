@@ -1,6 +1,9 @@
 import { Module } from "@nestjs/common";
+import type { MiddlewareConsumer, NestModule } from "@nestjs/common";
 import { APP_FILTER } from "@nestjs/core";
 import { ThrottlerModule } from "@nestjs/throttler";
+import { ActivityController } from "./activity/activity.controller";
+import { ActivityLogMiddleware } from "./activity/activity.middleware";
 import { RequestErrorFilter } from "./request-error.filter";
 import { AuthModule } from "./auth/auth.module";
 import { DatabaseModule } from "./database/database.module";
@@ -23,12 +26,18 @@ import { QuoteRequestsService } from "./quotations/quote-requests.service";
     QuoteRequestsController,
     CustomersController,
     JobsController,
+    ActivityController,
   ],
   providers: [
     QuoteRequestsService,
     CustomersService,
     JobsService,
+    ActivityLogMiddleware,
     { provide: APP_FILTER, useClass: RequestErrorFilter },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(ActivityLogMiddleware).forRoutes("*");
+  }
+}

@@ -9,6 +9,9 @@ import {
 import {
   isUuid,
   jobCreateInputSchema,
+  jobStatusChangeInputSchema,
+  jobStatusReasonRequired,
+  jobStatusTransitions,
   milestoneEventInputSchema,
   milestoneTemplates,
   parseContract,
@@ -116,10 +119,8 @@ export class JobsService {
         "milestoneKey is not part of this service line's milestones",
       );
     }
-    if (job.status !== "open") {
-      throw new ConflictException(
-        "Milestones can only be recorded on open jobs",
-      );
+    if (job.status === "closed" || job.status === "cancelled") {
+      throw new ConflictException("Reopen the job before recording milestones");
     }
     const now = Date.now();
     const occurredAt = parsed.data.occurredAt ?? new Date(now).toISOString();
@@ -141,5 +142,55 @@ export class JobsService {
       );
     }
     return event;
+  }
+
+  async getStatusHistory(id: string, scope: JobScope) {
+    const job = await this.get(id, scope);
+    return {
+      job,
+      allowedNext: jobStatusTransitions[job.status],
+      history: await this.database.listJobStatusHistory(job.id),
+    };
+  }
+
+  /**
+   * Moves a job along the status workflow. Anyone with access to the job's
+   * department may do it, including reopening and closure overrides, and
+   * those actions need a written reason. Every change is kept in history.
+   */
+  async changeStatus(
+    id: string,
+    input: unknown,
+    changedBy: string,
+    scope: JobScope,
+  ): Promise<JobRecord> {
+    const job = await this.get(id, scope);
+    const parsed = parseContract(jobStatusChangeInputSchema, input);
+    if (!parsed.success) throw new BadRequestException(parsed.message);
+    const { status, reason } = parsed.data;
+
+    if (!jobStatusTransitions[job.status].includes(status)) {
+      throw new ConflictException(
+        `A job that is ${job.status} cannot move to ${status}`,
+      );
+    }
+    if (jobStatusReasonRequired(job.status, status) && !reason) {
+      throw new BadRequestException(
+        "reason is required to cancel, reopen or override closure",
+      );
+    }
+    const result = await this.database.changeJobStatus({
+      jobId: job.id,
+      from: job.status,
+      to: status,
+      reason,
+      changedBy,
+    });
+    if (result === "status_changed") {
+      throw new ConflictException(
+        "The job status changed while you were editing; reload and try again",
+      );
+    }
+    return result;
   }
 }

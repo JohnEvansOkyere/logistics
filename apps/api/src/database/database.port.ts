@@ -1,3 +1,5 @@
+import type { JobStatus } from "@bjh/contracts";
+
 export interface DatabaseHealth {
   status: "ok" | "error";
   provider: "postgresql";
@@ -37,6 +39,16 @@ export interface QuoteDraftRecord {
 export type ServiceLine =
   "sea_import" | "sea_export" | "air_import" | "air_export";
 
+export interface JobStatusChangeRecord {
+  id: string;
+  jobId: string;
+  fromStatus: JobStatus;
+  toStatus: JobStatus;
+  reason: string | null;
+  changedBy: string;
+  changedAt: string;
+}
+
 export interface JobRecord {
   id: string;
   fileNumber: string;
@@ -44,7 +56,7 @@ export interface JobRecord {
   customerCompanyId: string;
   customerCompanyName: string;
   quoteRequestId: string | null;
-  status: "open" | "closed" | "cancelled";
+  status: JobStatus;
   openedBy: string;
   openedAt: string;
   closedAt: string | null;
@@ -60,6 +72,30 @@ export interface MilestoneEventRecord {
   source: "manual" | "system";
   note: string | null;
   correctionOf: string | null;
+}
+
+export interface ActivityEntry {
+  actorUserId: string;
+  actorEmail: string | null;
+  method: string;
+  route: string;
+  entityId: string | null;
+  statusCode: number;
+  clientIp: string | null;
+}
+
+export interface ActivityRecord extends ActivityEntry {
+  id: string;
+  occurredAt: string;
+}
+
+export interface ActivityFilter {
+  actorUserId?: string;
+  entityId?: string;
+  from?: string;
+  to?: string;
+  limit: number;
+  offset: number;
 }
 
 /** Undefined fields mean unrestricted; an empty array matches nothing. */
@@ -164,6 +200,16 @@ export abstract class DatabasePort {
   ): Promise<JobRecord>;
   abstract listJobs(search: string, scope: JobScope): Promise<JobRecord[]>;
   abstract findJob(id: string, scope: JobScope): Promise<JobRecord | null>;
+  abstract changeJobStatus(change: {
+    jobId: string;
+    from: JobStatus;
+    to: JobStatus;
+    reason: string | null;
+    changedBy: string;
+  }): Promise<JobRecord | "status_changed">;
+  abstract listJobStatusHistory(
+    jobId: string,
+  ): Promise<JobStatusChangeRecord[]>;
   abstract appendMilestoneEvent(event: {
     jobId: string;
     milestoneKey: string;
@@ -173,6 +219,8 @@ export abstract class DatabasePort {
     correctionOf: string | null;
   }): Promise<MilestoneEventRecord | "correction_target_not_found">;
   abstract listMilestoneEvents(jobId: string): Promise<MilestoneEventRecord[]>;
+  abstract recordActivity(entry: ActivityEntry): Promise<void>;
+  abstract listActivity(filter: ActivityFilter): Promise<ActivityRecord[]>;
   abstract getActiveCustomerCompanyIds(userId: string): Promise<string[]>;
   abstract listCustomerMemberships(
     userId: string,

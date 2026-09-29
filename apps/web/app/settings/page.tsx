@@ -18,7 +18,7 @@ export default function SettingsPage() {
             <p className="eyebrow">WORKSPACE CONFIGURATION</p>
             <h1 id="settings-title">Settings</h1>
             <p className="welcome-copy">
-              Manage staff access and review system status.
+              Manage staff access, review user activity and check system status.
             </p>
           </div>
         </section>
@@ -34,6 +34,19 @@ export default function SettingsPage() {
             </div>
             <Link className="action-link" href="/settings/staff">
               Manage staff <span aria-hidden="true">→</span>
+            </Link>
+          </article>
+          <article className="action-card">
+            <span className="action-icon" aria-hidden="true">
+              ☰
+            </span>
+            <div className="action-copy">
+              <p className="action-kicker">AUDIT</p>
+              <h3>Activity log</h3>
+              <p>See what every user has done, including denied attempts.</p>
+            </div>
+            <Link className="action-link" href="/settings/activity">
+              View activity <span aria-hidden="true">→</span>
             </Link>
           </article>
           <article className="action-card">

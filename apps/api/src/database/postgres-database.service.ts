@@ -1,11 +1,16 @@
 import { Inject, Injectable, OnModuleDestroy } from "@nestjs/common";
+import type { JobStatus } from "@bjh/contracts";
 import {
+  ActivityEntry,
+  ActivityFilter,
+  ActivityRecord,
   DatabaseHealth,
   DatabasePort,
   CustomerCompanyRecord,
   CustomerMembershipRecord,
   JobRecord,
   JobScope,
+  JobStatusChangeRecord,
   MilestoneEventRecord,
   ServiceLine,
   QuoteDraftRecord,
@@ -462,6 +467,65 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
     };
   }
 
+  async changeJobStatus(change: {
+    jobId: string;
+    from: JobStatus;
+    to: JobStatus;
+    reason: string | null;
+    changedBy: string;
+  }): Promise<JobRecord | "status_changed"> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const updated = await client.query(
+        `UPDATE app.job
+         SET status = $3,
+             closed_at = CASE WHEN $3 IN ('closed', 'cancelled') THEN now() ELSE NULL END
+         WHERE job_id = $1::uuid AND status = $2
+         RETURNING job_id`,
+        [change.jobId, change.from, change.to],
+      );
+      if (updated.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return "status_changed";
+      }
+      await client.query(
+        `INSERT INTO app.job_status_history
+          (job_id, from_status, to_status, reason, changed_by)
+         VALUES ($1::uuid, $2, $3, $4, $5::uuid)`,
+        [change.jobId, change.from, change.to, change.reason, change.changedBy],
+      );
+      const job = await client.query(
+        `${jobSelect} WHERE job.job_id = $1::uuid`,
+        [change.jobId],
+      );
+      await client.query("COMMIT");
+      return this.mapJob(job.rows[0]);
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listJobStatusHistory(jobId: string): Promise<JobStatusChangeRecord[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM app.job_status_history
+       WHERE job_id = $1::uuid ORDER BY changed_at, history_id`,
+      [jobId],
+    );
+    return result.rows.map((row) => ({
+      id: String(row.history_id),
+      jobId: String(row.job_id),
+      fromStatus: row.from_status as JobStatus,
+      toStatus: row.to_status as JobStatus,
+      reason: row.reason ? String(row.reason) : null,
+      changedBy: String(row.changed_by),
+      changedAt: this.toIsoString(row.changed_at),
+    }));
+  }
+
   async appendMilestoneEvent(event: {
     jobId: string;
     milestoneKey: string;
@@ -518,6 +582,54 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       note: row.note ? String(row.note) : null,
       correctionOf: row.correction_of ? String(row.correction_of) : null,
     };
+  }
+
+  async recordActivity(entry: ActivityEntry): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO app.activity_log
+        (actor_user_id, actor_email, method, route, entity_id, status_code, client_ip)
+       VALUES ($1::uuid, $2, $3, $4, $5::uuid, $6, $7)`,
+      [
+        entry.actorUserId,
+        entry.actorEmail,
+        entry.method,
+        entry.route,
+        entry.entityId,
+        entry.statusCode,
+        entry.clientIp,
+      ],
+    );
+  }
+
+  async listActivity(filter: ActivityFilter): Promise<ActivityRecord[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM app.activity_log
+       WHERE ($1::uuid IS NULL OR actor_user_id = $1::uuid)
+         AND ($2::uuid IS NULL OR entity_id = $2::uuid)
+         AND ($3::timestamptz IS NULL OR occurred_at >= $3::timestamptz)
+         AND ($4::timestamptz IS NULL OR occurred_at <= $4::timestamptz)
+       ORDER BY occurred_at DESC, activity_id DESC
+       LIMIT $5 OFFSET $6`,
+      [
+        filter.actorUserId ?? null,
+        filter.entityId ?? null,
+        filter.from ?? null,
+        filter.to ?? null,
+        filter.limit,
+        filter.offset,
+      ],
+    );
+    return result.rows.map((row) => ({
+      id: String(row.activity_id),
+      occurredAt: this.toIsoString(row.occurred_at),
+      actorUserId: String(row.actor_user_id),
+      actorEmail: row.actor_email ? String(row.actor_email) : null,
+      method: String(row.method),
+      route: String(row.route),
+      entityId: row.entity_id ? String(row.entity_id) : null,
+      statusCode: Number(row.status_code),
+      clientIp: row.client_ip ? String(row.client_ip) : null,
+    }));
   }
 
   async getActiveCustomerCompanyIds(userId: string): Promise<string[]> {

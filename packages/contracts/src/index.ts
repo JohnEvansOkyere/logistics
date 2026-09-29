@@ -127,6 +127,60 @@ export const jobCreateInputSchema = z.object(
 );
 export type JobCreateInput = z.infer<typeof jobCreateInputSchema>;
 
+export const jobStatusKeys = [
+  "open",
+  "in_progress",
+  "on_hold",
+  "ready_to_close",
+  "closed",
+  "cancelled",
+] as const;
+export type JobStatus = (typeof jobStatusKeys)[number];
+
+/** Allowed moves. Leaving closed/cancelled is a reopen. */
+export const jobStatusTransitions: Record<JobStatus, readonly JobStatus[]> = {
+  open: ["in_progress", "on_hold", "closed", "cancelled"],
+  in_progress: ["on_hold", "ready_to_close", "closed", "cancelled"],
+  on_hold: ["in_progress", "cancelled"],
+  ready_to_close: ["in_progress", "closed", "cancelled"],
+  closed: ["in_progress"],
+  cancelled: ["in_progress"],
+};
+
+/**
+ * A written reason is required to cancel, to reopen a closed/cancelled job and
+ * to close a job that was not first marked ready_to_close (a closure override).
+ */
+export function jobStatusReasonRequired(
+  from: JobStatus,
+  to: JobStatus,
+): boolean {
+  return (
+    to === "cancelled" ||
+    from === "closed" ||
+    from === "cancelled" ||
+    (to === "closed" && from !== "ready_to_close")
+  );
+}
+
+export const jobStatusChangeInputSchema = z.object(
+  {
+    status: z.enum(jobStatusKeys, {
+      error: "status is not a supported job status",
+    }),
+    reason: z
+      .string({ error: "reason must be text" })
+      .transform((value) => value.trim())
+      .refine((value) => value.length <= 2000, {
+        error: "reason must be at most 2000 characters",
+      })
+      .nullish()
+      .transform((value) => value || null),
+  },
+  { error: "A status object is required" },
+);
+export type JobStatusChangeInput = z.infer<typeof jobStatusChangeInputSchema>;
+
 export interface MilestoneDefinition {
   key: string;
   label: string;

@@ -74,4 +74,25 @@ export class JobsController {
       scopeOf(request),
     );
   }
+
+  @Get(":id/status-history")
+  @UseGuards(JobScopeGuard)
+  statusHistory(@Param("id") id: string, @Req() request: AuthenticatedRequest) {
+    return this.jobs.getStatusHistory(id, scopeOf(request));
+  }
+
+  @Post(":id/status")
+  @UseGuards(DepartmentStaffGuard, JobScopeGuard)
+  changeStatus(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.jobs.changeStatus(
+      id,
+      body,
+      request.authUser!.userId,
+      scopeOf(request),
+    );
+  }
 }
