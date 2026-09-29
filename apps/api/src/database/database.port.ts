@@ -1,5 +1,9 @@
 import type {
   DocumentType,
+  QuoteDecision,
+  QuoteBasis,
+  QuoteVersionInput,
+  TaskKind,
   JobStatus,
   PartyRole,
   ReferenceKind,
@@ -124,6 +128,107 @@ export interface MilestoneEventRecord {
   source: "manual" | "system";
   note: string | null;
   correctionOf: string | null;
+}
+
+export interface EtaEventRecord {
+  id: string;
+  jobId: string;
+  etaAt: string;
+  source: string;
+  note: string | null;
+  recordedAt: string;
+  recordedBy: string;
+  correctionOf: string | null;
+}
+
+export interface JobTaskRecord {
+  id: string;
+  jobId: string;
+  fileNumber: string;
+  customerCompanyName: string;
+  kind: TaskKind;
+  title: string;
+  details: string | null;
+  assignedRole: StaffRoleKey;
+  dueDate: string | null;
+  status: "open" | "done";
+  createdAt: string;
+  createdBy: string;
+  completedAt: string | null;
+  completedBy: string | null;
+  completionNote: string | null;
+}
+
+export interface QuoteLineRecord {
+  id: string;
+  position: number;
+  section: string | null;
+  description: string;
+  basis: QuoteBasis;
+  basisNote: string | null;
+  amountMinor: number | null;
+  amount20ftMinor: number | null;
+  amount40ftMinor: number | null;
+}
+
+export interface QuoteVersionRecord {
+  id: string;
+  versionNumber: number;
+  status: "draft" | "issued";
+  currency: string;
+  title: string;
+  subtitle: string | null;
+  shipmentScope: string | null;
+  intro: string | null;
+  atCostNote: string | null;
+  procedureSteps: string[];
+  requiredDocuments: string[];
+  documentsNote: string | null;
+  timeline: string | null;
+  terms: string[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  issuedBy: string | null;
+  issuedAt: string | null;
+  lines: QuoteLineRecord[];
+}
+
+/** A quote as listed: the latest version the viewer may see. */
+export interface QuoteSummaryRecord {
+  id: string;
+  quoteNumber: string | null;
+  serviceLine: ServiceLine;
+  customerCompanyId: string;
+  customerCompanyName: string;
+  quoteRequestId: string | null;
+  createdBy: string;
+  createdAt: string;
+  latestVersionNumber: number;
+  latestStatus: "draft" | "issued";
+  title: string;
+  currency: string;
+}
+
+export interface QuoteDecisionRecord {
+  id: string;
+  versionNumber: number;
+  decision: QuoteDecision;
+  clientSignatory: string;
+  decidedAt: string;
+  note: string | null;
+  recordedAt: string;
+  recordedBy: string;
+}
+
+export interface QuoteRecord extends Omit<
+  QuoteSummaryRecord,
+  "latestVersionNumber" | "latestStatus" | "title" | "currency"
+> {
+  versions: QuoteVersionRecord[];
+  decisions: QuoteDecisionRecord[];
+  /** The job opened when the quote was accepted, if any. */
+  jobId: string | null;
 }
 
 export interface ActivityEntry {
@@ -319,6 +424,80 @@ export abstract class DatabasePort {
     correctionOf: string | null;
   }): Promise<MilestoneEventRecord | "correction_target_not_found">;
   abstract listMilestoneEvents(jobId: string): Promise<MilestoneEventRecord[]>;
+  abstract appendEtaEvent(event: {
+    jobId: string;
+    etaAt: string;
+    source: string;
+    note: string | null;
+    recordedBy: string;
+    correctionOf: string | null;
+  }): Promise<EtaEventRecord | "correction_target_not_found">;
+  abstract listEtaEvents(jobId: string): Promise<EtaEventRecord[]>;
+  abstract createJobTask(task: {
+    jobId: string;
+    kind: TaskKind;
+    title: string;
+    details: string | null;
+    assignedRole: StaffRoleKey;
+    dueDate: string | null;
+    createdBy: string;
+  }): Promise<JobTaskRecord>;
+  abstract listJobTasks(
+    filter: { jobId?: string; assignedRole?: StaffRoleKey; open?: boolean },
+    scope: JobScope,
+  ): Promise<JobTaskRecord[]>;
+  abstract completeJobTask(
+    jobId: string,
+    taskId: string,
+    completedBy: string,
+    note: string | null,
+  ): Promise<JobTaskRecord | "not_found" | "already_done">;
+  abstract createQuote(
+    input: {
+      customerCompanyId: string;
+      serviceLine: ServiceLine;
+      quoteRequestId: string | null;
+      version: QuoteVersionInput;
+    },
+    createdBy: string,
+  ): Promise<string>;
+  abstract listQuotes(scope: JobScope): Promise<QuoteSummaryRecord[]>;
+  /** Customers (a scope with company IDs) only ever see issued versions. */
+  abstract findQuote(id: string, scope: JobScope): Promise<QuoteRecord | null>;
+  abstract saveQuoteVersionDraft(
+    quoteId: string,
+    content: QuoteVersionInput,
+  ): Promise<"saved" | "no_draft">;
+  abstract startQuoteVersion(
+    quoteId: string,
+    createdBy: string,
+  ): Promise<"started" | "draft_exists">;
+  abstract issueQuoteVersion(
+    quoteId: string,
+    issuedBy: string,
+    year: number,
+  ): Promise<"issued" | "no_draft" | "no_lines">;
+  /**
+   * Records the client's decision on the latest issued version. Accepting also
+   * opens the job in the same transaction. Repeating the same decision returns
+   * the stored one (and its job) instead of creating another.
+   */
+  abstract decideQuote(input: {
+    quoteId: string;
+    versionNumber: number;
+    decision: QuoteDecision;
+    clientSignatory: string;
+    decidedAt: string;
+    note: string | null;
+    recordedBy: string;
+    year: number;
+  }): Promise<
+    | { decision: QuoteDecisionRecord; job: JobRecord | null }
+    | "version_not_found"
+    | "not_issued"
+    | "not_latest"
+    | "already_decided"
+  >;
   abstract recordActivity(entry: ActivityEntry): Promise<void>;
   abstract listActivity(filter: ActivityFilter): Promise<ActivityRecord[]>;
   abstract getActiveCustomerCompanyIds(userId: string): Promise<string[]>;

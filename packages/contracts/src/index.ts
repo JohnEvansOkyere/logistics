@@ -454,3 +454,230 @@ export function parseContract<T>(
   if (result.success) return { success: true, data: result.data };
   return { success: false, message: result.error.issues[0].message };
 }
+
+export const etaInputSchema = z.object(
+  {
+    etaAt: z
+      .string({ error: "etaAt is required" })
+      .refine((value) => !Number.isNaN(Date.parse(value)), {
+        error: "etaAt must be a date and time",
+      })
+      .transform((value) => new Date(value).toISOString()),
+    source: requiredText("source", 200),
+    note: z
+      .string({ error: "note must be text" })
+      .transform((value) => value.trim())
+      .refine((value) => value.length <= 2000, {
+        error: "note must be at most 2000 characters",
+      })
+      .nullish()
+      .transform((value) => value || null),
+    correctionOf: uuidField("correctionOf")
+      .nullish()
+      .transform((value) => value ?? null),
+  },
+  objectError("An ETA object is required"),
+);
+export type EtaInput = z.infer<typeof etaInputSchema>;
+
+export const taskKinds = [
+  "task",
+  "missing_documents",
+  "damage",
+  "delay",
+  "other",
+] as const;
+export type TaskKind = (typeof taskKinds)[number];
+
+const optionalText = (field: string, maximumLength: number) =>
+  z
+    .string({ error: `${field} must be text` })
+    .transform((value) => value.trim())
+    .refine((value) => value.length <= maximumLength, {
+      error: `${field} must be at most ${maximumLength} characters`,
+    })
+    .nullish()
+    .transform((value) => value || null);
+
+export const jobTaskInputSchema = z.object(
+  {
+    kind: z
+      .enum(taskKinds, { error: `kind must be one of ${taskKinds.join(", ")}` })
+      .default("task"),
+    title: requiredText("title", 200),
+    details: optionalText("details", 2000),
+    assignedRole: z.enum(staffRoleKeys, {
+      error: `assignedRole must be one of ${staffRoleKeys.join(", ")}`,
+    }),
+    dueDate: z
+      .string({ error: "dueDate must be a date (YYYY-MM-DD)" })
+      .regex(/^\d{4}-\d{2}-\d{2}$/, {
+        error: "dueDate must be a date (YYYY-MM-DD)",
+      })
+      .refine((value) => !Number.isNaN(Date.parse(`${value}T00:00:00Z`)), {
+        error: "dueDate must be a date (YYYY-MM-DD)",
+      })
+      .nullish()
+      .transform((value) => value ?? null),
+  },
+  objectError("A task object is required"),
+);
+export type JobTaskInput = z.infer<typeof jobTaskInputSchema>;
+
+export const taskCompletionSchema = z.object(
+  { note: optionalText("note", 2000) },
+  objectError("A completion object is required"),
+);
+
+export const quoteBasisKeys = [
+  "fixed",
+  "per_bl",
+  "per_container",
+  "at_cost",
+] as const;
+export type QuoteBasis = (typeof quoteBasisKeys)[number];
+
+export const quoteBasisLabels: Record<QuoteBasis, string> = {
+  fixed: "Fixed",
+  per_bl: "Per bill of lading",
+  per_container: "Per container",
+  at_cost: "At cost",
+};
+
+const MAX_MINOR_AMOUNT = 1_000_000_000_000;
+const minorAmount = (field: string) =>
+  z
+    .number({ error: `${field} must be a whole number of minor units` })
+    .int({ error: `${field} must be a whole number of minor units` })
+    .min(0, { error: `${field} cannot be negative` })
+    .max(MAX_MINOR_AMOUNT, { error: `${field} is too large` })
+    .nullish()
+    .transform((value) => value ?? null);
+
+const textList = (field: string, maximumItems: number, maximumLength: number) =>
+  z
+    .array(
+      z
+        .string({ error: `${field} must be a list of text` })
+        .transform((value) => value.trim())
+        .refine((value) => value.length >= 1 && value.length <= maximumLength, {
+          error: `each ${field} entry must contain 1 to ${maximumLength} characters`,
+        }),
+      { error: `${field} must be a list of text` },
+    )
+    .max(maximumItems, {
+      error: `${field} can have at most ${maximumItems} entries`,
+    })
+    .nullish()
+    .transform((value) => value ?? []);
+
+/** One charge row: a single amount, or a 20ft and a 40ft amount together. */
+export const quoteLineInputSchema = z
+  .object(
+    {
+      section: optionalText("section", 200),
+      description: requiredText("description", 300),
+      basis: z.enum(quoteBasisKeys, {
+        error: `basis must be one of ${quoteBasisKeys.join(", ")}`,
+      }),
+      basisNote: optionalText("basisNote", 300),
+      amountMinor: minorAmount("amountMinor"),
+      amount20ftMinor: minorAmount("amount20ftMinor"),
+      amount40ftMinor: minorAmount("amount40ftMinor"),
+    },
+    objectError("A charge line object is required"),
+  )
+  .superRefine((line, context) => {
+    const sized =
+      line.amount20ftMinor !== null || line.amount40ftMinor !== null;
+    if ((line.amount20ftMinor === null) !== (line.amount40ftMinor === null)) {
+      context.addIssue({
+        code: "custom",
+        message: "Give both the 20ft and the 40ft amount, or neither",
+      });
+    } else if (sized && line.amountMinor !== null) {
+      context.addIssue({
+        code: "custom",
+        message: "Use either one amount or 20ft and 40ft amounts, not both",
+      });
+    } else if (
+      line.basis !== "at_cost" &&
+      line.amountMinor === null &&
+      !sized
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Only at-cost lines can leave the amount out",
+      });
+    }
+  });
+export type QuoteLineInput = z.infer<typeof quoteLineInputSchema>;
+
+export const quoteVersionInputSchema = z.object(
+  {
+    currency: z
+      .string({ error: "currency is required" })
+      .transform((value) => value.trim().toUpperCase())
+      .refine((value) => /^[A-Z]{3}$/.test(value), {
+        error: "currency must be a 3-letter code such as USD or GHS",
+      }),
+    title: requiredText("title", 200),
+    subtitle: optionalText("subtitle", 200),
+    shipmentScope: optionalText("shipmentScope", 500),
+    intro: optionalText("intro", 4000),
+    atCostNote: optionalText("atCostNote", 2000),
+    procedureSteps: textList("procedureSteps", 30, 1000),
+    requiredDocuments: textList("requiredDocuments", 30, 300),
+    documentsNote: optionalText("documentsNote", 2000),
+    timeline: optionalText("timeline", 2000),
+    terms: textList("terms", 30, 1000),
+    lines: z
+      .array(quoteLineInputSchema, { error: "lines must be a list" })
+      .max(100, { error: "A quote can have at most 100 charge lines" }),
+  },
+  objectError("A quote version object is required"),
+);
+export type QuoteVersionInput = z.infer<typeof quoteVersionInputSchema>;
+
+export const quoteCreateInputSchema = z.object(
+  {
+    customerCompanyId: uuidField("customerCompanyId"),
+    serviceLine: z.enum(serviceLineKeys, {
+      error:
+        "serviceLine must be sea_import, sea_export, air_import or air_export",
+    }),
+    quoteRequestId: uuidField("quoteRequestId")
+      .nullish()
+      .transform((value) => value ?? null),
+    version: quoteVersionInputSchema,
+  },
+  objectError("A quote object is required"),
+);
+export type QuoteCreateInput = z.infer<typeof quoteCreateInputSchema>;
+
+export const quoteDecisionKeys = ["accepted", "rejected"] as const;
+export type QuoteDecision = (typeof quoteDecisionKeys)[number];
+
+/** Staff record the client's decision on one issued version of a quote. */
+export const quoteDecisionInputSchema = z.object(
+  {
+    versionNumber: z
+      .number({ error: "versionNumber is required" })
+      .int({ error: "versionNumber must be a whole number" })
+      .min(1, { error: "versionNumber must be a whole number" }),
+    decision: z.enum(quoteDecisionKeys, {
+      error: "decision must be accepted or rejected",
+    }),
+    clientSignatory: requiredText("clientSignatory", 160),
+    decidedAt: z
+      .string({ error: "decidedAt must be a date and time" })
+      .refine((value) => !Number.isNaN(Date.parse(value)), {
+        error: "decidedAt must be a date and time",
+      })
+      .nullish()
+      .transform((value) => (value ? new Date(value).toISOString() : null)),
+    note: optionalText("note", 2000),
+  },
+  objectError("A quote decision object is required"),
+);
+export type QuoteDecisionInput = z.infer<typeof quoteDecisionInputSchema>;

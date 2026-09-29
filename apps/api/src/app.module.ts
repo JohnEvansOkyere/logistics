@@ -14,7 +14,10 @@ import {
   DOCUMENT_STORAGE,
   SupabaseDocumentStorage,
 } from "./documents/document-storage.port";
-import { JobDetailsController } from "./jobs/job-details.controller";
+import {
+  JobDetailsController,
+  TasksController,
+} from "./jobs/job-details.controller";
 import { JobDetailsService } from "./jobs/job-details.service";
 import { JobsController } from "./jobs/jobs.controller";
 import { JobsService } from "./jobs/jobs.service";
@@ -22,6 +25,8 @@ import { CustomersController } from "./customers/customers.controller";
 import { CustomersService } from "./customers/customers.service";
 import { QuoteRequestsController } from "./quotations/quote-requests.controller";
 import { QuoteRequestsService } from "./quotations/quote-requests.service";
+import { QuotesController } from "./quotations/quotes.controller";
+import { QuotesService } from "./quotations/quotes.service";
 
 @Module({
   imports: [
@@ -32,14 +37,17 @@ import { QuoteRequestsService } from "./quotations/quote-requests.service";
   controllers: [
     HealthController,
     QuoteRequestsController,
+    QuotesController,
     CustomersController,
     JobsController,
     JobDetailsController,
+    TasksController,
     DocumentsController,
     ActivityController,
   ],
   providers: [
     QuoteRequestsService,
+    QuotesService,
     CustomersService,
     JobsService,
     JobDetailsService,

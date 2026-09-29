@@ -5,6 +5,8 @@ import type {
   PartyRole,
   ReferenceKind,
   ServiceLine,
+  StaffRoleKey,
+  TaskKind,
 } from "@bjh/contracts";
 import { authenticatedFetch } from "../auth/authenticatedFetch";
 
@@ -201,3 +203,84 @@ export const getDownloadLink = (
     `/${encodeURIComponent(id)}/documents/${encodeURIComponent(documentId)}/download?version=${versionNumber}`,
     "GET",
   );
+
+export type EtaEvent = {
+  id: string;
+  etaAt: string;
+  source: string;
+  note: string | null;
+  recordedAt: string;
+  recordedBy: string;
+  correctionOf: string | null;
+};
+
+export type Eta = { current: EtaEvent | null; history: EtaEvent[] };
+
+export const getEta = (id: string) =>
+  send<Eta>(`/${encodeURIComponent(id)}/eta`, "GET");
+export const recordEta = (
+  id: string,
+  input: {
+    etaAt: string;
+    source: string;
+    note?: string;
+    correctionOf?: string;
+  },
+) => send<EtaEvent>(`/${encodeURIComponent(id)}/eta`, "POST", input);
+
+export type JobTask = {
+  id: string;
+  jobId: string;
+  fileNumber: string;
+  customerCompanyName: string;
+  kind: TaskKind;
+  title: string;
+  details: string | null;
+  assignedRole: StaffRoleKey;
+  dueDate: string | null;
+  status: "open" | "done";
+  completedAt: string | null;
+  completionNote: string | null;
+};
+
+export const taskKindLabels: Record<TaskKind, string> = {
+  task: "Task",
+  missing_documents: "Missing documents",
+  damage: "Damage",
+  delay: "Delay",
+  other: "Other",
+};
+
+export const roleLabels: Record<StaffRoleKey, string> = {
+  super_admin: "Super admin",
+  sea_import_rep: "Sea import",
+  sea_export_rep: "Sea export",
+  air_import_rep: "Air import",
+  air_export_rep: "Air export",
+};
+
+export const listJobTasks = (id: string) =>
+  send<JobTask[]>(`/${encodeURIComponent(id)}/tasks`, "GET");
+export const createJobTask = (
+  id: string,
+  input: {
+    kind: TaskKind;
+    title: string;
+    details?: string;
+    assignedRole: StaffRoleKey;
+    dueDate?: string;
+  },
+) => send<JobTask>(`/${encodeURIComponent(id)}/tasks`, "POST", input);
+export const completeJobTask = (id: string, taskId: string, note?: string) =>
+  send<JobTask>(
+    `/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}/complete`,
+    "POST",
+    { note },
+  );
+export const listTasks = (assignedRole: string, status: "open" | "all") =>
+  authenticatedFetch(
+    `${apiBaseUrl.replace(/\/$/, "")}/v1/tasks?${new URLSearchParams({
+      ...(assignedRole ? { assignedRole } : {}),
+      status,
+    })}`,
+  ).then((response) => readResponse<JobTask[]>(response));

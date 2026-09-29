@@ -6,6 +6,7 @@ import {
   Inject,
   Param,
   Post,
+  Query,
   Req,
   UseGuards,
 } from "@nestjs/common";
@@ -104,5 +105,83 @@ export class JobDetailsController {
       request.authUser!.userId,
       scopeOf(request),
     );
+  }
+
+  @Get("eta")
+  @UseGuards(JobScopeGuard)
+  getEta(@Param("id") id: string, @Req() request: AuthenticatedRequest) {
+    return this.details.getEta(id, scopeOf(request));
+  }
+
+  @Post("eta")
+  @UseGuards(DepartmentStaffGuard, JobScopeGuard)
+  recordEta(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.details.recordEta(
+      id,
+      body,
+      request.authUser!.userId,
+      scopeOf(request),
+    );
+  }
+
+  @Get("tasks")
+  @UseGuards(DepartmentStaffGuard, JobScopeGuard)
+  listTasks(@Param("id") id: string, @Req() request: AuthenticatedRequest) {
+    return this.details.listTasks(id, scopeOf(request));
+  }
+
+  @Post("tasks")
+  @UseGuards(DepartmentStaffGuard, JobScopeGuard)
+  createTask(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.details.createTask(
+      id,
+      body,
+      request.authUser!.userId,
+      scopeOf(request),
+    );
+  }
+
+  @Post("tasks/:taskId/complete")
+  @UseGuards(DepartmentStaffGuard, JobScopeGuard)
+  completeTask(
+    @Param("id") id: string,
+    @Param("taskId") taskId: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.details.completeTask(
+      id,
+      taskId,
+      body,
+      request.authUser!.userId,
+      scopeOf(request),
+    );
+  }
+}
+
+/** Open work across every job the caller can see (a department's task list). */
+@Controller("api/v1/tasks")
+@UseGuards(SupabaseIdentityGuard)
+export class TasksController {
+  constructor(
+    @Inject(JobDetailsService) private readonly details: JobDetailsService,
+  ) {}
+
+  @Get()
+  @UseGuards(DepartmentStaffGuard, JobScopeGuard)
+  list(
+    @Query("assignedRole") assignedRole: string | undefined,
+    @Query("status") status: string | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.details.listOpenTasks(assignedRole, status, scopeOf(request));
   }
 }

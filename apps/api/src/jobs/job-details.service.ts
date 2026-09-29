@@ -6,22 +6,29 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import {
+  etaInputSchema,
   isUuid,
   jobPartyInputSchema,
+  jobTaskInputSchema,
   parseContract,
   referenceKindAllowedFor,
   shipmentReferenceInputSchema,
+  staffRoleKeys,
+  taskCompletionSchema,
 } from "@bjh/contracts";
+import type { StaffRoleKey } from "@bjh/contracts";
 import {
   DatabasePort,
+  EtaEventRecord,
   JobPartyRecord,
+  JobTaskRecord,
   JobRecord,
   JobScope,
   ShipmentReferenceRecord,
 } from "../database/database.port";
 import { JobsService } from "./jobs.service";
 
-/** Parties and shipment references (master/house documents, containers) on a job. */
+/** Parties, shipment references, manual ETA and tasks on a job. */
 @Injectable()
 export class JobDetailsService {
   constructor(
@@ -144,6 +151,112 @@ export class JobDetailsService {
       throw new NotFoundException("Reference was not found on this job");
     }
     return { removed: true };
+  }
+
+  /** Newest entry is the current ETA; earlier entries stay as history. */
+  async getEta(
+    id: string,
+    scope: JobScope,
+  ): Promise<{ current: EtaEventRecord | null; history: EtaEventRecord[] }> {
+    const job = await this.jobs.get(id, scope);
+    const history = await this.database.listEtaEvents(job.id);
+    return { current: history.at(-1) ?? null, history };
+  }
+
+  async recordEta(
+    id: string,
+    input: unknown,
+    recordedBy: string,
+    scope: JobScope,
+  ): Promise<EtaEventRecord> {
+    const job = await this.editableJob(id, scope);
+    const parsed = parseContract(etaInputSchema, input);
+    if (!parsed.success) throw new BadRequestException(parsed.message);
+    const event = await this.database.appendEtaEvent({
+      jobId: job.id,
+      ...parsed.data,
+      recordedBy,
+    });
+    if (event === "correction_target_not_found") {
+      throw new NotFoundException(
+        "The ETA being corrected was not found on this job",
+      );
+    }
+    return event;
+  }
+
+  async listTasks(id: string, scope: JobScope): Promise<JobTaskRecord[]> {
+    const job = await this.jobs.get(id, scope);
+    return this.database.listJobTasks({ jobId: job.id }, scope);
+  }
+
+  async createTask(
+    id: string,
+    input: unknown,
+    createdBy: string,
+    scope: JobScope,
+  ): Promise<JobTaskRecord> {
+    const job = await this.editableJob(id, scope);
+    const parsed = parseContract(jobTaskInputSchema, input);
+    if (!parsed.success) throw new BadRequestException(parsed.message);
+    return this.database.createJobTask({
+      jobId: job.id,
+      ...parsed.data,
+      createdBy,
+    });
+  }
+
+  async completeTask(
+    id: string,
+    taskId: string,
+    input: unknown,
+    completedBy: string,
+    scope: JobScope,
+  ): Promise<JobTaskRecord> {
+    const job = await this.editableJob(id, scope);
+    const parsed = parseContract(taskCompletionSchema, input ?? {});
+    if (!parsed.success) throw new BadRequestException(parsed.message);
+    const result = isUuid(taskId)
+      ? await this.database.completeJobTask(
+          job.id,
+          taskId,
+          completedBy,
+          parsed.data.note,
+        )
+      : "not_found";
+    if (result === "not_found") {
+      throw new NotFoundException("Task was not found on this job");
+    }
+    if (result === "already_done") {
+      throw new ConflictException("Task is already complete");
+    }
+    return result;
+  }
+
+  /** Tasks across the jobs the caller can see, e.g. one department's open work. */
+  async listOpenTasks(
+    assignedRole: string | undefined,
+    status: string | undefined,
+    scope: JobScope,
+  ): Promise<JobTaskRecord[]> {
+    if (
+      assignedRole !== undefined &&
+      !(staffRoleKeys as readonly string[]).includes(assignedRole)
+    ) {
+      throw new BadRequestException(
+        `assignedRole must be one of ${staffRoleKeys.join(", ")}`,
+      );
+    }
+    if (status !== undefined && status !== "open" && status !== "all") {
+      throw new BadRequestException("status must be open or all");
+    }
+    return this.database.listJobTasks(
+      {
+        assignedRole: assignedRole as StaffRoleKey | undefined,
+        open: status !== "all",
+      },
+      scope,
+    );
   }
 
   private async editableJob(id: string, scope: JobScope): Promise<JobRecord> {

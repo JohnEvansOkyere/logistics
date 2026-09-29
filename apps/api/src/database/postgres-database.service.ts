@@ -1,6 +1,10 @@
 import { Inject, Injectable, OnModuleDestroy } from "@nestjs/common";
 import type {
   DocumentType,
+  QuoteDecision,
+  QuoteBasis,
+  QuoteVersionInput,
+  TaskKind,
   JobStatus,
   PartyRole,
   ReferenceKind,
@@ -22,6 +26,13 @@ import {
   ShipmentReferenceRecord,
   JobStatusChangeRecord,
   MilestoneEventRecord,
+  EtaEventRecord,
+  JobTaskRecord,
+  QuoteDecisionRecord,
+  QuoteLineRecord,
+  QuoteRecord,
+  QuoteSummaryRecord,
+  QuoteVersionRecord,
   ServiceLine,
   QuoteDraftRecord,
   QuoteRequestRecord,
@@ -29,6 +40,33 @@ import {
   StaffRoleKey,
   StaffRoleAssignmentRecord,
 } from "./database.port";
+
+/** Task rows joined to their job; `source` is the table or CTE holding the task. */
+const jobTaskSelect = (source: string) => `
+  SELECT task.task_id, task.job_id, job.file_number,
+    company.company_name, task.kind, task.title, task.details,
+    task.assigned_role, to_char(task.due_date, 'YYYY-MM-DD') AS due_date,
+    task.status, task.created_at, task.created_by, task.completed_at,
+    task.completed_by, task.completion_note
+  FROM ${source} AS task
+  JOIN app.job AS job ON job.job_id = task.job_id
+  JOIN app.customer_company AS company
+    ON company.company_id = job.customer_company_id`;
+
+/** Version columns in the order the INSERT/UPDATE statements above expect. */
+const quoteVersionValues = (content: QuoteVersionInput) => [
+  content.currency,
+  content.title,
+  content.subtitle,
+  content.shipmentScope,
+  content.intro,
+  content.atCostNote,
+  content.procedureSteps,
+  content.requiredDocuments,
+  content.documentsNote,
+  content.timeline,
+  content.terms,
+];
 
 export const POSTGRES_POOL = Symbol("POSTGRES_POOL");
 
@@ -883,6 +921,688 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       source: row.source as MilestoneEventRecord["source"],
       note: row.note ? String(row.note) : null,
       correctionOf: row.correction_of ? String(row.correction_of) : null,
+    };
+  }
+
+  async appendEtaEvent(event: {
+    jobId: string;
+    etaAt: string;
+    source: string;
+    note: string | null;
+    recordedBy: string;
+    correctionOf: string | null;
+  }): Promise<EtaEventRecord | "correction_target_not_found"> {
+    if (event.correctionOf) {
+      const target = await this.pool.query(
+        `SELECT 1 FROM app.eta_event
+         WHERE eta_id = $1::uuid AND job_id = $2::uuid`,
+        [event.correctionOf, event.jobId],
+      );
+      if (target.rows.length === 0) return "correction_target_not_found";
+    }
+    const result = await this.pool.query(
+      `INSERT INTO app.eta_event
+        (job_id, eta_at, source, note, recorded_by, correction_of)
+       VALUES ($1::uuid, $2::timestamptz, $3, $4, $5::uuid, $6::uuid)
+       RETURNING *`,
+      [
+        event.jobId,
+        event.etaAt,
+        event.source,
+        event.note,
+        event.recordedBy,
+        event.correctionOf,
+      ],
+    );
+    return this.mapEtaEvent(result.rows[0]);
+  }
+
+  async listEtaEvents(jobId: string): Promise<EtaEventRecord[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM app.eta_event
+       WHERE job_id = $1::uuid ORDER BY recorded_at, eta_id`,
+      [jobId],
+    );
+    return result.rows.map((row) => this.mapEtaEvent(row));
+  }
+
+  private mapEtaEvent(row: Record<string, unknown>): EtaEventRecord {
+    return {
+      id: String(row.eta_id),
+      jobId: String(row.job_id),
+      etaAt: this.toIsoString(row.eta_at),
+      source: String(row.source),
+      note: row.note ? String(row.note) : null,
+      recordedAt: this.toIsoString(row.recorded_at),
+      recordedBy: String(row.recorded_by),
+      correctionOf: row.correction_of ? String(row.correction_of) : null,
+    };
+  }
+
+  async createJobTask(task: {
+    jobId: string;
+    kind: TaskKind;
+    title: string;
+    details: string | null;
+    assignedRole: StaffRoleKey;
+    dueDate: string | null;
+    createdBy: string;
+  }): Promise<JobTaskRecord> {
+    const result = await this.pool.query(
+      `WITH inserted AS (
+         INSERT INTO app.job_task
+           (job_id, kind, title, details, assigned_role, due_date, created_by)
+         VALUES ($1::uuid, $2, $3, $4, $5, $6::date, $7::uuid)
+         RETURNING *)
+       ${jobTaskSelect("inserted")}`,
+      [
+        task.jobId,
+        task.kind,
+        task.title,
+        task.details,
+        task.assignedRole,
+        task.dueDate,
+        task.createdBy,
+      ],
+    );
+    return this.mapJobTask(result.rows[0]);
+  }
+
+  async listJobTasks(
+    filter: { jobId?: string; assignedRole?: StaffRoleKey; open?: boolean },
+    scope: JobScope,
+  ): Promise<JobTaskRecord[]> {
+    if (scope.companyIds?.length === 0 || scope.serviceLines?.length === 0) {
+      return [];
+    }
+    const result = await this.pool.query(
+      `${jobTaskSelect("app.job_task")}
+       WHERE ($1::uuid IS NULL OR task.job_id = $1::uuid)
+         AND ($2::text IS NULL OR task.assigned_role = $2)
+         AND (NOT $3::boolean OR task.status = 'open')
+         AND ($4::uuid[] IS NULL OR job.customer_company_id = ANY($4::uuid[]))
+         AND ($5::text[] IS NULL OR job.service_line = ANY($5::text[]))
+       ORDER BY (task.status = 'done'), task.due_date NULLS LAST,
+         task.created_at, task.task_id`,
+      [
+        filter.jobId ?? null,
+        filter.assignedRole ?? null,
+        filter.open ?? false,
+        scope.companyIds ?? null,
+        scope.serviceLines ?? null,
+      ],
+    );
+    return result.rows.map((row) => this.mapJobTask(row));
+  }
+
+  async completeJobTask(
+    jobId: string,
+    taskId: string,
+    completedBy: string,
+    note: string | null,
+  ): Promise<JobTaskRecord | "not_found" | "already_done"> {
+    const updated = await this.pool.query(
+      `WITH updated AS (
+         UPDATE app.job_task
+         SET status = 'done', completed_at = clock_timestamp(),
+             completed_by = $3::uuid, completion_note = $4
+         WHERE task_id = $2::uuid AND job_id = $1::uuid AND status = 'open'
+         RETURNING *)
+       ${jobTaskSelect("updated")}`,
+      [jobId, taskId, completedBy, note],
+    );
+    if (updated.rows.length > 0) return this.mapJobTask(updated.rows[0]);
+    const existing = await this.pool.query(
+      `SELECT 1 FROM app.job_task WHERE task_id = $2::uuid AND job_id = $1::uuid`,
+      [jobId, taskId],
+    );
+    return existing.rows.length > 0 ? "already_done" : "not_found";
+  }
+
+  private mapJobTask(row: Record<string, unknown>): JobTaskRecord {
+    return {
+      id: String(row.task_id),
+      jobId: String(row.job_id),
+      fileNumber: String(row.file_number),
+      customerCompanyName: String(row.company_name),
+      kind: row.kind as TaskKind,
+      title: String(row.title),
+      details: row.details ? String(row.details) : null,
+      assignedRole: row.assigned_role as StaffRoleKey,
+      dueDate: row.due_date ? String(row.due_date) : null,
+      status: row.status as "open" | "done",
+      createdAt: this.toIsoString(row.created_at),
+      createdBy: String(row.created_by),
+      completedAt: row.completed_at ? this.toIsoString(row.completed_at) : null,
+      completedBy: row.completed_by ? String(row.completed_by) : null,
+      completionNote: row.completion_note ? String(row.completion_note) : null,
+    };
+  }
+
+  async createQuote(
+    input: {
+      customerCompanyId: string;
+      serviceLine: ServiceLine;
+      quoteRequestId: string | null;
+      version: QuoteVersionInput;
+    },
+    createdBy: string,
+  ): Promise<string> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const quote = await client.query(
+        `INSERT INTO app.quote
+          (service_line, customer_company_id, quote_request_id, created_by)
+         VALUES ($1, $2::uuid, $3::uuid, $4::uuid)
+         RETURNING quote_id`,
+        [
+          input.serviceLine,
+          input.customerCompanyId,
+          input.quoteRequestId,
+          createdBy,
+        ],
+      );
+      const quoteId = String(quote.rows[0].quote_id);
+      const version = await client.query(
+        `INSERT INTO app.quote_version
+          (quote_id, version_number, currency, title, subtitle, shipment_scope,
+           intro, at_cost_note, procedure_steps, required_documents,
+           documents_note, timeline, terms, created_by)
+         VALUES ($1::uuid, 1, $2, $3, $4, $5, $6, $7, $8::text[], $9::text[],
+           $10, $11, $12::text[], $13::uuid)
+         RETURNING version_id`,
+        [quoteId, ...quoteVersionValues(input.version), createdBy],
+      );
+      await this.insertQuoteLines(
+        client,
+        String(version.rows[0].version_id),
+        input.version,
+      );
+      await client.query("COMMIT");
+      return quoteId;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listQuotes(scope: JobScope): Promise<QuoteSummaryRecord[]> {
+    if (scope.companyIds?.length === 0 || scope.serviceLines?.length === 0) {
+      return [];
+    }
+    const result = await this.pool.query(
+      `SELECT quote.*, company.company_name,
+         version.version_number, version.status, version.title, version.currency
+       FROM app.quote AS quote
+       JOIN app.customer_company AS company
+         ON company.company_id = quote.customer_company_id
+       JOIN LATERAL (
+         SELECT * FROM app.quote_version AS candidate
+         WHERE candidate.quote_id = quote.quote_id
+           AND (NOT $1::boolean OR candidate.status = 'issued')
+         ORDER BY candidate.version_number DESC LIMIT 1
+       ) AS version ON true
+       WHERE ($2::uuid[] IS NULL OR quote.customer_company_id = ANY($2::uuid[]))
+         AND ($3::text[] IS NULL OR quote.service_line = ANY($3::text[]))
+       ORDER BY quote.created_at DESC, quote.quote_id`,
+      [
+        scope.companyIds !== undefined,
+        scope.companyIds ?? null,
+        scope.serviceLines ?? null,
+      ],
+    );
+    return result.rows.map((row) => ({
+      ...this.mapQuoteHead(row),
+      latestVersionNumber: Number(row.version_number),
+      latestStatus: row.status as "draft" | "issued",
+      title: String(row.title),
+      currency: String(row.currency),
+    }));
+  }
+
+  async findQuote(id: string, scope: JobScope): Promise<QuoteRecord | null> {
+    if (scope.companyIds?.length === 0 || scope.serviceLines?.length === 0) {
+      return null;
+    }
+    const head = await this.pool.query(
+      `SELECT quote.*, company.company_name
+       FROM app.quote AS quote
+       JOIN app.customer_company AS company
+         ON company.company_id = quote.customer_company_id
+       WHERE quote.quote_id = $1::uuid
+         AND ($2::uuid[] IS NULL OR quote.customer_company_id = ANY($2::uuid[]))
+         AND ($3::text[] IS NULL OR quote.service_line = ANY($3::text[]))`,
+      [id, scope.companyIds ?? null, scope.serviceLines ?? null],
+    );
+    if (head.rows.length === 0) return null;
+    const versions = await this.pool.query(
+      `SELECT * FROM app.quote_version
+       WHERE quote_id = $1::uuid AND (NOT $2::boolean OR status = 'issued')
+       ORDER BY version_number`,
+      [id, scope.companyIds !== undefined],
+    );
+    if (versions.rows.length === 0 && scope.companyIds !== undefined) {
+      return null;
+    }
+    const lines = await this.pool.query(
+      `SELECT line.* FROM app.quote_line AS line
+       JOIN app.quote_version AS version ON version.version_id = line.version_id
+       WHERE version.quote_id = $1::uuid
+       ORDER BY line.version_id, line.position`,
+      [id],
+    );
+    const decisions = await this.pool.query(
+      `SELECT decision.*, version.version_number
+       FROM app.quote_decision AS decision
+       JOIN app.quote_version AS version
+         ON version.version_id = decision.version_id
+       WHERE decision.quote_id = $1::uuid
+       ORDER BY decision.recorded_at, decision.decision_id`,
+      [id],
+    );
+    const job = await this.pool.query(
+      "SELECT job_id FROM app.job WHERE quote_id = $1::uuid",
+      [id],
+    );
+    return {
+      ...this.mapQuoteHead(head.rows[0]),
+      versions: versions.rows.map((row) =>
+        this.mapQuoteVersion(
+          row,
+          lines.rows.filter((line) => line.version_id === row.version_id),
+        ),
+      ),
+      decisions: decisions.rows.map((row) => this.mapQuoteDecision(row)),
+      jobId: job.rows.length > 0 ? String(job.rows[0].job_id) : null,
+    };
+  }
+
+  async decideQuote(input: {
+    quoteId: string;
+    versionNumber: number;
+    decision: QuoteDecision;
+    clientSignatory: string;
+    decidedAt: string;
+    note: string | null;
+    recordedBy: string;
+    year: number;
+  }): Promise<
+    | { decision: QuoteDecisionRecord; job: JobRecord | null }
+    | "version_not_found"
+    | "not_issued"
+    | "not_latest"
+    | "already_decided"
+  > {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      // Serialises concurrent decisions on the same quote.
+      const quote = await client.query(
+        `SELECT service_line, customer_company_id, quote_request_id
+         FROM app.quote WHERE quote_id = $1::uuid FOR UPDATE`,
+        [input.quoteId],
+      );
+      const version = await client.query(
+        `SELECT version_id, status FROM app.quote_version
+         WHERE quote_id = $1::uuid AND version_number = $2::integer`,
+        [input.quoteId, input.versionNumber],
+      );
+      if (version.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return "version_not_found";
+      }
+      if (version.rows[0].status !== "issued") {
+        await client.query("ROLLBACK");
+        return "not_issued";
+      }
+      const versionId = String(version.rows[0].version_id);
+
+      const existing = await client.query(
+        `SELECT decision.*, $2::integer AS version_number
+         FROM app.quote_decision AS decision
+         WHERE decision.version_id = $1::uuid`,
+        [versionId, input.versionNumber],
+      );
+      if (existing.rows.length > 0) {
+        const replay =
+          existing.rows[0].decision === input.decision
+            ? {
+                decision: this.mapQuoteDecision(existing.rows[0]),
+                job: await this.findJobForQuote(client, input.quoteId),
+              }
+            : ("already_decided" as const);
+        await client.query("ROLLBACK");
+        return replay;
+      }
+
+      const latest = await client.query(
+        `SELECT max(version_number) AS latest FROM app.quote_version
+         WHERE quote_id = $1::uuid AND status = 'issued'`,
+        [input.quoteId],
+      );
+      if (Number(latest.rows[0].latest) !== input.versionNumber) {
+        await client.query("ROLLBACK");
+        return "not_latest";
+      }
+
+      const inserted = await client.query(
+        `INSERT INTO app.quote_decision
+          (quote_id, version_id, decision, client_signatory, decided_at, note, recorded_by)
+         VALUES ($1::uuid, $2::uuid, $3, $4, $5::timestamptz, $6, $7::uuid)
+         RETURNING *, $8::integer AS version_number`,
+        [
+          input.quoteId,
+          versionId,
+          input.decision,
+          input.clientSignatory,
+          input.decidedAt,
+          input.note,
+          input.recordedBy,
+          input.versionNumber,
+        ],
+      );
+
+      let job: JobRecord | null = null;
+      if (input.decision === "accepted") {
+        const allocated = await client.query(
+          "SELECT app.allocate_job_number($1, $2) AS file_number",
+          [String(quote.rows[0].service_line), input.year],
+        );
+        const created = await client.query(
+          `INSERT INTO app.job
+            (file_number, service_line, customer_company_id, quote_request_id, quote_id, opened_by)
+           VALUES ($1, $2, $3::uuid, $4::uuid, $5::uuid, $6::uuid)
+           RETURNING job_id`,
+          [
+            String(allocated.rows[0].file_number),
+            String(quote.rows[0].service_line),
+            String(quote.rows[0].customer_company_id),
+            quote.rows[0].quote_request_id
+              ? String(quote.rows[0].quote_request_id)
+              : null,
+            input.quoteId,
+            input.recordedBy,
+          ],
+        );
+        const row = await client.query(
+          `${jobSelect} WHERE job.job_id = $1::uuid`,
+          [String(created.rows[0].job_id)],
+        );
+        job = this.mapJob(row.rows[0]);
+      }
+      await client.query("COMMIT");
+      return { decision: this.mapQuoteDecision(inserted.rows[0]), job };
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private async findJobForQuote(
+    client: PostgresClient,
+    quoteId: string,
+  ): Promise<JobRecord | null> {
+    const result = await client.query(
+      `${jobSelect} WHERE job.quote_id = $1::uuid`,
+      [quoteId],
+    );
+    return result.rows.length > 0 ? this.mapJob(result.rows[0]) : null;
+  }
+
+  private mapQuoteDecision(row: Record<string, unknown>): QuoteDecisionRecord {
+    return {
+      id: String(row.decision_id),
+      versionNumber: Number(row.version_number),
+      decision: row.decision as QuoteDecision,
+      clientSignatory: String(row.client_signatory),
+      decidedAt: this.toIsoString(row.decided_at),
+      note: row.note ? String(row.note) : null,
+      recordedAt: this.toIsoString(row.recorded_at),
+      recordedBy: String(row.recorded_by),
+    };
+  }
+
+  async saveQuoteVersionDraft(
+    quoteId: string,
+    content: QuoteVersionInput,
+  ): Promise<"saved" | "no_draft"> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const draft = await client.query(
+        `SELECT version_id FROM app.quote_version
+         WHERE quote_id = $1::uuid AND status = 'draft' FOR UPDATE`,
+        [quoteId],
+      );
+      if (draft.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return "no_draft";
+      }
+      const versionId = String(draft.rows[0].version_id);
+      await client.query(
+        `UPDATE app.quote_version
+         SET currency = $2, title = $3, subtitle = $4, shipment_scope = $5,
+             intro = $6, at_cost_note = $7, procedure_steps = $8::text[],
+             required_documents = $9::text[], documents_note = $10,
+             timeline = $11, terms = $12::text[], updated_at = clock_timestamp()
+         WHERE version_id = $1::uuid`,
+        [versionId, ...quoteVersionValues(content)],
+      );
+      await client.query(
+        "DELETE FROM app.quote_line WHERE version_id = $1::uuid",
+        [versionId],
+      );
+      await this.insertQuoteLines(client, versionId, content);
+      await client.query("COMMIT");
+      return "saved";
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async startQuoteVersion(
+    quoteId: string,
+    createdBy: string,
+  ): Promise<"started" | "draft_exists"> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "SELECT 1 FROM app.quote WHERE quote_id = $1::uuid FOR UPDATE",
+        [quoteId],
+      );
+      const draft = await client.query(
+        "SELECT 1 FROM app.quote_version WHERE quote_id = $1::uuid AND status = 'draft'",
+        [quoteId],
+      );
+      if (draft.rows.length > 0) {
+        await client.query("ROLLBACK");
+        return "draft_exists";
+      }
+      const copied = await client.query(
+        `INSERT INTO app.quote_version
+          (quote_id, version_number, currency, title, subtitle, shipment_scope,
+           intro, at_cost_note, procedure_steps, required_documents,
+           documents_note, timeline, terms, created_by)
+         SELECT quote_id, version_number + 1, currency, title, subtitle,
+           shipment_scope, intro, at_cost_note, procedure_steps,
+           required_documents, documents_note, timeline, terms, $2::uuid
+         FROM app.quote_version WHERE quote_id = $1::uuid
+         ORDER BY version_number DESC LIMIT 1
+         RETURNING version_id, version_number`,
+        [quoteId, createdBy],
+      );
+      await client.query(
+        `INSERT INTO app.quote_line
+          (version_id, position, section, description, basis, basis_note,
+           amount_minor, amount_20ft_minor, amount_40ft_minor)
+         SELECT $2::uuid, position, section, description, basis, basis_note,
+           amount_minor, amount_20ft_minor, amount_40ft_minor
+         FROM app.quote_line
+         WHERE version_id = (
+           SELECT version_id FROM app.quote_version
+           WHERE quote_id = $1::uuid AND version_number = $3::integer - 1)`,
+        [
+          quoteId,
+          String(copied.rows[0].version_id),
+          Number(copied.rows[0].version_number),
+        ],
+      );
+      await client.query("COMMIT");
+      return "started";
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async issueQuoteVersion(
+    quoteId: string,
+    issuedBy: string,
+    year: number,
+  ): Promise<"issued" | "no_draft" | "no_lines"> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const quote = await client.query(
+        `SELECT quote_number, service_line FROM app.quote
+         WHERE quote_id = $1::uuid FOR UPDATE`,
+        [quoteId],
+      );
+      const draft = await client.query(
+        `SELECT version_id,
+           EXISTS (SELECT 1 FROM app.quote_line
+                   WHERE version_id = quote_version.version_id) AS has_lines
+         FROM app.quote_version
+         WHERE quote_id = $1::uuid AND status = 'draft'`,
+        [quoteId],
+      );
+      if (draft.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return "no_draft";
+      }
+      if (!draft.rows[0].has_lines) {
+        await client.query("ROLLBACK");
+        return "no_lines";
+      }
+      if (!quote.rows[0].quote_number) {
+        const allocated = await client.query(
+          "SELECT app.allocate_quote_number($1, $2) AS quote_number",
+          [String(quote.rows[0].service_line), year],
+        );
+        await client.query(
+          "UPDATE app.quote SET quote_number = $2 WHERE quote_id = $1::uuid",
+          [quoteId, String(allocated.rows[0].quote_number)],
+        );
+      }
+      await client.query(
+        `UPDATE app.quote_version
+         SET status = 'issued', issued_by = $2::uuid,
+             issued_at = clock_timestamp(), updated_at = clock_timestamp()
+         WHERE version_id = $1::uuid`,
+        [String(draft.rows[0].version_id), issuedBy],
+      );
+      await client.query("COMMIT");
+      return "issued";
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private async insertQuoteLines(
+    client: PostgresClient,
+    versionId: string,
+    content: QuoteVersionInput,
+  ): Promise<void> {
+    for (const [position, line] of content.lines.entries()) {
+      await client.query(
+        `INSERT INTO app.quote_line
+          (version_id, position, section, description, basis, basis_note,
+           amount_minor, amount_20ft_minor, amount_40ft_minor)
+         VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          versionId,
+          position,
+          line.section,
+          line.description,
+          line.basis,
+          line.basisNote,
+          line.amountMinor,
+          line.amount20ftMinor,
+          line.amount40ftMinor,
+        ],
+      );
+    }
+  }
+
+  private mapQuoteHead(
+    row: Record<string, unknown>,
+  ): Omit<QuoteRecord, "versions" | "decisions" | "jobId"> {
+    return {
+      id: String(row.quote_id),
+      quoteNumber: row.quote_number ? String(row.quote_number) : null,
+      serviceLine: row.service_line as ServiceLine,
+      customerCompanyId: String(row.customer_company_id),
+      customerCompanyName: String(row.company_name),
+      quoteRequestId: row.quote_request_id
+        ? String(row.quote_request_id)
+        : null,
+      createdBy: String(row.created_by),
+      createdAt: this.toIsoString(row.created_at),
+    };
+  }
+
+  private mapQuoteVersion(
+    row: Record<string, unknown>,
+    lines: Array<Record<string, unknown>>,
+  ): QuoteVersionRecord {
+    const optional = (value: unknown) => (value ? String(value) : null);
+    const minor = (value: unknown) =>
+      value === null || value === undefined ? null : Number(value);
+    return {
+      id: String(row.version_id),
+      versionNumber: Number(row.version_number),
+      status: row.status as "draft" | "issued",
+      currency: String(row.currency),
+      title: String(row.title),
+      subtitle: optional(row.subtitle),
+      shipmentScope: optional(row.shipment_scope),
+      intro: optional(row.intro),
+      atCostNote: optional(row.at_cost_note),
+      procedureSteps: row.procedure_steps as string[],
+      requiredDocuments: row.required_documents as string[],
+      documentsNote: optional(row.documents_note),
+      timeline: optional(row.timeline),
+      terms: row.terms as string[],
+      createdBy: String(row.created_by),
+      createdAt: this.toIsoString(row.created_at),
+      updatedAt: this.toIsoString(row.updated_at),
+      issuedBy: optional(row.issued_by),
+      issuedAt: row.issued_at ? this.toIsoString(row.issued_at) : null,
+      lines: lines.map((line): QuoteLineRecord => ({
+        id: String(line.line_id),
+        position: Number(line.position),
+        section: optional(line.section),
+        description: String(line.description),
+        basis: line.basis as QuoteBasis,
+        basisNote: optional(line.basis_note),
+        amountMinor: minor(line.amount_minor),
+        amount20ftMinor: minor(line.amount_20ft_minor),
+        amount40ftMinor: minor(line.amount_40ft_minor),
+      })),
     };
   }
 

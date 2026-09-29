@@ -35,6 +35,8 @@ import type {
   StatusHistory,
   Timeline,
 } from "./jobApi";
+import { JobEta } from "./JobEta";
+import { JobTasks } from "./JobTasks";
 import styles from "./jobs.module.css";
 
 const partyRoles: Array<[PartyRole, string]> = [
@@ -533,6 +535,9 @@ export function JobDetail({ jobId }: { jobId: string }) {
           </section>
         </div>
       </div>
+
+      <JobEta canEdit={isStaff && !closedJob} jobId={job.id} />
+      {isStaff && <JobTasks canEdit={!closedJob} jobId={job.id} />}
 
       <section className={styles.card} aria-labelledby="documents-title">
         <h2 id="documents-title">Documents</h2>
