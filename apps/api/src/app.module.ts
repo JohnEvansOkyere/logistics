@@ -8,6 +8,8 @@ import { RequestErrorFilter } from "./request-error.filter";
 import { AuthModule } from "./auth/auth.module";
 import { DatabaseModule } from "./database/database.module";
 import { HealthController } from "./health.controller";
+import { JobDetailsController } from "./jobs/job-details.controller";
+import { JobDetailsService } from "./jobs/job-details.service";
 import { JobsController } from "./jobs/jobs.controller";
 import { JobsService } from "./jobs/jobs.service";
 import { CustomersController } from "./customers/customers.controller";
@@ -26,12 +28,14 @@ import { QuoteRequestsService } from "./quotations/quote-requests.service";
     QuoteRequestsController,
     CustomersController,
     JobsController,
+    JobDetailsController,
     ActivityController,
   ],
   providers: [
     QuoteRequestsService,
     CustomersService,
     JobsService,
+    JobDetailsService,
     ActivityLogMiddleware,
     { provide: APP_FILTER, useClass: RequestErrorFilter },
   ],

@@ -26,11 +26,11 @@ Each item: requirement IDs · done when.
 - [x] **B1** ⚑ Confirm job-number format (D12 open) — propose e.g. `BJH/{SI|SE|AI|AE}/{YYYY}/{seq}` · decision logged.
 - [x] **B2** Migration: `job` (file number unique, service/direction/mode, customer company, owner role, status, dates), `number_sequence` with transactional allocation · concurrent-create test yields unique numbers.
 - [x] **B3** Job API: create directly without a quote (confirmed: any staff role; reps within their own service line — assumption), list/search, detail; company scoping for customers; department scoping by role · cross-company and wrong-department denial tests.
-- [ ] **B4** `job_party` (shipper, consignee, notify, agents) and `shipment_reference` with **master/house hierarchy** (MBL/HBL, MAWB/HAWB, booking, container + seal) · one master → many houses supported; search by any reference.
+- [x] **B4** `job_party` (shipper, consignee, notify, agents) and `shipment_reference` with **master/house hierarchy** (MBL/HBL, MAWB/HAWB, booking, container + seal) · one master → many houses supported; search by any reference.
 - [x] **B5** Milestone template for **sea import** (D02 draft from `docs/workflows.md`); `milestone_event` append-only with actor, time, source, note · events can't be edited/deleted; correction = new event.
 - [x] **B6** Job status transitions (`open → in_progress → on_hold → ready_to_close → closed/cancelled`), reopen needs a reason and the department in charge (or super admin) - per Evans 2026-09-29 · invalid transition tests.
 - [ ] **B7** Web: job list, create form, job detail with timeline and parties/references · browser check at 390px/1280px.
-- [ ] **B8** Audit events for job create/status/owner changes · audit rows asserted in tests.
+- [x] **B8** Audit events for job create/status/owner changes · audit rows asserted in tests. _(2026-09-29: covered by the activity log — job create, status, milestone, party and reference requests — plus `job_status_history`; there is no separate owner field because ownership is the service line.)_
 
 ## C — Document archive (Release 1) · P08, P14
 
@@ -51,8 +51,8 @@ Each item: requirement IDs · done when.
 
 ## E — Remaining shipment flows and ETA · P04, P05
 
-- [ ] **E1** ⚑ Sea export milestone template (D02).
-- [ ] **E2** ⚑ Air import and air export templates; no EIR requirement for air (D02).
+- [x] **E1** Sea export milestone template (D02).
+- [x] **E2** Air import and air export templates; no EIR requirement for air (D02).
 - [ ] **E3** Manual ETA entry with source and correction history; exceptions (missing docs, damage, delay) as tasks · correction never overwrites history.
 - [ ] **E4** Tasks per job assigned to role, with due dates · list "my department's open tasks".
 

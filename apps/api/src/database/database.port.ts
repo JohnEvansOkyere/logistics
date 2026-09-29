@@ -1,4 +1,4 @@
-import type { JobStatus } from "@bjh/contracts";
+import type { JobStatus, PartyRole, ReferenceKind } from "@bjh/contracts";
 
 export interface DatabaseHealth {
   status: "ok" | "error";
@@ -47,6 +47,27 @@ export interface JobStatusChangeRecord {
   reason: string | null;
   changedBy: string;
   changedAt: string;
+}
+
+export interface JobPartyRecord {
+  id: string;
+  jobId: string;
+  role: PartyRole;
+  name: string;
+  details: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface ShipmentReferenceRecord {
+  id: string;
+  jobId: string;
+  kind: ReferenceKind;
+  value: string;
+  sealNumber: string | null;
+  parentReferenceId: string | null;
+  createdBy: string;
+  createdAt: string;
 }
 
 export interface JobRecord {
@@ -200,6 +221,37 @@ export abstract class DatabasePort {
   ): Promise<JobRecord>;
   abstract listJobs(search: string, scope: JobScope): Promise<JobRecord[]>;
   abstract findJob(id: string, scope: JobScope): Promise<JobRecord | null>;
+  abstract addJobParty(party: {
+    jobId: string;
+    role: PartyRole;
+    name: string;
+    details: string | null;
+    createdBy: string;
+  }): Promise<JobPartyRecord>;
+  abstract listJobParties(jobId: string): Promise<JobPartyRecord[]>;
+  abstract removeJobParty(
+    jobId: string,
+    partyId: string,
+    removedBy: string,
+  ): Promise<boolean>;
+  abstract addShipmentReference(reference: {
+    jobId: string;
+    kind: ReferenceKind;
+    value: string;
+    sealNumber: string | null;
+    parentReferenceId: string | null;
+    createdBy: string;
+  }): Promise<
+    ShipmentReferenceRecord | "parent_invalid" | "duplicate_reference"
+  >;
+  abstract listShipmentReferences(
+    jobId: string,
+  ): Promise<ShipmentReferenceRecord[]>;
+  abstract removeShipmentReference(
+    jobId: string,
+    referenceId: string,
+    removedBy: string,
+  ): Promise<boolean | "has_children">;
   abstract changeJobStatus(change: {
     jobId: string;
     from: JobStatus;

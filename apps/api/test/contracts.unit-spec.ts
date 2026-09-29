@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   customerInputSchema,
+  milestoneTemplates,
+  serviceLineKeys,
   departmentAssignmentInputSchema,
   parseContract,
   quoteDraftInputSchema,
@@ -127,4 +129,14 @@ test("staff contracts reject unsupported roles and tolerate missing strings", ()
     message(staffCreateInputSchema, undefined),
     "Email, password and roleKey are required",
   );
+});
+
+test("every service line has a milestone template with unique keys", () => {
+  for (const line of serviceLineKeys) {
+    const keys = milestoneTemplates[line].map((milestone) => milestone.key);
+    assert.ok(keys.length > 0, `${line} has milestones`);
+    assert.equal(new Set(keys).size, keys.length, `${line} keys are unique`);
+  }
+  const airImport = milestoneTemplates.air_import.map((item) => item.key);
+  assert.equal(airImport.includes("eir_received"), false);
 });

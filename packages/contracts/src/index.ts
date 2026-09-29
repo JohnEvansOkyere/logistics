@@ -181,14 +181,98 @@ export const jobStatusChangeInputSchema = z.object(
 );
 export type JobStatusChangeInput = z.infer<typeof jobStatusChangeInputSchema>;
 
+export const partyRoleKeys = [
+  "shipper",
+  "consignee",
+  "notify_party",
+  "agent",
+] as const;
+export type PartyRole = (typeof partyRoleKeys)[number];
+
+export const jobPartyInputSchema = z.object(
+  {
+    role: z.enum(partyRoleKeys, {
+      error: "role must be shipper, consignee, notify_party or agent",
+    }),
+    name: requiredText("name", 200),
+    details: z
+      .string({ error: "details must be text" })
+      .transform((value) => value.trim())
+      .refine((value) => value.length <= 1000, {
+        error: "details must be at most 1000 characters",
+      })
+      .nullish()
+      .transform((value) => value || null),
+  },
+  { error: "A party object is required" },
+);
+export type JobPartyInput = z.infer<typeof jobPartyInputSchema>;
+
+export const referenceKindKeys = [
+  "master_bl",
+  "house_bl",
+  "master_awb",
+  "house_awb",
+  "booking",
+  "container",
+] as const;
+export type ReferenceKind = (typeof referenceKindKeys)[number];
+
+const seaOnlyKinds: readonly ReferenceKind[] = [
+  "master_bl",
+  "house_bl",
+  "container",
+];
+const airOnlyKinds: readonly ReferenceKind[] = ["master_awb", "house_awb"];
+
+/** Bills of lading and containers belong to sea jobs, air waybills to air jobs. */
+export function referenceKindAllowedFor(
+  serviceLine: ServiceLine,
+  kind: ReferenceKind,
+): boolean {
+  return serviceLine.startsWith("sea")
+    ? !airOnlyKinds.includes(kind)
+    : !seaOnlyKinds.includes(kind);
+}
+
+/** House documents hang under a master of the matching kind. */
+export const referenceParentKind: Partial<
+  Record<ReferenceKind, ReferenceKind>
+> = { house_bl: "master_bl", house_awb: "master_awb" };
+
+export const shipmentReferenceInputSchema = z.object(
+  {
+    kind: z.enum(referenceKindKeys, {
+      error:
+        "kind must be master_bl, house_bl, master_awb, house_awb, booking or container",
+    }),
+    value: requiredText("value", 80),
+    sealNumber: z
+      .string({ error: "sealNumber must be text" })
+      .transform((value) => value.trim())
+      .refine((value) => value.length <= 80, {
+        error: "sealNumber must be at most 80 characters",
+      })
+      .nullish()
+      .transform((value) => value || null),
+    parentReferenceId: uuidField("parentReferenceId")
+      .nullish()
+      .transform((value) => value ?? null),
+  },
+  { error: "A reference object is required" },
+);
+export type ShipmentReferenceInput = z.infer<
+  typeof shipmentReferenceInputSchema
+>;
+
 export interface MilestoneDefinition {
   key: string;
   label: string;
 }
 
 /**
- * Sea import sequence as the client described it (D02 draft, client-derived;
- * order and mandatory evidence still to be validated by the operations lead).
+ * Sea import sequence as the client described it (client-derived; order is
+ * indicative and not enforced).
  * Milestones are not enforced in order: real jobs overlap.
  */
 export const seaImportMilestones: readonly MilestoneDefinition[] = [
@@ -226,15 +310,75 @@ export const seaImportMilestones: readonly MilestoneDefinition[] = [
   { key: "eir_received", label: "EIR (equipment condition) received" },
 ];
 
-/** Service lines without an agreed template have none yet. */
+/** Sea export, as the client described it: invoice, booking, stuffing, customs, shipping. */
+export const seaExportMilestones: readonly MilestoneDefinition[] = [
+  { key: "customer_invoice_issued", label: "Cost arranged; invoice sent" },
+  { key: "vessel_booked", label: "Vessel booked" },
+  {
+    key: "container_sent_to_customer",
+    label: "Container sent to customer for loading",
+  },
+  { key: "container_stuffed", label: "Container stuffed" },
+  {
+    key: "container_returned_to_port",
+    label: "Loaded container returned to port",
+  },
+  { key: "customs_processed", label: "Customs process done" },
+  { key: "customs_released", label: "Customs release received" },
+  {
+    key: "terminal_charges_paid",
+    label: "Terminal handling charges paid",
+  },
+  { key: "container_shipped", label: "Container shipped out" },
+  {
+    key: "final_invoice_or_waybill_issued",
+    label: "Final invoice / waybill issued to customer",
+  },
+];
+
+/** Air import: the same clearance and delivery steps as sea, without container steps or EIR. */
+export const airImportMilestones: readonly MilestoneDefinition[] = [
+  { key: "cargo_arrived", label: "Cargo arrived; customer updated" },
+  {
+    key: "customs_declaration_submitted",
+    label: "Documents entered with customs",
+  },
+  { key: "duties_assessed", label: "Customs tax / duties generated" },
+  { key: "customer_invoice_issued", label: "Bill issued to customer" },
+  { key: "customer_payment_recorded", label: "Customer payment recorded" },
+  { key: "airport_charges_paid", label: "Airport and other charges paid" },
+  { key: "customs_released", label: "Customs released cargo" },
+  {
+    key: "delivery_note_signed",
+    label: "Delivered; delivery note signed by consignee",
+  },
+];
+
+/** Air export: booking, customs, charges, departure and waybill. */
+export const airExportMilestones: readonly MilestoneDefinition[] = [
+  { key: "air_booked", label: "Air booking made with airline" },
+  {
+    key: "cargo_received_from_customer",
+    label: "Goods received from customer",
+  },
+  { key: "customs_arranged", label: "Customs arrangements made" },
+  { key: "customs_released", label: "Customs released goods" },
+  {
+    key: "airport_airline_charges_paid",
+    label: "Airport and airline charges paid",
+  },
+  { key: "cargo_departed", label: "Cargo left Ghana" },
+  { key: "waybill_issued", label: "Waybill issued" },
+];
+
 export const milestoneTemplates: Record<
   ServiceLine,
   readonly MilestoneDefinition[]
 > = {
   sea_import: seaImportMilestones,
-  sea_export: [],
-  air_import: [],
-  air_export: [],
+  sea_export: seaExportMilestones,
+  air_import: airImportMilestones,
+  air_export: airExportMilestones,
 };
 
 export const milestoneEventInputSchema = z.object(

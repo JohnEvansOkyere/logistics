@@ -197,11 +197,22 @@ test("invalid milestone requests are rejected", async () => {
   }
 });
 
-test("service lines without an agreed template refuse milestones", async () => {
-  const response = await record(airJobId, TEST_SUPER_ADMIN_TOKEN, {
-    milestoneKey: "cargo_arrived",
+test("each service line accepts only its own milestones", async () => {
+  const accepted = await record(airJobId, TEST_SUPER_ADMIN_TOKEN, {
+    milestoneKey: "airport_charges_paid",
   });
-  assert.equal(response.status, 409);
+  assert.equal(accepted.status, 201);
+  const seaOnly = await record(airJobId, TEST_SUPER_ADMIN_TOKEN, {
+    milestoneKey: "eir_received",
+  });
+  assert.equal(seaOnly.status, 400);
+  const timeline = (await (
+    await call(`/api/v1/jobs/${airJobId}/milestones`, TEST_SUPER_ADMIN_TOKEN)
+  ).json()) as { template: Array<{ key: string }> };
+  assert.equal(
+    timeline.template.some((item) => item.key === "eir_received"),
+    false,
+  );
 });
 
 test("access boundaries: other departments and companies cannot read or write", async () => {

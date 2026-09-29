@@ -1,5 +1,5 @@
 import { Inject, Injectable, OnModuleDestroy } from "@nestjs/common";
-import type { JobStatus } from "@bjh/contracts";
+import type { JobStatus, PartyRole, ReferenceKind } from "@bjh/contracts";
 import {
   ActivityEntry,
   ActivityFilter,
@@ -9,7 +9,9 @@ import {
   CustomerCompanyRecord,
   CustomerMembershipRecord,
   JobRecord,
+  JobPartyRecord,
   JobScope,
+  ShipmentReferenceRecord,
   JobStatusChangeRecord,
   MilestoneEventRecord,
   ServiceLine,
@@ -427,7 +429,16 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       `${jobSelect}
        WHERE ($1 = ''
          OR strpos(lower(job.file_number), lower($1)) > 0
-         OR strpos(lower(company.company_name), lower($1)) > 0)
+         OR strpos(lower(company.company_name), lower($1)) > 0
+         OR EXISTS (
+           SELECT 1 FROM app.shipment_reference AS reference
+           WHERE reference.job_id = job.job_id AND reference.removed_at IS NULL
+             AND (strpos(lower(reference.reference_value), lower($1)) > 0
+               OR strpos(lower(COALESCE(reference.seal_number, '')), lower($1)) > 0))
+         OR EXISTS (
+           SELECT 1 FROM app.job_party AS party
+           WHERE party.job_id = job.job_id AND party.removed_at IS NULL
+             AND strpos(lower(party.party_name), lower($1)) > 0))
          AND ($2::uuid[] IS NULL OR job.customer_company_id = ANY($2::uuid[]))
          AND ($3::text[] IS NULL OR job.service_line = ANY($3::text[]))
        ORDER BY job.opened_at DESC, job.file_number DESC`,
@@ -464,6 +475,140 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       openedBy: String(row.opened_by),
       openedAt: this.toIsoString(row.opened_at),
       closedAt: row.closed_at ? this.toIsoString(row.closed_at) : null,
+    };
+  }
+
+  async addJobParty(party: {
+    jobId: string;
+    role: PartyRole;
+    name: string;
+    details: string | null;
+    createdBy: string;
+  }): Promise<JobPartyRecord> {
+    const result = await this.pool.query(
+      `INSERT INTO app.job_party (job_id, role, party_name, details, created_by)
+       VALUES ($1::uuid, $2, $3, $4, $5::uuid) RETURNING *`,
+      [party.jobId, party.role, party.name, party.details, party.createdBy],
+    );
+    return this.mapParty(result.rows[0]);
+  }
+
+  async listJobParties(jobId: string): Promise<JobPartyRecord[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM app.job_party
+       WHERE job_id = $1::uuid AND removed_at IS NULL
+       ORDER BY created_at, party_id`,
+      [jobId],
+    );
+    return result.rows.map((row) => this.mapParty(row));
+  }
+
+  async removeJobParty(
+    jobId: string,
+    partyId: string,
+    removedBy: string,
+  ): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE app.job_party SET removed_by = $3::uuid, removed_at = clock_timestamp()
+       WHERE party_id = $2::uuid AND job_id = $1::uuid AND removed_at IS NULL
+       RETURNING party_id`,
+      [jobId, partyId, removedBy],
+    );
+    return result.rows.length > 0;
+  }
+
+  async addShipmentReference(reference: {
+    jobId: string;
+    kind: ReferenceKind;
+    value: string;
+    sealNumber: string | null;
+    parentReferenceId: string | null;
+    createdBy: string;
+  }): Promise<
+    ShipmentReferenceRecord | "parent_invalid" | "duplicate_reference"
+  > {
+    try {
+      const result = await this.pool.query(
+        `INSERT INTO app.shipment_reference
+          (job_id, kind, reference_value, seal_number, parent_reference_id, created_by)
+         VALUES ($1::uuid, $2, $3, $4, $5::uuid, $6::uuid) RETURNING *`,
+        [
+          reference.jobId,
+          reference.kind,
+          reference.value,
+          reference.sealNumber,
+          reference.parentReferenceId,
+          reference.createdBy,
+        ],
+      );
+      return this.mapReference(result.rows[0]);
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code === "23505") return "duplicate_reference";
+      if ((error as Error).message?.includes("active master of the same job")) {
+        return "parent_invalid";
+      }
+      throw error;
+    }
+  }
+
+  async listShipmentReferences(
+    jobId: string,
+  ): Promise<ShipmentReferenceRecord[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM app.shipment_reference
+       WHERE job_id = $1::uuid AND removed_at IS NULL
+       ORDER BY created_at, reference_id`,
+      [jobId],
+    );
+    return result.rows.map((row) => this.mapReference(row));
+  }
+
+  async removeShipmentReference(
+    jobId: string,
+    referenceId: string,
+    removedBy: string,
+  ): Promise<boolean | "has_children"> {
+    const children = await this.pool.query(
+      `SELECT 1 FROM app.shipment_reference
+       WHERE parent_reference_id = $1::uuid AND removed_at IS NULL`,
+      [referenceId],
+    );
+    if (children.rows.length > 0) return "has_children";
+    const result = await this.pool.query(
+      `UPDATE app.shipment_reference
+       SET removed_by = $3::uuid, removed_at = clock_timestamp()
+       WHERE reference_id = $2::uuid AND job_id = $1::uuid AND removed_at IS NULL
+       RETURNING reference_id`,
+      [jobId, referenceId, removedBy],
+    );
+    return result.rows.length > 0;
+  }
+
+  private mapParty(row: Record<string, unknown>): JobPartyRecord {
+    return {
+      id: String(row.party_id),
+      jobId: String(row.job_id),
+      role: row.role as PartyRole,
+      name: String(row.party_name),
+      details: row.details ? String(row.details) : null,
+      createdBy: String(row.created_by),
+      createdAt: this.toIsoString(row.created_at),
+    };
+  }
+
+  private mapReference(row: Record<string, unknown>): ShipmentReferenceRecord {
+    return {
+      id: String(row.reference_id),
+      jobId: String(row.job_id),
+      kind: row.kind as ReferenceKind,
+      value: String(row.reference_value),
+      sealNumber: row.seal_number ? String(row.seal_number) : null,
+      parentReferenceId: row.parent_reference_id
+        ? String(row.parent_reference_id)
+        : null,
+      createdBy: String(row.created_by),
+      createdAt: this.toIsoString(row.created_at),
     };
   }
 

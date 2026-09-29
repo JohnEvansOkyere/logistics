@@ -109,11 +109,6 @@ export class JobsService {
     const { milestoneKey, note, correctionOf } = parsed.data;
 
     const template = milestoneTemplates[job.serviceLine];
-    if (template.length === 0) {
-      throw new ConflictException(
-        "No milestone template has been agreed for this service line yet",
-      );
-    }
     if (!template.some((milestone) => milestone.key === milestoneKey)) {
       throw new BadRequestException(
         "milestoneKey is not part of this service line's milestones",

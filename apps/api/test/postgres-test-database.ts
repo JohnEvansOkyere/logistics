@@ -74,16 +74,46 @@ async function runOnTestConnection(
       `RELEASE SAVEPOINT ${name}`,
     )) as PostgresQueryResult;
   }
-  return (await client.query(queryText, values)) as PostgresQueryResult;
+  if (savepointStack.length > 0) {
+    return (await client.query(queryText, values)) as PostgresQueryResult;
+  }
+  // Outside an API-managed transaction a real connection would autocommit, so
+  // a failed statement must not poison the shared outer transaction.
+  const name = `test_sp_${++savepointCounter}`;
+  await client.query(`SAVEPOINT ${name}`);
+  try {
+    const result = (await client.query(
+      queryText,
+      values,
+    )) as PostgresQueryResult;
+    await client.query(`RELEASE SAVEPOINT ${name}`);
+    return result;
+  } catch (error) {
+    await client.query(`ROLLBACK TO SAVEPOINT ${name}`);
+    await client.query(`RELEASE SAVEPOINT ${name}`);
+    throw error;
+  }
+}
+
+async function acquire(): Promise<() => void> {
+  const previous = lock;
+  let release!: () => void;
+  lock = new Promise<void>((done) => (release = done));
+  await previous;
+  return release;
 }
 
 export const testPostgresPool: PostgresPool = {
-  query: (queryText, values) => runOnTestConnection(queryText, values),
+  async query(queryText, values) {
+    const release = await acquire();
+    try {
+      return await runOnTestConnection(queryText, values);
+    } finally {
+      release();
+    }
+  },
   async connect(): Promise<PostgresClient> {
-    const previous = lock;
-    let release!: () => void;
-    lock = new Promise<void>((done) => (release = done));
-    await previous;
+    const release = await acquire();
     let released = false;
     return {
       query: (queryText, values) => runOnTestConnection(queryText, values),
