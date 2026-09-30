@@ -126,8 +126,8 @@ export function renderTransportDocumentPdf(
   const boxHeight = (value: string, boxWidth: number) => {
     doc.font("Helvetica").fontSize(9);
     return Math.max(
-      38,
-      doc.heightOfString(value || " ", { width: boxWidth - 16 }) + 26,
+      36,
+      doc.heightOfString(value || " ", { width: boxWidth - 16 }) + 24,
     );
   };
   const drawBox = (
@@ -153,6 +153,29 @@ export function renderTransportDocumentPdf(
     doc.text(value, x + 8, y + 18, { width: boxWidth - 16 });
   };
 
+  type Definition = (typeof definitions)[number];
+  const drawRow = (row: Definition[]) => {
+    const columns = row.length;
+    const columnWidth = (width - gap * (columns - 1)) / columns;
+    const values = row.map((field) => document.fields[field.key] ?? "");
+    const height = Math.max(
+      ...values.map((value) => boxHeight(value, columnWidth)),
+    );
+    if (doc.y + height > bottom()) doc.addPage();
+    const y = doc.y;
+    row.forEach((field, index) => {
+      drawBox(
+        field.label,
+        values[index],
+        left + index * (columnWidth + gap),
+        y,
+        columnWidth,
+        height,
+      );
+    });
+    doc.y = y + height;
+  };
+
   for (const group of groups) {
     const inGroup = definitions.filter((field) => field.group === group);
     if (doc.y + 60 > bottom()) doc.addPage();
@@ -160,49 +183,36 @@ export function renderTransportDocumentPdf(
     doc.text(group.toUpperCase(), left, doc.y, { characterSpacing: 0.8 });
     doc.y += 4;
 
-    let pending: (typeof inGroup)[number] | null = null;
-    const flush = (
-      first: (typeof inGroup)[number],
-      second: (typeof inGroup)[number] | null,
-    ) => {
-      const a = document.fields[first.key] ?? "";
-      const b = second ? (document.fields[second.key] ?? "") : "";
-      const height = Math.max(
-        boxHeight(a, half),
-        second ? boxHeight(b, half) : 0,
-      );
-      if (doc.y + height > bottom()) doc.addPage();
-      const y = doc.y;
-      drawBox(first.label, a, left, y, second ? half : width, height);
-      if (second) drawBox(second.label, b, left + half + gap, y, half, height);
-      doc.y = y + height;
+    // Short fields sit three to a row, party and text blocks two to a row,
+    // and the wide fields take the full width.
+    let buffer: Definition[] = [];
+    const flush = () => {
+      if (buffer.length > 0) drawRow(buffer);
+      buffer = [];
     };
     for (const field of inGroup) {
       if (fullWidth.has(field.key)) {
-        if (pending) {
-          flush(pending, null);
-          pending = null;
-        }
-        const value = document.fields[field.key] ?? "";
-        const height = boxHeight(value, width);
-        if (doc.y + height > bottom()) doc.addPage();
-        const y = doc.y;
-        drawBox(field.label, value, left, y, width, height);
-        doc.y = y + height;
-      } else if (pending) {
-        flush(pending, field);
-        pending = null;
-      } else {
-        pending = field;
+        flush();
+        drawRow([field]);
+        continue;
       }
+      const capacity = field.multiline ? 2 : 3;
+      if (
+        buffer.length > 0 &&
+        (Boolean(buffer[0].multiline) !== Boolean(field.multiline) ||
+          buffer.length >= capacity)
+      ) {
+        flush();
+      }
+      buffer.push(field);
     }
-    if (pending) flush(pending, null);
+    flush();
     doc.y += 10;
   }
 
   // Signature line for the issuer.
-  if (doc.y + 70 > bottom()) doc.addPage();
-  doc.y += 8;
+  if (doc.y + 56 > bottom()) doc.addPage();
+  doc.y += 4;
   const signatureTop = doc.y;
   doc.font("Helvetica-Bold").fontSize(9).fillColor(PRIMARY);
   doc.text(`For ${issuerName}`, left, signatureTop, { width: half });

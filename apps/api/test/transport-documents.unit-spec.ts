@@ -242,3 +242,51 @@ test("an air manifest and a house air waybill print their own labels", async () 
   assert.ok(manifest.includes("AIR CARGO MANIFEST"));
   assert.ok(manifest.includes("SYN-HAWB-1 | 259 CTNS | 2,347 KG"));
 });
+
+/** The number of pages in an uncompressed pdfkit document. */
+const pageCount = (file: Buffer) =>
+  (file.toString("latin1").match(/\/Type \/Page\b(?!s)/g) ?? []).length;
+
+test("a typical house B/L, air waybill and manifest each fit on one page", async () => {
+  const bl = document({
+    fields: {
+      ...document().fields,
+      notifyParty: "Synthetic Notify Co\n1 Test Road\nLondon",
+      deliveryAgent: "Synthetic Delivery Agent Ltd\nCheshire",
+      vessel: "IONIKOS",
+      voyage: "2639N",
+      portOfLoading: "TEMA, GHANA",
+      portOfDischarge: "LONDON GATEWAY",
+      containerStatus: "FCL",
+      shippedOnBoard: "10/10/2026",
+      placeAndDateOfIssue: "TEMA GHANA, 24/08/2026",
+      originals: "EXPRESS RELEASE",
+      signatory: "HENRY SOMUAH",
+    },
+  });
+  for (const candidate of [
+    bl,
+    document({
+      kind: "house_awb",
+      fields: {
+        shipper: "S\nA",
+        goods: "6216 PCS 259 CTNS MEN'S POLO SHIRTS",
+        carrier: "BRITISH AIRWAYS",
+      },
+    }),
+    document({
+      kind: "air_manifest",
+      fields: {
+        shipper: "S\nA",
+        shipmentLines:
+          "BJH-16545CV | 259 CTNS | 2,347 KG | 20.04 CBM | POLO SHIRTS | GH",
+      },
+    }),
+  ]) {
+    const file = await renderTransportDocumentPdf(
+      { document: candidate, job, settings },
+      { compress: false },
+    );
+    assert.equal(pageCount(file), 1, candidate.kind);
+  }
+});
