@@ -32,7 +32,10 @@ import {
   JobTaskRecord,
   BusinessSettingsRevisionRecord,
   ChargeActualRecord,
+  DeliveryRecord,
+  DriverRecord,
   JobChargeRecord,
+  VehicleRecord,
   QuoteDecisionRecord,
   QuoteLineRecord,
   QuoteRecord,
@@ -1887,6 +1890,289 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       correctionOf: row.correction_of ? String(row.correction_of) : null,
       recordedBy: String(row.recorded_by),
       recordedAt: this.toIsoString(row.recorded_at),
+    };
+  }
+
+  async createDriver(
+    driver: { name: string; phone: string },
+    createdBy: string,
+  ): Promise<DriverRecord> {
+    const result = await this.pool.query(
+      `INSERT INTO app.driver (driver_name, phone, created_by)
+       VALUES ($1, $2, $3::uuid) RETURNING *`,
+      [driver.name, driver.phone, createdBy],
+    );
+    return this.mapDriver(result.rows[0]);
+  }
+
+  async listDrivers(): Promise<DriverRecord[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM app.driver
+       ORDER BY (deactivated_at IS NOT NULL), lower(driver_name), driver_id`,
+    );
+    return result.rows.map((row) => this.mapDriver(row));
+  }
+
+  async setDriverActive(
+    id: string,
+    active: boolean,
+  ): Promise<DriverRecord | null> {
+    const result = await this.pool.query(
+      `UPDATE app.driver
+       SET deactivated_at = CASE WHEN $2::boolean THEN NULL
+                                 ELSE COALESCE(deactivated_at, clock_timestamp()) END
+       WHERE driver_id = $1::uuid RETURNING *`,
+      [id, active],
+    );
+    return result.rows.length > 0 ? this.mapDriver(result.rows[0]) : null;
+  }
+
+  async createVehicle(
+    vehicle: { registration: string; description: string | null },
+    createdBy: string,
+  ): Promise<VehicleRecord | "duplicate_registration"> {
+    const result = await this.pool.query(
+      `INSERT INTO app.vehicle (registration, description, created_by)
+       VALUES ($1, $2, $3::uuid)
+       ON CONFLICT (upper(registration)) DO NOTHING
+       RETURNING *`,
+      [vehicle.registration, vehicle.description, createdBy],
+    );
+    return result.rows.length > 0
+      ? this.mapVehicle(result.rows[0])
+      : "duplicate_registration";
+  }
+
+  async listVehicles(): Promise<VehicleRecord[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM app.vehicle
+       ORDER BY (deactivated_at IS NOT NULL), upper(registration), vehicle_id`,
+    );
+    return result.rows.map((row) => this.mapVehicle(row));
+  }
+
+  async setVehicleActive(
+    id: string,
+    active: boolean,
+  ): Promise<VehicleRecord | null> {
+    const result = await this.pool.query(
+      `UPDATE app.vehicle
+       SET deactivated_at = CASE WHEN $2::boolean THEN NULL
+                                 ELSE COALESCE(deactivated_at, clock_timestamp()) END
+       WHERE vehicle_id = $1::uuid RETURNING *`,
+      [id, active],
+    );
+    return result.rows.length > 0 ? this.mapVehicle(result.rows[0]) : null;
+  }
+
+  async createDelivery(
+    delivery: {
+      jobId: string;
+      driverId: string;
+      vehicleId: string;
+      cargoDescription: string;
+      packages: number | null;
+      grossWeightKg: number | null;
+      pickupLocation: string | null;
+      deliveryAddress: string;
+    },
+    dispatchedBy: string,
+    year: number,
+  ): Promise<DeliveryRecord | "driver_unavailable" | "vehicle_unavailable"> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const driver = await client.query(
+        `SELECT driver_name, phone FROM app.driver
+         WHERE driver_id = $1::uuid AND deactivated_at IS NULL FOR SHARE`,
+        [delivery.driverId],
+      );
+      if (driver.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return "driver_unavailable";
+      }
+      const vehicle = await client.query(
+        `SELECT registration FROM app.vehicle
+         WHERE vehicle_id = $1::uuid AND deactivated_at IS NULL FOR SHARE`,
+        [delivery.vehicleId],
+      );
+      if (vehicle.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return "vehicle_unavailable";
+      }
+      const allocated = await client.query(
+        `SELECT app.allocate_waybill_number($1, COALESCE(
+           (SELECT settings #>> '{numbering,waybillPrefix}'
+            FROM app.business_settings_revision
+            ORDER BY revision_number DESC LIMIT 1), 'BJH/WB')) AS waybill_number`,
+        [year],
+      );
+      const inserted = await client.query(
+        `INSERT INTO app.delivery
+          (job_id, waybill_number, driver_id, vehicle_id, driver_name,
+           driver_phone, vehicle_registration, cargo_description, packages,
+           gross_weight_kg, pickup_location, delivery_address, dispatched_by)
+         VALUES ($1::uuid, $2, $3::uuid, $4::uuid, $5, $6, $7, $8, $9, $10, $11, $12, $13::uuid)
+         RETURNING *`,
+        [
+          delivery.jobId,
+          String(allocated.rows[0].waybill_number),
+          delivery.driverId,
+          delivery.vehicleId,
+          String(driver.rows[0].driver_name),
+          String(driver.rows[0].phone),
+          String(vehicle.rows[0].registration),
+          delivery.cargoDescription,
+          delivery.packages,
+          delivery.grossWeightKg,
+          delivery.pickupLocation,
+          delivery.deliveryAddress,
+          dispatchedBy,
+        ],
+      );
+      await client.query("COMMIT");
+      return this.mapDelivery(inserted.rows[0]);
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listDeliveries(jobId: string): Promise<DeliveryRecord[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM app.delivery
+       WHERE job_id = $1::uuid ORDER BY dispatched_at, delivery_id`,
+      [jobId],
+    );
+    return result.rows.map((row) => this.mapDelivery(row));
+  }
+
+  async recordProofOfDelivery(
+    jobId: string,
+    deliveryId: string,
+    proof: {
+      receiverName: string;
+      receiverPhone: string | null;
+      deliveredAt: string;
+      damageNotes: string | null;
+      podDocumentId: string | null;
+    },
+    recordedBy: string,
+  ): Promise<
+    DeliveryRecord | "not_found" | "already_delivered" | "document_invalid"
+  > {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const current = await client.query(
+        `SELECT status FROM app.delivery
+         WHERE delivery_id = $2::uuid AND job_id = $1::uuid FOR UPDATE`,
+        [jobId, deliveryId],
+      );
+      if (current.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return "not_found";
+      }
+      if (current.rows[0].status === "delivered") {
+        await client.query("ROLLBACK");
+        return "already_delivered";
+      }
+      if (proof.podDocumentId) {
+        const document = await client.query(
+          `SELECT 1 FROM app.document
+           WHERE document_id = $2::uuid AND job_id = $1::uuid
+             AND document_type = 'delivery_note'`,
+          [jobId, proof.podDocumentId],
+        );
+        if (document.rows.length === 0) {
+          await client.query("ROLLBACK");
+          return "document_invalid";
+        }
+      }
+      const updated = await client.query(
+        `UPDATE app.delivery
+         SET status = 'delivered', receiver_name = $3, receiver_phone = $4,
+             delivered_at = $5::timestamptz, damage_notes = $6,
+             pod_document_id = $7::uuid, pod_recorded_by = $8::uuid,
+             pod_recorded_at = clock_timestamp()
+         WHERE delivery_id = $2::uuid AND job_id = $1::uuid
+         RETURNING *`,
+        [
+          jobId,
+          deliveryId,
+          proof.receiverName,
+          proof.receiverPhone,
+          proof.deliveredAt,
+          proof.damageNotes,
+          proof.podDocumentId,
+          recordedBy,
+        ],
+      );
+      await client.query("COMMIT");
+      return this.mapDelivery(updated.rows[0]);
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private mapDriver(row: Record<string, unknown>): DriverRecord {
+    return {
+      id: String(row.driver_id),
+      name: String(row.driver_name),
+      phone: String(row.phone),
+      createdAt: this.toIsoString(row.created_at),
+      deactivatedAt: row.deactivated_at
+        ? this.toIsoString(row.deactivated_at)
+        : null,
+    };
+  }
+
+  private mapVehicle(row: Record<string, unknown>): VehicleRecord {
+    return {
+      id: String(row.vehicle_id),
+      registration: String(row.registration),
+      description: row.description ? String(row.description) : null,
+      createdAt: this.toIsoString(row.created_at),
+      deactivatedAt: row.deactivated_at
+        ? this.toIsoString(row.deactivated_at)
+        : null,
+    };
+  }
+
+  private mapDelivery(row: Record<string, unknown>): DeliveryRecord {
+    const optional = (value: unknown) => (value ? String(value) : null);
+    return {
+      id: String(row.delivery_id),
+      jobId: String(row.job_id),
+      waybillNumber: String(row.waybill_number),
+      driverId: String(row.driver_id),
+      vehicleId: String(row.vehicle_id),
+      driverName: String(row.driver_name),
+      driverPhone: String(row.driver_phone),
+      vehicleRegistration: String(row.vehicle_registration),
+      cargoDescription: String(row.cargo_description),
+      packages: row.packages === null ? null : Number(row.packages),
+      grossWeightKg:
+        row.gross_weight_kg === null ? null : Number(row.gross_weight_kg),
+      pickupLocation: optional(row.pickup_location),
+      deliveryAddress: String(row.delivery_address),
+      dispatchedAt: this.toIsoString(row.dispatched_at),
+      dispatchedBy: String(row.dispatched_by),
+      status: row.status as "dispatched" | "delivered",
+      receiverName: optional(row.receiver_name),
+      receiverPhone: optional(row.receiver_phone),
+      deliveredAt: row.delivered_at ? this.toIsoString(row.delivered_at) : null,
+      damageNotes: optional(row.damage_notes),
+      podDocumentId: optional(row.pod_document_id),
+      podRecordedBy: optional(row.pod_recorded_by),
+      podRecordedAt: row.pod_recorded_at
+        ? this.toIsoString(row.pod_recorded_at)
+        : null,
     };
   }
 

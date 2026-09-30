@@ -29,6 +29,12 @@ import { SettingsController } from "./settings/settings.controller";
 import { SettingsService } from "./settings/settings.service";
 import { JobChargesController } from "./finance/job-charges.controller";
 import { JobChargesService } from "./finance/job-charges.service";
+import {
+  DeliveriesController,
+  DriversController,
+  VehiclesController,
+} from "./transport/transport.controller";
+import { TransportService } from "./transport/transport.service";
 import { QuotesController } from "./quotations/quotes.controller";
 import { QuotesService } from "./quotations/quotes.service";
 
@@ -47,6 +53,9 @@ import { QuotesService } from "./quotations/quotes.service";
     JobsController,
     JobDetailsController,
     JobChargesController,
+    DriversController,
+    VehiclesController,
+    DeliveriesController,
     TasksController,
     DocumentsController,
     ActivityController,
@@ -59,6 +68,7 @@ import { QuotesService } from "./quotations/quotes.service";
     JobsService,
     JobDetailsService,
     JobChargesService,
+    TransportService,
     DocumentsService,
     { provide: DOCUMENT_STORAGE, useClass: SupabaseDocumentStorage },
     ActivityLogMiddleware,

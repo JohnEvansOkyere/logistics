@@ -92,6 +92,7 @@ const settings = {
     quotePrefix: "SYN/Q",
     invoicePrefix: "SYN/INV",
     receiptPrefix: "SYN/RCT",
+    waybillPrefix: "SYN/WB",
   },
   quoteDefaults: {
     intro: null,

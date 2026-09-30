@@ -67,10 +67,10 @@ Each item: requirement IDs · done when.
 
 ## G — Delivery paperwork and closure · P07
 
-- [ ] **G1** Drivers/vehicles; numbered waybill with frozen driver/vehicle/cargo snapshot.
-- [ ] **G2** POD upload (scanned) with receiver, date/time, damage notes.
-- [ ] **G3** Container return + EIR for containerised imports.
-- [ ] **G4** Closure gate: required evidence present or approved override · close blocked test.
+- [x] **G1** Drivers/vehicles; numbered waybill with frozen driver/vehicle/cargo snapshot. _(2026-09-29: drivers and vehicles as records, numbered waybill with the driver, vehicle and cargo frozen at dispatch. The waybill number `BJH/WB/{YYYY}/{seq}` and its fields are assumptions: no BJH waybill sample was supplied, so there is no printable waybill yet. Web screens typechecked and built, not yet checked in a browser.)_
+- [x] **G2** POD upload (scanned) with receiver, date/time, damage notes. _(2026-09-29: recorded once on the delivery: receiver, phone, time, damage notes and the signed delivery note document. Customers can read their own company's waybills and proofs.)_
+- [ ] **G3** Container return + EIR for containerised imports. _(2026-09-29: largely covered by existing pieces: the `empty_container_returned` and `eir_received` milestones and the EIR document type. Not built: tracking which of several containers was returned.)_
+- [x] **G4** Closure gate: dropped 2026-09-30 by Evans ("make it open"). Closing a job is not blocked by missing evidence; reopen/override reasons stay as built. No work needed.
 - [ ] **G5** ⚑ D14: house B/L / HAWB / manifest generation — only if BJH confirms authority and template.
 
 ## H — Client portal and notifications · P10, P11

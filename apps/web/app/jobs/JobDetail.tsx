@@ -36,6 +36,7 @@ import type {
   Timeline,
 } from "./jobApi";
 import { JobCharges } from "./JobCharges";
+import { JobDeliveries } from "./JobDeliveries";
 import { JobEta } from "./JobEta";
 import { JobTasks } from "./JobTasks";
 import styles from "./jobs.module.css";
@@ -547,6 +548,12 @@ export function JobDetail({ jobId }: { jobId: string }) {
           quoteId={job.quoteId}
         />
       )}
+
+      <JobDeliveries
+        canEdit={isStaff && !closedJob}
+        documents={data.documents}
+        jobId={job.id}
+      />
 
       <section className={styles.card} aria-labelledby="documents-title">
         <h2 id="documents-title">Documents</h2>

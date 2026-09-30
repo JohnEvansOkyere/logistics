@@ -14,6 +14,7 @@ export function WorkspaceFrame({ children }: { children: ReactNode }) {
   const customersActive = pathname.startsWith("/customers");
   const jobsActive = pathname.startsWith("/jobs");
   const quotesActive = pathname.startsWith("/quotes");
+  const transportActive = pathname.startsWith("/transport");
   const tasksActive = pathname.startsWith("/tasks");
   const quotationsActive = pathname.startsWith("/quotations");
   const settingsActive =
@@ -73,6 +74,16 @@ export function WorkspaceFrame({ children }: { children: ReactNode }) {
               ❐
             </span>
             Quotes
+          </Link>
+          <Link
+            className={`nav-link${transportActive ? " active" : ""}`}
+            href="/transport"
+            aria-current={transportActive ? "page" : undefined}
+          >
+            <span className="nav-icon" aria-hidden="true">
+              ⛟
+            </span>
+            Transport
           </Link>
           <Link
             className={`nav-link${tasksActive ? " active" : ""}`}

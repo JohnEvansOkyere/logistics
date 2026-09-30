@@ -272,6 +272,49 @@ export interface JobChargeRecord {
   actuals: ChargeActualRecord[];
 }
 
+export interface DriverRecord {
+  id: string;
+  name: string;
+  phone: string;
+  createdAt: string;
+  deactivatedAt: string | null;
+}
+
+export interface VehicleRecord {
+  id: string;
+  registration: string;
+  description: string | null;
+  createdAt: string;
+  deactivatedAt: string | null;
+}
+
+/** A numbered waybill; driver, vehicle and cargo are frozen at dispatch. */
+export interface DeliveryRecord {
+  id: string;
+  jobId: string;
+  waybillNumber: string;
+  driverId: string;
+  vehicleId: string;
+  driverName: string;
+  driverPhone: string;
+  vehicleRegistration: string;
+  cargoDescription: string;
+  packages: number | null;
+  grossWeightKg: number | null;
+  pickupLocation: string | null;
+  deliveryAddress: string;
+  dispatchedAt: string;
+  dispatchedBy: string;
+  status: "dispatched" | "delivered";
+  receiverName: string | null;
+  receiverPhone: string | null;
+  deliveredAt: string | null;
+  damageNotes: string | null;
+  podDocumentId: string | null;
+  podRecordedBy: string | null;
+  podRecordedAt: string | null;
+}
+
 export interface ActivityEntry {
   actorUserId: string;
   actorEmail: string | null;
@@ -586,6 +629,53 @@ export abstract class DatabasePort {
   abstract findAcceptedQuoteLines(
     jobId: string,
   ): Promise<{ currency: string; lines: QuoteLineRecord[] } | null>;
+  abstract createDriver(
+    driver: { name: string; phone: string },
+    createdBy: string,
+  ): Promise<DriverRecord>;
+  abstract listDrivers(): Promise<DriverRecord[]>;
+  abstract setDriverActive(
+    id: string,
+    active: boolean,
+  ): Promise<DriverRecord | null>;
+  abstract createVehicle(
+    vehicle: { registration: string; description: string | null },
+    createdBy: string,
+  ): Promise<VehicleRecord | "duplicate_registration">;
+  abstract listVehicles(): Promise<VehicleRecord[]>;
+  abstract setVehicleActive(
+    id: string,
+    active: boolean,
+  ): Promise<VehicleRecord | null>;
+  abstract createDelivery(
+    delivery: {
+      jobId: string;
+      driverId: string;
+      vehicleId: string;
+      cargoDescription: string;
+      packages: number | null;
+      grossWeightKg: number | null;
+      pickupLocation: string | null;
+      deliveryAddress: string;
+    },
+    dispatchedBy: string,
+    year: number,
+  ): Promise<DeliveryRecord | "driver_unavailable" | "vehicle_unavailable">;
+  abstract listDeliveries(jobId: string): Promise<DeliveryRecord[]>;
+  abstract recordProofOfDelivery(
+    jobId: string,
+    deliveryId: string,
+    proof: {
+      receiverName: string;
+      receiverPhone: string | null;
+      deliveredAt: string;
+      damageNotes: string | null;
+      podDocumentId: string | null;
+    },
+    recordedBy: string,
+  ): Promise<
+    DeliveryRecord | "not_found" | "already_delivered" | "document_invalid"
+  >;
   abstract recordActivity(entry: ActivityEntry): Promise<void>;
   abstract listActivity(filter: ActivityFilter): Promise<ActivityRecord[]>;
   abstract getActiveCustomerCompanyIds(userId: string): Promise<string[]>;

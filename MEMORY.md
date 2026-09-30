@@ -237,3 +237,33 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **Why:** F2 asks for quoted vs actual, evidence links and a per-transaction rate; making evidence mandatory would invent a rule the client has not stated.
 **What was rejected:** Editing actuals in place; requiring evidence before an amount can be recorded (a business rule for Evans/BJH to set); customer visibility of internal costs; converting with floating-point numbers; using today's rate at report time (history would shift).
 
+## 2026-09-29, Deliveries: numbered waybill with frozen snapshot, proof recorded once; G3/G4 not built
+
+**What was decided:** Drivers (name, phone) and vehicles (registration) are records any staff member manages; taking one out of service keeps it on past waybills. Dispatching a delivery on a job allocates a waybill number `{waybillPrefix}/{YYYY}/{seq}` (prefix from Settings, default `BJH/WB`) and copies the driver, vehicle and cargo onto it; those fields cannot change afterwards. The proof of delivery (receiver, phone, time, damage notes, optional signed delivery-note document on the same job) is recorded once. Customers read their own company's waybills; only staff dispatch. G3 (container return/EIR) is treated as largely covered by the existing milestones and EIR document type. G4 (closure evidence gate) is not built because it contradicts Evans's decision that no evidence gate blocks closure. G5 (house B/L generation) stays blocked on BJH confirming authority and template (D14); the supplied "transport bill" sample is a BJH-issued house B/L.
+**Why:** G1/G2 are next in the plan and unblocked; the waybill number and fields are assumptions because no BJH waybill sample was supplied and the client has not answered question 8.
+**What was rejected:** A printable waybill layout (no sample to follow); editing a waybill after dispatch; reversing a recorded proof of delivery (needs a new decision); building G4 against a logged decision.
+
+## 2026-09-30, Levy rule read from the sample invoice; SMS provider shortlist
+
+**What was decided:** (1) Invoice tax lines (F3) are independent percentages of the same charge subtotal, not compounded: the supplied `EVIDENCES/invoice.pdf` shows NHIL 2.5%, GETFL 2.5% and VAT 15% each computed on the 2,397.80 subtotal (VAT 359.67 = 15% of the subtotal, not of subtotal plus levies). That sample is a port operator's invoice to BJH (a supplier invoice), not a BJH invoice, so it is evidence of Ghana practice, not BJH's own layout; rates still come from Settings. Its total is the unrounded levies summed then rounded once (2,877.36), so F3 will round the total once, not sum rounded lines, and show the arithmetic in tests. (2) SMS (H4) is narrowed to Arkesel or a second Ghanaian provider Evans wrote as "Moorle" (assumed to be Moolre; to confirm); the final pick and current official docs are checked when H4 starts, sandbox only. (3) `prov_of_delivery.pdf` (BJH-branded: AWB, consignee, goods, packages, weight, date/time, received-by name, phone, signature) matches the fields already on the delivery proof. No BJH waybill sample exists, so the waybill layout stays an assumption.
+**Why:** Evans said the answers are in the evidence files and named the SMS providers.
+**What was rejected:** Compounding levies; asking again for facts already in the samples; picking an SMS provider before checking its current docs.
+
+
+## 2026-09-30, Waybill evidence found; D14 answered by the samples; SMS provider is Moolre
+
+**What was decided:** (1) Corrects the earlier same-day entry, which said no waybill sample exists: `EVIDENCES/HBL - 125-23823984.pdf` is a BJH-issued house air waybill (HAWB `BJH-16545CV` under MAWB `125-23823984`: shipper, forwarding agent, consignee, notify, airports, flight, pieces, gross/chargeable weight, rate, freight/HAWB/origin fee, goods, departure date, issuing-carrier signature, BJH stamp) and `BJH_Air_Cargo_Manifest_125-23823984.pdf` is a BJH-issued manifest listing it. With `Transport_bill.pdf` (BJH-issued house B/L `BJH-TMA0159261A` under MBL/booking `TMA0159261`) they show BJH issues its own house B/L, HAWB and manifest, so D14 is answered by the samples and G5 is unblocked in principle. Still no sample of the road-transport waybill (truck/driver); the delivery waybill layout remains an assumption. (2) Evans gave https://moolre.com/ for the SMS provider named "Moorle": Moolre and Arkesel remain the two candidates; current official docs are checked when H4 starts.
+**Why:** Evans pointed to the evidence folder for the waybill.
+**What was rejected:** Treating the HAWB/manifest as unrelated to waybills; asking BJH again whether it issues house documents.
+
+## 2026-09-30, Interim waybill PDF modelled on the client's samples
+
+**What was decided:** Build a printable road-delivery waybill now (`GET /api/v1/jobs/:id/deliveries/:deliveryId/pdf`, pdfkit, on demand) while BJH's own waybill sample is awaited. Layout borrows from the samples: the HAWB's header/party-box/cargo-row grid, and the proof-of-delivery sheet's "goods received in apparently safe and sound condition by" block (name, telephone, date and time, signature). Shipper and consignee come from the job's parties, references from the job's shipment references, driver/vehicle/cargo from the frozen delivery snapshot; the receiver block prints blank for signing on the day and fills in once proof is recorded. Same access boundary as the delivery itself (customers only their own company's).
+**Why:** Evans asked for something that resonates with the evidence in the meantime.
+**What was rejected:** Waiting for the sample; copying the client's logo or any client document verbatim; hard-coding issuer details (they come from Settings, with a visible placeholder if unset). To revisit when BJH's road-waybill sample arrives: layout and numbering `{prefix}/{YYYY}/{seq}` are still assumptions.
+
+## 2026-09-30, G4 closure gate dropped: closing stays open
+
+**What was decided:** No closure evidence gate, and no "documents missing" reminder either. Staff can close a job without required documents; reopening and overriding still need a written reason as already built. G4 is closed as not needed.
+**Why:** Evans said "make it open", consistent with his earlier decision that no evidence gate blocks closure (interpreted as the no-gate option; say so if a non-blocking reminder was meant).
+**What was rejected:** A blocking gate with override, and the non-blocking reminder.

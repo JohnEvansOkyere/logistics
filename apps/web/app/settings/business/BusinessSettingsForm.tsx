@@ -45,6 +45,7 @@ export function BusinessSettingsForm() {
   const [quotePrefix, setQuotePrefix] = useState("BJH/Q");
   const [invoicePrefix, setInvoicePrefix] = useState("BJH/INV");
   const [receiptPrefix, setReceiptPrefix] = useState("BJH/RCT");
+  const [waybillPrefix, setWaybillPrefix] = useState("BJH/WB");
   const [intro, setIntro] = useState("");
   const [atCostNote, setAtCostNote] = useState("");
   const [steps, setSteps] = useState("");
@@ -78,6 +79,7 @@ export function BusinessSettingsForm() {
     setQuotePrefix(settings.numbering.quotePrefix);
     setInvoicePrefix(settings.numbering.invoicePrefix);
     setReceiptPrefix(settings.numbering.receiptPrefix);
+    setWaybillPrefix(settings.numbering.waybillPrefix ?? "BJH/WB");
     setIntro(settings.quoteDefaults.intro ?? "");
     setAtCostNote(settings.quoteDefaults.atCostNote ?? "");
     setSteps(settings.quoteDefaults.procedureSteps.join("\n"));
@@ -137,7 +139,12 @@ export function BusinessSettingsForm() {
           rateBasisPoints: rates[index],
         })),
         paymentTermsDays: terms.trim() === "" ? null : Number(terms),
-        numbering: { quotePrefix, invoicePrefix, receiptPrefix },
+        numbering: {
+          quotePrefix,
+          invoicePrefix,
+          receiptPrefix,
+          waybillPrefix,
+        },
         quoteDefaults: {
           intro,
           atCostNote,
@@ -290,6 +297,7 @@ export function BusinessSettingsForm() {
             {text("Quote prefix", quotePrefix, setQuotePrefix, true)}
             {text("Invoice prefix", invoicePrefix, setInvoicePrefix, true)}
             {text("Receipt prefix", receiptPrefix, setReceiptPrefix, true)}
+            {text("Waybill prefix", waybillPrefix, setWaybillPrefix, true)}
 
             <h2>Quote defaults</h2>
             <p className={styles.muted}>

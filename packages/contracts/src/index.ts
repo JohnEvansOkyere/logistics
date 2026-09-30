@@ -762,6 +762,9 @@ export const businessSettingsSchema = z
           quotePrefix: prefixField("quotePrefix"),
           invoicePrefix: prefixField("invoicePrefix"),
           receiptPrefix: prefixField("receiptPrefix"),
+          waybillPrefix: prefixField("waybillPrefix")
+            .nullish()
+            .transform((value) => value ?? "BJH/WB"),
         },
         objectError("numbering prefixes are required"),
       ),
@@ -903,3 +906,72 @@ export function convertMinor(
   const half = BigInt(50_000_000);
   return Number((BigInt(amountMinor) * scaled + half) / BigInt(100_000_000));
 }
+
+export const driverInputSchema = z.object(
+  {
+    name: requiredText("name", 160),
+    phone: requiredText("phone", 40),
+  },
+  objectError("A driver object is required"),
+);
+export type DriverInput = z.infer<typeof driverInputSchema>;
+
+export const vehicleInputSchema = z.object(
+  {
+    registration: requiredText("registration", 40),
+    description: optionalText("description", 200),
+  },
+  objectError("A vehicle object is required"),
+);
+export type VehicleInput = z.infer<typeof vehicleInputSchema>;
+
+export const activeInputSchema = z.object(
+  { active: z.boolean({ error: "active must be true or false" }) },
+  objectError("An active flag is required"),
+);
+
+export const deliveryInputSchema = z.object(
+  {
+    driverId: uuidField("driverId"),
+    vehicleId: uuidField("vehicleId"),
+    cargoDescription: requiredText("cargoDescription", 500),
+    packages: z
+      .number({ error: "packages must be a whole number" })
+      .int({ error: "packages must be a whole number" })
+      .min(1, { error: "packages must be 1 to 1000000" })
+      .max(1_000_000, { error: "packages must be 1 to 1000000" })
+      .nullish()
+      .transform((value) => value ?? null),
+    grossWeightKg: z
+      .number({ error: "grossWeightKg must be a number" })
+      .min(0, { error: "grossWeightKg must be 0 to 100000000" })
+      .max(100_000_000, { error: "grossWeightKg must be 0 to 100000000" })
+      .nullish()
+      .transform((value) => value ?? null),
+    pickupLocation: optionalText("pickupLocation", 300),
+    deliveryAddress: requiredText("deliveryAddress", 500),
+  },
+  objectError("A delivery object is required"),
+);
+export type DeliveryInput = z.infer<typeof deliveryInputSchema>;
+
+/** The proof of delivery: who received the goods, when, and any damage. */
+export const proofOfDeliveryInputSchema = z.object(
+  {
+    receiverName: requiredText("receiverName", 160),
+    receiverPhone: optionalText("receiverPhone", 40),
+    deliveredAt: z
+      .string({ error: "deliveredAt must be a date and time" })
+      .refine((value) => !Number.isNaN(Date.parse(value)), {
+        error: "deliveredAt must be a date and time",
+      })
+      .nullish()
+      .transform((value) => (value ? new Date(value).toISOString() : null)),
+    damageNotes: optionalText("damageNotes", 2000),
+    podDocumentId: uuidField("podDocumentId")
+      .nullish()
+      .transform((value) => value ?? null),
+  },
+  objectError("A proof of delivery object is required"),
+);
+export type ProofOfDeliveryInput = z.infer<typeof proofOfDeliveryInputSchema>;
