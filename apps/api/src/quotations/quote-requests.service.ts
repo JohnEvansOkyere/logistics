@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -9,6 +10,7 @@ import {
   departmentAssignmentInputSchema,
   parseContract,
   quoteDraftInputSchema,
+  portalQuoteRequestInputSchema,
   quoteRequestInputSchema,
   type QuoteRequestInput,
 } from "@bjh/contracts";
@@ -36,6 +38,58 @@ export class QuoteRequestsService {
       quoteDraftRevisionCount: 0,
       quoteDraftUpdatedAt: null,
     });
+  }
+
+  /**
+   * A customer's own request. The company comes from the customer's linked
+   * companies (the account's identity, not a typed name), so it is linked at
+   * once; the contact email is the account's email.
+   */
+  async createForCustomer(
+    input: unknown,
+    user: { email: string | null },
+    allowedCompanyIds: string[] | undefined,
+  ): Promise<QuoteRequestRecord> {
+    if (!allowedCompanyIds) {
+      throw new ForbiddenException(
+        "Only a customer account can send its own quote request",
+      );
+    }
+    if (!user.email) {
+      throw new BadRequestException("The account has no email address");
+    }
+    const parsed = parseContract(portalQuoteRequestInputSchema, input);
+    if (!parsed.success) throw new BadRequestException(parsed.message);
+    const companyId =
+      parsed.data.companyId ??
+      (allowedCompanyIds.length === 1 ? allowedCompanyIds[0] : null);
+    if (!companyId) {
+      throw new BadRequestException(
+        "companyId is required: this account belongs to several companies",
+      );
+    }
+    if (!allowedCompanyIds.includes(companyId)) {
+      throw new NotFoundException("Customer company was not found");
+    }
+    const company = await this.database.findCustomer(companyId);
+    if (!company) throw new NotFoundException("Customer company was not found");
+    const created = await this.database.createQuoteRequest({
+      id: randomUUID(),
+      companyName: company.companyName,
+      contactName: parsed.data.contactName,
+      email: user.email,
+      message: parsed.data.message,
+      createdAt: new Date().toISOString(),
+      customerCompanyId: null,
+      customerCompanyName: null,
+      quoteDraftRevisionCount: 0,
+      quoteDraftUpdatedAt: null,
+    });
+    const linked = await this.database.linkQuoteRequestToCustomer(
+      created.id,
+      company.id,
+    );
+    return linked ?? created;
   }
 
   list(

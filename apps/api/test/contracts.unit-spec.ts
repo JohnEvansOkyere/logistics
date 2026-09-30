@@ -131,8 +131,15 @@ test("staff contracts reject unsupported roles and tolerate missing strings", ()
   );
 });
 
-test("every service line has a milestone template with unique keys", () => {
-  for (const line of serviceLineKeys) {
+test("every freight service line has a milestone template with unique keys", () => {
+  // Warehousing and road transport are tracked by stock movements and
+  // deliveries instead, so their milestone list is deliberately empty.
+  const freight = serviceLineKeys.filter(
+    (line) => line !== "warehousing" && line !== "road_transport",
+  );
+  assert.deepEqual(milestoneTemplates.warehousing, []);
+  assert.deepEqual(milestoneTemplates.road_transport, []);
+  for (const line of freight) {
     const keys = milestoneTemplates[line].map((milestone) => milestone.key);
     assert.ok(keys.length > 0, `${line} has milestones`);
     assert.equal(new Set(keys).size, keys.length, `${line} keys are unique`);

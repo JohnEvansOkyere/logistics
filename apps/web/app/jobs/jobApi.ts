@@ -9,6 +9,9 @@ import type {
   TaskKind,
   ChargeKind,
   PaymentMethod,
+  CorrespondenceChannel,
+  CorrespondenceDirection,
+  StockKind,
 } from "@bjh/contracts";
 import { authenticatedFetch } from "../auth/authenticatedFetch";
 
@@ -75,6 +78,8 @@ export const serviceLineLabels: Record<ServiceLine, string> = {
   sea_export: "Sea export",
   air_import: "Air import",
   air_export: "Air export",
+  warehousing: "Warehousing",
+  road_transport: "Road transport",
 };
 
 export const statusLabels: Record<JobStatus, string> = {
@@ -375,6 +380,7 @@ export type InvoiceLine = {
 
 export type InvoicePayment = {
   id: string;
+  receiptNumber: string | null;
   amountMinor: number;
   receivedOn: string;
   method: PaymentMethod;
@@ -490,3 +496,133 @@ export async function fetchInvoicePdf(
   if (!response.ok) throw new Error("The invoice could not be created");
   return response.blob();
 }
+
+export async function fetchReceiptPdf(
+  id: string,
+  invoiceId: string,
+  paymentId: string,
+): Promise<Blob> {
+  const response = await authenticatedFetch(
+    `${jobsUrl}/${encodeURIComponent(id)}/invoices/${encodeURIComponent(invoiceId)}/payments/${encodeURIComponent(paymentId)}/receipt`,
+  );
+  if (!response.ok) throw new Error("The receipt could not be created");
+  return response.blob();
+}
+
+export type CorrespondenceEntry = {
+  id: string;
+  channel: CorrespondenceChannel;
+  direction: CorrespondenceDirection;
+  occurredAt: string;
+  counterparty: string | null;
+  subject: string | null;
+  body: string;
+  documentId: string | null;
+  recordedAt: string;
+};
+
+export const listCorrespondence = (id: string) =>
+  send<CorrespondenceEntry[]>(
+    `/${encodeURIComponent(id)}/correspondence`,
+    "GET",
+  );
+export const addCorrespondence = (
+  id: string,
+  input: {
+    channel: CorrespondenceChannel;
+    direction: CorrespondenceDirection;
+    occurredAt?: string;
+    counterparty?: string;
+    subject?: string;
+    body: string;
+    documentId?: string;
+  },
+) =>
+  send<CorrespondenceEntry>(
+    `/${encodeURIComponent(id)}/correspondence`,
+    "POST",
+    input,
+  );
+
+export type WarehouseLocation = {
+  id: string;
+  name: string;
+  deactivatedAt: string | null;
+};
+
+export type StockMovement = {
+  id: string;
+  locationId: string;
+  locationName: string;
+  kind: StockKind;
+  item: string;
+  unit: string;
+  quantity: number;
+  conditionNotes: string | null;
+  reference: string | null;
+  occurredAt: string;
+};
+
+export type StockBalance = {
+  jobId: string;
+  fileNumber: string;
+  customerCompanyId: string;
+  customerCompanyName: string;
+  locationId: string;
+  locationName: string;
+  item: string;
+  unit: string;
+  balance: number;
+};
+
+const apiRoot = `${apiBaseUrl.replace(/\/$/, "")}/v1`;
+
+async function sendApi<T>(
+  path: string,
+  method: string,
+  body?: unknown,
+): Promise<T> {
+  return authenticatedFetch(`${apiRoot}${path}`, {
+    method,
+    headers: body === undefined ? {} : { "content-type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  }).then((response) => readResponse<T>(response));
+}
+
+export const listLocations = () =>
+  sendApi<WarehouseLocation[]>("/warehouse/locations", "GET");
+export const addLocation = (name: string) =>
+  sendApi<WarehouseLocation>("/warehouse/locations", "POST", { name });
+export const setLocationActive = (id: string, active: boolean) =>
+  sendApi<WarehouseLocation>(
+    `/warehouse/locations/${encodeURIComponent(id)}/active`,
+    "POST",
+    { active },
+  );
+export const getJobStock = (id: string) =>
+  send<{ movements: StockMovement[]; balances: StockBalance[] }>(
+    `/${encodeURIComponent(id)}/stock`,
+    "GET",
+  );
+export const addStockMovement = (
+  id: string,
+  input: {
+    locationId: string;
+    kind: StockKind;
+    item: string;
+    unit?: string;
+    quantity: number;
+    conditionNotes?: string;
+    reference?: string;
+    occurredAt?: string;
+  },
+) => send<StockMovement>(`/${encodeURIComponent(id)}/stock`, "POST", input);
+export const getStockReport = (asOf: string, companyId: string) => {
+  const query = new URLSearchParams();
+  if (asOf) query.set("asOf", asOf);
+  if (companyId) query.set("companyId", companyId);
+  return sendApi<{ asOf: string | null; balances: StockBalance[] }>(
+    `/stock/report${query.size > 0 ? `?${query}` : ""}`,
+    "GET",
+  );
+};

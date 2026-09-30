@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { AuthStatus } from "./auth/AuthStatus";
+import { PortalRedirect } from "./portal/PortalRedirect";
 
 export default function HomePage() {
   return (
     <>
+      <PortalRedirect />
       <header className="topbar">
         <div className="breadcrumb">
           <span>Workspace</span>

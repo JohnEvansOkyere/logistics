@@ -3,15 +3,20 @@
 import { useEffect, useState } from "react";
 import { authenticatedFetch } from "./authenticatedFetch";
 
+export type CustomerCompany = { companyId: string; companyName: string };
+
 type StaffAccessState = {
   status: "loading" | "ready" | "unavailable";
   roles: string[];
+  /** The companies linked to a customer account; empty for staff. */
+  companies: CustomerCompany[];
 };
 
 export function useStaffAccess() {
   const [access, setAccess] = useState<StaffAccessState>({
     status: "loading",
     roles: [],
+    companies: [],
   });
 
   useEffect(() => {
@@ -22,23 +27,32 @@ export function useStaffAccess() {
     void authenticatedFetch(`${apiBase}/v1/auth/session`)
       .then(async (response) => {
         if (response.status === 403) {
-          return [];
+          return { roles: [], companies: [] };
         }
         if (!response.ok) {
           throw new Error("Staff access could not be checked");
         }
-        const session = (await response.json()) as { roles?: unknown };
-        return Array.isArray(session.roles)
-          ? session.roles.filter(
-              (role): role is string => typeof role === "string",
-            )
-          : [];
+        const session = (await response.json()) as {
+          roles?: unknown;
+          companies?: unknown;
+        };
+        return {
+          roles: Array.isArray(session.roles)
+            ? session.roles.filter(
+                (role): role is string => typeof role === "string",
+              )
+            : [],
+          companies: Array.isArray(session.companies)
+            ? (session.companies as CustomerCompany[])
+            : [],
+        };
       })
-      .then((roles) => {
-        if (active) setAccess({ status: "ready", roles });
+      .then(({ roles, companies }) => {
+        if (active) setAccess({ status: "ready", roles, companies });
       })
       .catch(() => {
-        if (active) setAccess({ status: "unavailable", roles: [] });
+        if (active)
+          setAccess({ status: "unavailable", roles: [], companies: [] });
       });
 
     return () => {
@@ -51,5 +65,6 @@ export function useStaffAccess() {
     ...access,
     isSuperAdmin,
     isDepartmentStaff: access.roles.length > 0 && !isSuperAdmin,
+    isCustomer: access.roles.length === 0 && access.companies.length > 0,
   };
 }

@@ -85,6 +85,21 @@ export async function createQuoteRequest(
   );
 }
 
+/** A customer's own request: the company and email come from their account. */
+export async function createPortalQuoteRequest(request: {
+  contactName: string;
+  message: string;
+  companyId?: string;
+}): Promise<QuoteRequest> {
+  return readResponse<QuoteRequest>(
+    await authenticatedFetch(`${quoteRequestsUrl}/mine`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(request),
+    }),
+  );
+}
+
 export async function associateQuoteRequestCustomer(
   requestId: string,
   customerCompanyId: string,

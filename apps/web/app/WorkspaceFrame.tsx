@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { useStaffAccess } from "./auth/useStaffAccess";
 import { SettingsSidebarSection } from "./SettingsSidebarSection";
 
 export function WorkspaceFrame({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const { isCustomer } = useStaffAccess();
   if (pathname === "/sign-in" || pathname === "/complete-invitation") {
     return children;
   }
@@ -15,6 +17,7 @@ export function WorkspaceFrame({ children }: { children: ReactNode }) {
   const jobsActive = pathname.startsWith("/jobs");
   const quotesActive = pathname.startsWith("/quotes");
   const transportActive = pathname.startsWith("/transport");
+  const warehouseActive = pathname.startsWith("/warehouse");
   const tasksActive = pathname.startsWith("/tasks");
   const quotationsActive = pathname.startsWith("/quotations");
   const settingsActive =
@@ -34,80 +37,135 @@ export function WorkspaceFrame({ children }: { children: ReactNode }) {
         </Link>
 
         <p className="nav-heading">WORKSPACE</p>
-        <nav className="workspace-nav" aria-label="Staff workspace">
-          <Link
-            className={`nav-link${pathname === "/" ? " active" : ""}`}
-            href="/"
-            aria-current={pathname === "/" ? "page" : undefined}
-          >
-            <span className="nav-icon" aria-hidden="true">
-              ◫
-            </span>
-            Overview
-          </Link>
-          <Link
-            className={`nav-link${customersActive ? " active" : ""}`}
-            href="/customers"
-            aria-current={customersActive ? "page" : undefined}
-          >
-            <span className="nav-icon" aria-hidden="true">
-              ◉
-            </span>
-            Customers
-          </Link>
-          <Link
-            className={`nav-link${jobsActive ? " active" : ""}`}
-            href="/jobs"
-            aria-current={jobsActive ? "page" : undefined}
-          >
-            <span className="nav-icon" aria-hidden="true">
-              ▤
-            </span>
-            Jobs
-          </Link>
-          <Link
-            className={`nav-link${quotesActive ? " active" : ""}`}
-            href="/quotes"
-            aria-current={quotesActive ? "page" : undefined}
-          >
-            <span className="nav-icon" aria-hidden="true">
-              ❐
-            </span>
-            Quotes
-          </Link>
-          <Link
-            className={`nav-link${transportActive ? " active" : ""}`}
-            href="/transport"
-            aria-current={transportActive ? "page" : undefined}
-          >
-            <span className="nav-icon" aria-hidden="true">
-              ⛟
-            </span>
-            Transport
-          </Link>
-          <Link
-            className={`nav-link${tasksActive ? " active" : ""}`}
-            href="/tasks"
-            aria-current={tasksActive ? "page" : undefined}
-          >
-            <span className="nav-icon" aria-hidden="true">
-              ✓
-            </span>
-            Tasks
-          </Link>
-          <Link
-            className={`nav-link${quotationsActive ? " active" : ""}`}
-            href="/quotations"
-            aria-current={quotationsActive ? "page" : undefined}
-          >
-            <span className="nav-icon" aria-hidden="true">
-              ≡
-            </span>
-            Quotations
-          </Link>
-        </nav>
+        {isCustomer ? (
+          <nav className="workspace-nav" aria-label="Customer portal">
+            <Link
+              className={`nav-link${pathname.startsWith("/portal") ? " active" : ""}`}
+              href="/portal"
+              aria-current={pathname.startsWith("/portal") ? "page" : undefined}
+            >
+              <span className="nav-icon" aria-hidden="true">
+                ◫
+              </span>
+              Overview
+            </Link>
+            <Link
+              className={`nav-link${jobsActive ? " active" : ""}`}
+              href="/jobs"
+              aria-current={jobsActive ? "page" : undefined}
+            >
+              <span className="nav-icon" aria-hidden="true">
+                ▤
+              </span>
+              Your jobs
+            </Link>
+            <Link
+              className={`nav-link${quotesActive ? " active" : ""}`}
+              href="/quotes"
+              aria-current={quotesActive ? "page" : undefined}
+            >
+              <span className="nav-icon" aria-hidden="true">
+                ❐
+              </span>
+              Your quotations
+            </Link>
+            <Link
+              className={`nav-link${warehouseActive ? " active" : ""}`}
+              href="/warehouse"
+              aria-current={warehouseActive ? "page" : undefined}
+            >
+              <span className="nav-icon" aria-hidden="true">
+                ▦
+              </span>
+              Your stock
+            </Link>
+          </nav>
+        ) : (
+          <nav className="workspace-nav" aria-label="Staff workspace">
+            <Link
+              className={`nav-link${pathname === "/" ? " active" : ""}`}
+              href="/"
+              aria-current={pathname === "/" ? "page" : undefined}
+            >
+              <span className="nav-icon" aria-hidden="true">
+                ◫
+              </span>
+              Overview
+            </Link>
+            <Link
+              className={`nav-link${customersActive ? " active" : ""}`}
+              href="/customers"
+              aria-current={customersActive ? "page" : undefined}
+            >
+              <span className="nav-icon" aria-hidden="true">
+                ◉
+              </span>
+              Customers
+            </Link>
+            <Link
+              className={`nav-link${jobsActive ? " active" : ""}`}
+              href="/jobs"
+              aria-current={jobsActive ? "page" : undefined}
+            >
+              <span className="nav-icon" aria-hidden="true">
+                ▤
+              </span>
+              Jobs
+            </Link>
+            <Link
+              className={`nav-link${quotesActive ? " active" : ""}`}
+              href="/quotes"
+              aria-current={quotesActive ? "page" : undefined}
+            >
+              <span className="nav-icon" aria-hidden="true">
+                ❐
+              </span>
+              Quotes
+            </Link>
+            <Link
+              className={`nav-link${transportActive ? " active" : ""}`}
+              href="/transport"
+              aria-current={transportActive ? "page" : undefined}
+            >
+              <span className="nav-icon" aria-hidden="true">
+                ⛟
+              </span>
+              Transport
+            </Link>
+            <Link
+              className={`nav-link${warehouseActive ? " active" : ""}`}
+              href="/warehouse"
+              aria-current={warehouseActive ? "page" : undefined}
+            >
+              <span className="nav-icon" aria-hidden="true">
+                ▦
+              </span>
+              Warehouse
+            </Link>
+            <Link
+              className={`nav-link${tasksActive ? " active" : ""}`}
+              href="/tasks"
+              aria-current={tasksActive ? "page" : undefined}
+            >
+              <span className="nav-icon" aria-hidden="true">
+                ✓
+              </span>
+              Tasks
+            </Link>
+            <Link
+              className={`nav-link${quotationsActive ? " active" : ""}`}
+              href="/quotations"
+              aria-current={quotationsActive ? "page" : undefined}
+            >
+              <span className="nav-icon" aria-hidden="true">
+                ≡
+              </span>
+              Quotations
+            </Link>
+          </nav>
+        )}
 
-        <SettingsSidebarSection active={settingsActive} />
+        {!isCustomer && <SettingsSidebarSection active={settingsActive} />}
 
         <div className="sidebar-note">
           <span className="local-indicator" aria-hidden="true" />

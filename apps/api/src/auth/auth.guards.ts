@@ -216,11 +216,15 @@ export class DepartmentStaffGuard implements CanActivate {
   }
 }
 
+/** Warehousing and road transport have no department of their own: any rep works them. */
+const sharedServiceLines: ServiceLine[] = ["warehousing", "road_transport"];
+
 /** Service lines a department role works on; `super_admin` maps to none. */
 export function serviceLinesForRoles(roles: StaffRoleKey[]): ServiceLine[] {
-  return roles
+  const own = roles
     .filter((role) => role !== "super_admin")
     .map((role) => role.replace(/_rep$/, "") as ServiceLine);
+  return own.length > 0 ? [...own, ...sharedServiceLines] : own;
 }
 
 /** Super admins see every job, reps their own service lines, customers their companies. */

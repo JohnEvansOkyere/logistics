@@ -149,7 +149,7 @@ test("invalid job requests fail safely", async () => {
     [
       { customerCompanyId: companyA, serviceLine: "road" },
       400,
-      "serviceLine must be sea_import, sea_export, air_import or air_export",
+      "serviceLine must be sea_import, sea_export, air_import, air_export, warehousing or road_transport",
     ],
     [
       { customerCompanyId: randomUUID(), serviceLine: "sea_import" },

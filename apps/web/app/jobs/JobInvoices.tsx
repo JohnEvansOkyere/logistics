@@ -10,6 +10,7 @@ import {
   createInvoice,
   createInvoiceFromCharges,
   fetchInvoicePdf,
+  fetchReceiptPdf,
   issueInvoice,
   listInvoices,
   recordInvoicePayment,
@@ -118,12 +119,12 @@ export function JobInvoices({
     }
   }
 
-  async function openPdf(invoiceId: string) {
+  async function openBlob(fetchBlob: () => Promise<Blob>) {
     // Opened first so the browser treats it as a click, not a pop-up.
     const tab = window.open("", "_blank");
     setError("");
     try {
-      const url = URL.createObjectURL(await fetchInvoicePdf(jobId, invoiceId));
+      const url = URL.createObjectURL(await fetchBlob());
       if (tab) tab.location.href = url;
       else window.location.href = url;
     } catch (cause) {
@@ -131,6 +132,11 @@ export function JobInvoices({
       setError(cause instanceof Error ? cause.message : "The PDF failed");
     }
   }
+
+  const openPdf = (invoiceId: string) =>
+    openBlob(() => fetchInvoicePdf(jobId, invoiceId));
+  const openReceipt = (invoiceId: string, paymentId: string) =>
+    openBlob(() => fetchReceiptPdf(jobId, invoiceId, paymentId));
 
   function draftInput() {
     const parsed: InvoiceLine[] = [];
@@ -329,6 +335,20 @@ export function JobInvoices({
                       {payment.reversal
                         ? ` · reversed: ${payment.reversal.reason}`
                         : ""}
+                      {payment.receiptNumber && (
+                        <>
+                          {" "}
+                          <button
+                            className={styles.secondaryButton}
+                            onClick={() =>
+                              void openReceipt(invoice.id, payment.id)
+                            }
+                            type="button"
+                          >
+                            Receipt {payment.receiptNumber}
+                          </button>
+                        </>
+                      )}
                       {!payment.reversal && (
                         <>
                           {" "}

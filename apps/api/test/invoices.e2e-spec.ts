@@ -103,6 +103,7 @@ type Invoice = {
   voidReason: string | null;
   payments?: Array<{
     id: string;
+    receiptNumber: string | null;
     amountMinor: number;
     method: string;
     reference: string | null;
@@ -807,4 +808,59 @@ test("payments still arrive after a job is closed, but invoices cannot change", 
   assert.equal(late.status, 201);
   const [after] = await invoicesOf(jobC);
   assert.equal(after.outstandingMinor, 60000);
+});
+
+test("each payment gets a numbered receipt that only staff can print", async () => {
+  const [current] = await invoicesOf(jobA);
+  const payments = current.payments ?? [];
+  assert.ok(payments.length >= 3);
+  const numbers = payments.map((item) => item.receiptNumber);
+  assert.deepEqual(
+    numbers,
+    payments.map(
+      (_, index) => `SYN/RCT/${year}/${String(index + 1).padStart(4, "0")}`,
+    ),
+  );
+
+  const receiptPath = (paymentId: string, invoiceId = invoice.id, job = jobA) =>
+    `/api/v1/jobs/${job}/invoices/${invoiceId}/payments/${paymentId}/receipt`;
+  const [first] = payments;
+  const printed = await get(receiptPath(first.id));
+  assert.equal(printed.status, 200);
+  assert.equal(printed.headers.get("content-type"), "application/pdf");
+  assert.match(
+    printed.headers.get("content-disposition") ?? "",
+    new RegExp(`^inline; filename="SYN-RCT-${year}-0001\\.pdf"$`),
+  );
+  assert.equal(
+    Buffer.from(await printed.arrayBuffer())
+      .subarray(0, 5)
+      .toString("latin1"),
+    "%PDF-",
+  );
+  // A reversed payment keeps its receipt, stamped as reversed.
+  const reversed = payments.find((item) => item.reversal);
+  assert.ok(reversed);
+  assert.equal((await get(receiptPath(reversed.id))).status, 200);
+
+  assert.equal(
+    (await get(receiptPath(first.id), TEST_CUSTOMER_A_TOKEN)).status,
+    403,
+  );
+  assert.equal(
+    (await get(receiptPath(first.id), TEST_CUSTOMER_B_TOKEN)).status,
+    403,
+  );
+  assert.equal(
+    (await get(receiptPath(first.id), TEST_UNASSIGNED_TOKEN)).status,
+    404,
+  );
+  assert.equal((await get(receiptPath(randomUUID()))).status, 404);
+  assert.equal((await get(receiptPath("not-a-uuid"))).status, 404);
+  assert.equal((await get(receiptPath(first.id, randomUUID()))).status, 404);
+  assert.equal(
+    (await get(receiptPath(first.id, invoice.id, jobB), TEST_SUPER_ADMIN_TOKEN))
+      .status,
+    404,
+  );
 });

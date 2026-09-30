@@ -37,8 +37,10 @@ import type {
 } from "./jobApi";
 import { JobCharges } from "./JobCharges";
 import { JobDeliveries } from "./JobDeliveries";
+import { JobCorrespondence } from "./JobCorrespondence";
 import { JobEta } from "./JobEta";
 import { JobInvoices } from "./JobInvoices";
+import { JobStock } from "./JobStock";
 import { JobTasks } from "./JobTasks";
 import styles from "./jobs.module.css";
 
@@ -550,6 +552,10 @@ export function JobDetail({ jobId }: { jobId: string }) {
         />
       )}
 
+      {job.serviceLine === "warehousing" && (
+        <JobStock canEdit={isStaff && !closedJob} jobId={job.id} />
+      )}
+
       <JobDeliveries
         canEdit={isStaff && !closedJob}
         documents={data.documents}
@@ -562,6 +568,10 @@ export function JobDetail({ jobId }: { jobId: string }) {
         isStaff={isStaff}
         jobId={job.id}
       />
+
+      {isStaff && (
+        <JobCorrespondence documents={data.documents} jobId={job.id} />
+      )}
 
       <section className={styles.card} aria-labelledby="documents-title">
         <h2 id="documents-title">Documents</h2>

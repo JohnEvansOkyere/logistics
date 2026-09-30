@@ -16,6 +16,8 @@ export const serviceLineKeys = [
   "sea_export",
   "air_import",
   "air_export",
+  "warehousing",
+  "road_transport",
 ] as const;
 export type ServiceLine = (typeof serviceLineKeys)[number];
 
@@ -117,7 +119,7 @@ export const jobCreateInputSchema = z.object(
     customerCompanyId: uuidField("customerCompanyId"),
     serviceLine: z.enum(serviceLineKeys, {
       error:
-        "serviceLine must be sea_import, sea_export, air_import or air_export",
+        "serviceLine must be sea_import, sea_export, air_import, air_export, warehousing or road_transport",
     }),
     quoteRequestId: uuidField("quoteRequestId")
       .nullish()
@@ -230,9 +232,10 @@ export function referenceKindAllowedFor(
   serviceLine: ServiceLine,
   kind: ReferenceKind,
 ): boolean {
-  return serviceLine.startsWith("sea")
-    ? !airOnlyKinds.includes(kind)
-    : !seaOnlyKinds.includes(kind);
+  if (serviceLine.startsWith("sea")) return !airOnlyKinds.includes(kind);
+  if (serviceLine.startsWith("air")) return !seaOnlyKinds.includes(kind);
+  // Warehousing and road jobs: a booking or a container, no bills of lading.
+  return kind === "booking" || kind === "container";
 }
 
 /** House documents hang under a master of the matching kind. */
@@ -414,6 +417,10 @@ export const milestoneTemplates: Record<
   sea_export: seaExportMilestones,
   air_import: airImportMilestones,
   air_export: airExportMilestones,
+  // Warehousing and road jobs have no milestone list: stock movements and
+  // deliveries carry their progress.
+  warehousing: [],
+  road_transport: [],
 };
 
 export const milestoneEventInputSchema = z.object(
@@ -644,7 +651,7 @@ export const quoteCreateInputSchema = z.object(
     customerCompanyId: uuidField("customerCompanyId"),
     serviceLine: z.enum(serviceLineKeys, {
       error:
-        "serviceLine must be sea_import, sea_export, air_import or air_export",
+        "serviceLine must be sea_import, sea_export, air_import, air_export, warehousing or road_transport",
     }),
     quoteRequestId: uuidField("quoteRequestId")
       .nullish()
@@ -1065,3 +1072,109 @@ export const paymentInputSchema = z.object(
   objectError("A payment object is required"),
 );
 export type PaymentInput = z.infer<typeof paymentInputSchema>;
+
+/** The super admin creates a customer account directly and links it to one company. */
+export const customerAccountCreateInputSchema = z.object(
+  {
+    email: emailField,
+    password: z.string().catch(""),
+    companyId: uuidField("companyId"),
+  },
+  objectError("Email, password and companyId are required"),
+);
+export type CustomerAccountCreateInput = z.infer<
+  typeof customerAccountCreateInputSchema
+>;
+
+/** A customer's own quote request; the company and email come from their account. */
+export const portalQuoteRequestInputSchema = z.object(
+  {
+    contactName: requiredText("contactName", 160),
+    message: requiredText("message", 5000),
+    companyId: uuidField("companyId")
+      .nullish()
+      .transform((value) => value ?? null),
+  },
+  objectError("A quote request object is required"),
+);
+export type PortalQuoteRequestInput = z.infer<
+  typeof portalQuoteRequestInputSchema
+>;
+
+export const correspondenceChannelKeys = [
+  "email",
+  "whatsapp",
+  "sms",
+  "phone",
+  "letter",
+  "other",
+] as const;
+export type CorrespondenceChannel = (typeof correspondenceChannelKeys)[number];
+
+export const correspondenceDirectionKeys = ["received", "sent"] as const;
+export type CorrespondenceDirection =
+  (typeof correspondenceDirectionKeys)[number];
+
+/** A message, call or letter staff log against a job (no message is sent from here). */
+export const correspondenceInputSchema = z.object(
+  {
+    channel: z.enum(correspondenceChannelKeys, {
+      error: `channel must be one of ${correspondenceChannelKeys.join(", ")}`,
+    }),
+    direction: z.enum(correspondenceDirectionKeys, {
+      error: "direction must be received or sent",
+    }),
+    occurredAt: z
+      .string({ error: "occurredAt must be a date and time" })
+      .refine((value) => !Number.isNaN(Date.parse(value)), {
+        error: "occurredAt must be a date and time",
+      })
+      .nullish()
+      .transform((value) => (value ? new Date(value).toISOString() : null)),
+    counterparty: optionalText("counterparty", 200),
+    subject: optionalText("subject", 300),
+    body: requiredText("body", 20000),
+    documentId: uuidField("documentId")
+      .nullish()
+      .transform((value) => value ?? null),
+  },
+  objectError("A correspondence object is required"),
+);
+export type CorrespondenceInput = z.infer<typeof correspondenceInputSchema>;
+
+export const warehouseLocationInputSchema = z.object(
+  { name: requiredText("name", 120) },
+  objectError("A location object is required"),
+);
+export type WarehouseLocationInput = z.infer<
+  typeof warehouseLocationInputSchema
+>;
+
+export const stockKindKeys = ["receipt", "release"] as const;
+export type StockKind = (typeof stockKindKeys)[number];
+
+/** Goods received into, or released from, a location on a warehousing job. */
+export const stockMovementInputSchema = z.object(
+  {
+    locationId: uuidField("locationId"),
+    kind: z.enum(stockKindKeys, { error: "kind must be receipt or release" }),
+    item: requiredText("item", 200),
+    unit: optionalText("unit", 40).transform((value) => value ?? "units"),
+    quantity: z
+      .number({ error: "quantity must be a whole number" })
+      .int({ error: "quantity must be a whole number" })
+      .min(1, { error: "quantity must be 1 to 100000000" })
+      .max(100_000_000, { error: "quantity must be 1 to 100000000" }),
+    conditionNotes: optionalText("conditionNotes", 2000),
+    reference: optionalText("reference", 200),
+    occurredAt: z
+      .string({ error: "occurredAt must be a date and time" })
+      .refine((value) => !Number.isNaN(Date.parse(value)), {
+        error: "occurredAt must be a date and time",
+      })
+      .nullish()
+      .transform((value) => (value ? new Date(value).toISOString() : null)),
+  },
+  objectError("A stock movement object is required"),
+);
+export type StockMovementInput = z.infer<typeof stockMovementInputSchema>;

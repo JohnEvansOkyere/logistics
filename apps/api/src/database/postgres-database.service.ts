@@ -12,6 +12,7 @@ import type {
   ReferenceKind,
 } from "@bjh/contracts";
 import {
+  ActiveCustomerMembershipRecord,
   ActivityEntry,
   ActivityFilter,
   ActivityRecord,
@@ -34,6 +35,10 @@ import {
   ChargeActualRecord,
   DeliveryRecord,
   InvoiceLineRecord,
+  JobCorrespondenceRecord,
+  StockBalanceRecord,
+  StockMovementRecord,
+  WarehouseLocationRecord,
   InvoicePaymentRecord,
   InvoiceRecord,
   InvoiceTotals,
@@ -149,7 +154,7 @@ const customerSelect = `
   LEFT JOIN app.customer_contact AS contact ON contact.company_id = company.company_id`;
 
 /** A payment with its reversal (if any) and the receipt date as plain text. */
-const PAYMENT_COLUMNS = `p.payment_id, p.invoice_id, p.amount_minor,
+const PAYMENT_COLUMNS = `p.payment_id, p.invoice_id, p.receipt_number, p.amount_minor,
   to_char(p.received_on, 'YYYY-MM-DD') AS received_on_text, p.method,
   p.reference, p.evidence_document_id, p.note, p.recorded_by, p.recorded_at,
   r.reason AS reversal_reason, r.reversed_by, r.reversed_at`;
@@ -512,7 +517,13 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
          OR EXISTS (
            SELECT 1 FROM app.job_party AS party
            WHERE party.job_id = job.job_id AND party.removed_at IS NULL
-             AND strpos(lower(party.party_name), lower($1)) > 0))
+             AND strpos(lower(party.party_name), lower($1)) > 0)
+         OR ($2::uuid[] IS NULL AND EXISTS (
+           SELECT 1 FROM app.job_correspondence AS entry
+           WHERE entry.job_id = job.job_id
+             AND (strpos(lower(entry.body), lower($1)) > 0
+               OR strpos(lower(COALESCE(entry.subject, '')), lower($1)) > 0
+               OR strpos(lower(COALESCE(entry.counterparty, '')), lower($1)) > 0))))
          AND ($2::uuid[] IS NULL OR job.customer_company_id = ANY($2::uuid[]))
          AND ($3::text[] IS NULL OR job.service_line = ANY($3::text[]))
        ORDER BY job.opened_at DESC, job.file_number DESC`,
@@ -2371,6 +2382,7 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       note: string | null;
     },
     recordedBy: string,
+    year: number,
   ): Promise<
     | InvoicePaymentRecord
     | "not_found"
@@ -2422,14 +2434,22 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
           return "document_invalid";
         }
       }
+      const receipt = await client.query(
+        `SELECT app.allocate_receipt_number($1, COALESCE(
+           (SELECT settings #>> '{numbering,receiptPrefix}'
+            FROM app.business_settings_revision
+            ORDER BY revision_number DESC LIMIT 1), 'BJH/RCT')) AS receipt_number`,
+        [year],
+      );
       const inserted = await client.query(
         `INSERT INTO app.invoice_payment
-          (invoice_id, amount_minor, received_on, method, reference,
-           evidence_document_id, note, recorded_by)
-         VALUES ($1::uuid, $2, $3::date, $4, $5, $6::uuid, $7, $8::uuid)
+          (invoice_id, receipt_number, amount_minor, received_on, method,
+           reference, evidence_document_id, note, recorded_by)
+         VALUES ($1::uuid, $2, $3, $4::date, $5, $6, $7::uuid, $8, $9::uuid)
          RETURNING payment_id`,
         [
           invoiceId,
+          String(receipt.rows[0].receipt_number),
           payment.amountMinor,
           payment.receivedOn,
           payment.method,
@@ -2521,6 +2541,279 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
     return this.mapPayment(result.rows[0]);
   }
 
+  async addJobCorrespondence(entry: {
+    jobId: string;
+    channel: JobCorrespondenceRecord["channel"];
+    direction: JobCorrespondenceRecord["direction"];
+    occurredAt: string;
+    counterparty: string | null;
+    subject: string | null;
+    body: string;
+    documentId: string | null;
+    recordedBy: string;
+  }): Promise<JobCorrespondenceRecord | "document_invalid"> {
+    if (entry.documentId) {
+      const document = await this.pool.query(
+        `SELECT 1 FROM app.document
+         WHERE document_id = $2::uuid AND job_id = $1::uuid`,
+        [entry.jobId, entry.documentId],
+      );
+      if (document.rows.length === 0) return "document_invalid";
+    }
+    const inserted = await this.pool.query(
+      `INSERT INTO app.job_correspondence
+        (job_id, channel, direction, occurred_at, counterparty, subject, body,
+         document_id, recorded_by)
+       VALUES ($1::uuid, $2, $3, $4::timestamptz, $5, $6, $7, $8::uuid, $9::uuid)
+       RETURNING *`,
+      [
+        entry.jobId,
+        entry.channel,
+        entry.direction,
+        entry.occurredAt,
+        entry.counterparty,
+        entry.subject,
+        entry.body,
+        entry.documentId,
+        entry.recordedBy,
+      ],
+    );
+    return this.mapCorrespondence(inserted.rows[0]);
+  }
+
+  async listJobCorrespondence(
+    jobId: string,
+  ): Promise<JobCorrespondenceRecord[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM app.job_correspondence
+       WHERE job_id = $1::uuid ORDER BY occurred_at DESC, recorded_at DESC, entry_id`,
+      [jobId],
+    );
+    return result.rows.map((row) => this.mapCorrespondence(row));
+  }
+
+  private mapCorrespondence(
+    row: Record<string, unknown>,
+  ): JobCorrespondenceRecord {
+    const optional = (value: unknown) => (value ? String(value) : null);
+    return {
+      id: String(row.entry_id),
+      jobId: String(row.job_id),
+      channel: row.channel as JobCorrespondenceRecord["channel"],
+      direction: row.direction as JobCorrespondenceRecord["direction"],
+      occurredAt: this.toIsoString(row.occurred_at),
+      counterparty: optional(row.counterparty),
+      subject: optional(row.subject),
+      body: String(row.body),
+      documentId: optional(row.document_id),
+      recordedBy: String(row.recorded_by),
+      recordedAt: this.toIsoString(row.recorded_at),
+    };
+  }
+
+  async listWarehouseLocations(): Promise<WarehouseLocationRecord[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM app.warehouse_location ORDER BY lower(location_name)`,
+    );
+    return result.rows.map((row) => this.mapLocation(row));
+  }
+
+  async createWarehouseLocation(
+    name: string,
+    createdBy: string,
+  ): Promise<WarehouseLocationRecord | "duplicate_name"> {
+    const result = await this.pool.query(
+      `INSERT INTO app.warehouse_location (location_name, created_by)
+       VALUES ($1, $2::uuid)
+       ON CONFLICT DO NOTHING
+       RETURNING *`,
+      [name, createdBy],
+    );
+    return result.rows[0] ? this.mapLocation(result.rows[0]) : "duplicate_name";
+  }
+
+  async setWarehouseLocationActive(
+    id: string,
+    active: boolean,
+  ): Promise<WarehouseLocationRecord | null> {
+    const result = await this.pool.query(
+      `UPDATE app.warehouse_location
+       SET deactivated_at = CASE WHEN $2 THEN NULL ELSE COALESCE(deactivated_at, clock_timestamp()) END
+       WHERE location_id = $1::uuid
+       RETURNING *`,
+      [id, active],
+    );
+    return result.rows[0] ? this.mapLocation(result.rows[0]) : null;
+  }
+
+  async addStockMovement(movement: {
+    jobId: string;
+    locationId: string;
+    kind: StockMovementRecord["kind"];
+    item: string;
+    unit: string;
+    quantity: number;
+    conditionNotes: string | null;
+    reference: string | null;
+    occurredAt: string;
+    recordedBy: string;
+  }): Promise<
+    StockMovementRecord | "location_unavailable" | "insufficient_stock"
+  > {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const location = await client.query(
+        `SELECT 1 FROM app.warehouse_location
+         WHERE location_id = $1::uuid AND deactivated_at IS NULL FOR SHARE`,
+        [movement.locationId],
+      );
+      if (location.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return "location_unavailable";
+      }
+      let inserted;
+      try {
+        inserted = await client.query(
+          `INSERT INTO app.stock_movement
+            (job_id, location_id, kind, item, unit, quantity, condition_notes,
+             reference, occurred_at, recorded_by)
+           VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9::timestamptz, $10::uuid)
+           RETURNING movement_id`,
+          [
+            movement.jobId,
+            movement.locationId,
+            movement.kind,
+            movement.item,
+            movement.unit,
+            movement.quantity,
+            movement.conditionNotes,
+            movement.reference,
+            movement.occurredAt,
+            movement.recordedBy,
+          ],
+        );
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message.includes("insufficient stock")
+        ) {
+          await client.query("ROLLBACK");
+          return "insufficient_stock";
+        }
+        throw error;
+      }
+      const saved = await client.query(
+        `SELECT m.*, l.location_name
+         FROM app.stock_movement m
+         JOIN app.warehouse_location l ON l.location_id = m.location_id
+         WHERE m.movement_id = $1::uuid`,
+        [String(inserted.rows[0].movement_id)],
+      );
+      await client.query("COMMIT");
+      return this.mapStockMovement(saved.rows[0]);
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listStockMovements(jobId: string): Promise<StockMovementRecord[]> {
+    const result = await this.pool.query(
+      `SELECT m.*, l.location_name
+       FROM app.stock_movement m
+       JOIN app.warehouse_location l ON l.location_id = m.location_id
+       WHERE m.job_id = $1::uuid
+       ORDER BY m.occurred_at DESC, m.recorded_at DESC, m.movement_id`,
+      [jobId],
+    );
+    return result.rows.map((row) => this.mapStockMovement(row));
+  }
+
+  async listStockBalances(filter: {
+    asOf: string | null;
+    jobId: string | null;
+    companyId: string | null;
+    scope: JobScope;
+  }): Promise<StockBalanceRecord[]> {
+    const { scope } = filter;
+    if (scope.companyIds?.length === 0 || scope.serviceLines?.length === 0) {
+      return [];
+    }
+    const result = await this.pool.query(
+      `SELECT job.job_id, job.file_number, job.customer_company_id,
+              company.company_name AS customer_company_name,
+              location.location_id, location.location_name,
+              (array_agg(m.item ORDER BY m.recorded_at))[1] AS item,
+              (array_agg(m.unit ORDER BY m.recorded_at))[1] AS unit,
+              sum(CASE WHEN m.kind = 'receipt' THEN m.quantity ELSE -m.quantity END) AS balance
+       FROM app.stock_movement m
+       JOIN app.job job ON job.job_id = m.job_id
+       JOIN app.customer_company company ON company.company_id = job.customer_company_id
+       JOIN app.warehouse_location location ON location.location_id = m.location_id
+       WHERE ($1::date IS NULL OR m.occurred_at < ($1::date + 1))
+         AND ($2::uuid IS NULL OR job.job_id = $2::uuid)
+         AND ($3::uuid IS NULL OR job.customer_company_id = $3::uuid)
+         AND ($4::uuid[] IS NULL OR job.customer_company_id = ANY($4::uuid[]))
+         AND ($5::text[] IS NULL OR job.service_line = ANY($5::text[]))
+       GROUP BY job.job_id, job.file_number, job.customer_company_id, company.company_name,
+                location.location_id, location.location_name,
+                lower(btrim(m.item)), lower(btrim(m.unit))
+       HAVING sum(CASE WHEN m.kind = 'receipt' THEN m.quantity ELSE -m.quantity END) > 0
+       ORDER BY company.company_name, job.file_number, location.location_name, item`,
+      [
+        filter.asOf,
+        filter.jobId,
+        filter.companyId,
+        scope.companyIds ?? null,
+        scope.serviceLines ?? null,
+      ],
+    );
+    return result.rows.map((row) => ({
+      jobId: String(row.job_id),
+      fileNumber: String(row.file_number),
+      customerCompanyId: String(row.customer_company_id),
+      customerCompanyName: String(row.customer_company_name),
+      locationId: String(row.location_id),
+      locationName: String(row.location_name),
+      item: String(row.item),
+      unit: String(row.unit),
+      balance: Number(row.balance),
+    }));
+  }
+
+  private mapLocation(row: Record<string, unknown>): WarehouseLocationRecord {
+    return {
+      id: String(row.location_id),
+      name: String(row.location_name),
+      createdAt: this.toIsoString(row.created_at),
+      deactivatedAt: row.deactivated_at
+        ? this.toIsoString(row.deactivated_at)
+        : null,
+    };
+  }
+
+  private mapStockMovement(row: Record<string, unknown>): StockMovementRecord {
+    const optional = (value: unknown) => (value ? String(value) : null);
+    return {
+      id: String(row.movement_id),
+      jobId: String(row.job_id),
+      locationId: String(row.location_id),
+      locationName: String(row.location_name),
+      kind: row.kind as StockMovementRecord["kind"],
+      item: String(row.item),
+      unit: String(row.unit),
+      quantity: Number(row.quantity),
+      conditionNotes: optional(row.condition_notes),
+      reference: optional(row.reference),
+      occurredAt: this.toIsoString(row.occurred_at),
+      recordedBy: String(row.recorded_by),
+      recordedAt: this.toIsoString(row.recorded_at),
+    };
+  }
+
   private mapDriver(row: Record<string, unknown>): DriverRecord {
     return {
       id: String(row.driver_id),
@@ -2578,6 +2871,7 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
     return {
       id: String(row.payment_id),
       invoiceId: String(row.invoice_id),
+      receiptNumber: optional(row.receipt_number),
       amountMinor: Number(row.amount_minor),
       receivedOn: String(row.received_on_text),
       method: row.method as InvoicePaymentRecord["method"],
@@ -2683,6 +2977,24 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       [userId],
     );
     return result.rows.map((row) => String(row.company_id));
+  }
+
+  async listActiveCustomerMemberships(): Promise<
+    ActiveCustomerMembershipRecord[]
+  > {
+    const result = await this.pool.query(
+      `SELECT m.user_id, m.company_id, c.company_name, m.granted_at
+       FROM app.customer_membership m
+       JOIN app.customer_company c ON c.company_id = m.company_id
+       WHERE m.revoked_at IS NULL
+       ORDER BY c.company_name, m.granted_at`,
+    );
+    return result.rows.map((row) => ({
+      userId: String(row.user_id),
+      companyId: String(row.company_id),
+      companyName: String(row.company_name),
+      grantedAt: this.toIsoString(row.granted_at),
+    }));
   }
 
   async listCustomerMemberships(

@@ -37,15 +37,28 @@ export class AuthService {
     };
   }
 
+  /** Staff get their roles; a customer gets the companies linked to the account. */
   async getSession(user: AuthenticatedUser) {
     const roles = await this.database.getActiveStaffRoles(user.userId);
-    if (roles.length === 0) {
-      throw new ForbiddenException("An active staff role is required");
+    if (roles.length > 0) {
+      return { userId: user.userId, email: user.email, roles };
+    }
+    const memberships = (
+      await this.database.listActiveCustomerMemberships()
+    ).filter((membership) => membership.userId === user.userId);
+    if (memberships.length === 0) {
+      throw new ForbiddenException(
+        "An active staff role or customer-company membership is required",
+      );
     }
     return {
       userId: user.userId,
       email: user.email,
-      roles,
+      roles: [] as string[],
+      companies: memberships.map(({ companyId, companyName }) => ({
+        companyId,
+        companyName,
+      })),
     };
   }
 

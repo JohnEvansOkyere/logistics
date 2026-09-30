@@ -36,6 +36,16 @@ export class QuoteRequestsController {
     return this.requests.create(body);
   }
 
+  @Post("mine")
+  @UseGuards(StaffCompanyReadGuard)
+  createMine(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
+    return this.requests.createForCustomer(
+      body,
+      request.authUser!,
+      request.allowedCompanyIds,
+    );
+  }
+
   @Get()
   @UseGuards(StaffCompanyReadGuard)
   list(

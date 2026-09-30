@@ -54,6 +54,19 @@ export default function SettingsPage() {
           </article>
           <article className="action-card">
             <span className="action-icon" aria-hidden="true">
+              ⚑
+            </span>
+            <div className="action-copy">
+              <p className="action-kicker">ACCESS</p>
+              <h3>Customer accounts</h3>
+              <p>Create customer sign-ins and link them to their company.</p>
+            </div>
+            <Link className="action-link" href="/settings/customer-accounts">
+              Manage customers <span aria-hidden="true">→</span>
+            </Link>
+          </article>
+          <article className="action-card">
+            <span className="action-icon" aria-hidden="true">
               ☰
             </span>
             <div className="action-copy">

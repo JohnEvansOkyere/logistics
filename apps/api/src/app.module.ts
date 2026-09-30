@@ -19,6 +19,8 @@ import {
   TasksController,
 } from "./jobs/job-details.controller";
 import { JobDetailsService } from "./jobs/job-details.service";
+import { JobCorrespondenceController } from "./jobs/job-correspondence.controller";
+import { JobCorrespondenceService } from "./jobs/job-correspondence.service";
 import { JobsController } from "./jobs/jobs.controller";
 import { JobsService } from "./jobs/jobs.service";
 import { CustomersController } from "./customers/customers.controller";
@@ -37,6 +39,12 @@ import {
   VehiclesController,
 } from "./transport/transport.controller";
 import { TransportService } from "./transport/transport.service";
+import {
+  JobStockController,
+  StockReportController,
+  WarehouseLocationsController,
+} from "./warehouse/warehouse.controller";
+import { WarehouseService } from "./warehouse/warehouse.service";
 import { QuotesController } from "./quotations/quotes.controller";
 import { QuotesService } from "./quotations/quotes.service";
 
@@ -54,11 +62,15 @@ import { QuotesService } from "./quotations/quotes.service";
     CustomersController,
     JobsController,
     JobDetailsController,
+    JobCorrespondenceController,
     JobChargesController,
     InvoicesController,
     DriversController,
     VehiclesController,
     DeliveriesController,
+    WarehouseLocationsController,
+    JobStockController,
+    StockReportController,
     TasksController,
     DocumentsController,
     ActivityController,
@@ -70,9 +82,11 @@ import { QuotesService } from "./quotations/quotes.service";
     CustomersService,
     JobsService,
     JobDetailsService,
+    JobCorrespondenceService,
     JobChargesService,
     InvoicesService,
     TransportService,
+    WarehouseService,
     DocumentsService,
     { provide: DOCUMENT_STORAGE, useClass: SupabaseDocumentStorage },
     ActivityLogMiddleware,

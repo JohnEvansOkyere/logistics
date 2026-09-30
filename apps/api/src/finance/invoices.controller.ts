@@ -154,6 +154,27 @@ export class InvoicesController {
     );
   }
 
+  @Get(":invoiceId/payments/:paymentId/receipt")
+  @UseGuards(DepartmentStaffGuard, JobScopeGuard)
+  async receipt(
+    @Param("id") id: string,
+    @Param("invoiceId") invoiceId: string,
+    @Param("paymentId") paymentId: string,
+    @Req() request: AuthenticatedRequest,
+    @Res() response: BinaryResponse,
+  ): Promise<void> {
+    const { file, filename } = await this.invoices.receiptPdf(
+      id,
+      invoiceId,
+      paymentId,
+      scopeOf(request),
+    );
+    response.setHeader("content-type", "application/pdf");
+    response.setHeader("content-disposition", `inline; filename="${filename}"`);
+    response.setHeader("content-length", String(file.length));
+    response.end(file);
+  }
+
   @Post(":invoiceId/payments/:paymentId/reverse")
   @UseGuards(DepartmentStaffGuard, JobScopeGuard)
   reversePayment(

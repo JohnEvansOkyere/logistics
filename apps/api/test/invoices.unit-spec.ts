@@ -8,7 +8,9 @@ import {
   invoiceDraftReason,
   renderInvoicePdf,
 } from "../src/finance/invoice-pdf";
+import { renderReceiptPdf } from "../src/finance/receipt-pdf";
 import type { InvoiceView } from "../src/finance/invoices.service";
+import type { InvoicePaymentRecord } from "../src/database/database.port";
 
 const levies = [
   { name: "NHIL", rateBasisPoints: 250 },
@@ -243,4 +245,72 @@ test("drafts and unconfigured settings are marked, and void invoices say why", a
   );
   assert.ok(draft.includes("Not yet numbered"));
   assert.ok(draft.includes("Issuer details not configured"));
+});
+
+const payment = (
+  over: Partial<InvoicePaymentRecord> = {},
+): InvoicePaymentRecord => ({
+  id: "payment",
+  invoiceId: "invoice",
+  receiptNumber: "SYN/RCT/2026/0001",
+  amountMinor: 100000,
+  receivedOn: "2026-09-25",
+  method: "bank_transfer",
+  reference: "TXN-42",
+  evidenceDocumentId: null,
+  note: null,
+  recordedBy: "user",
+  recordedAt: "2026-09-25T11:00:00.000Z",
+  reversal: null,
+  ...over,
+});
+
+test("a receipt acknowledges the payment and never claims bank verification", async () => {
+  const text = pdfText(
+    await renderReceiptPdf(
+      { payment: payment(), invoice: invoice(), job, settings },
+      { compress: false },
+    ),
+  );
+  for (const expected of [
+    "SYN/RCT/2026/0001",
+    "PAYMENT RECEIPT",
+    "GHS 1,000.00",
+    "Harbor Demo Ltd",
+    "SYN/INV/2026/0001",
+    "Bank transfer",
+    "TXN-42",
+    "GHS 2,877.36",
+    "GHS 1,877.36",
+    "It is not a bank confirmation.",
+  ]) {
+    assert.ok(text.includes(expected), `missing: ${expected}`);
+  }
+  assert.ok(
+    !/verified|confirmed by the bank/i.test(
+      text.replace("not a bank confirmation", ""),
+    ),
+  );
+  assert.ok(!text.includes("REVERSED"));
+});
+
+test("a reversed payment's receipt is stamped with the reason", async () => {
+  const text = pdfText(
+    await renderReceiptPdf(
+      {
+        payment: payment({
+          reversal: {
+            reason: "Cheque bounced",
+            reversedBy: "user",
+            reversedAt: "2026-09-27T09:00:00.000Z",
+          },
+        }),
+        invoice: invoice(),
+        job,
+        settings,
+      },
+      { compress: false },
+    ),
+  );
+  assert.ok(text.includes("REVERSED - CHEQUE BOUNCED"));
 });

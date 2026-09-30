@@ -48,7 +48,12 @@ export interface QuoteDraftRecord {
 }
 
 export type ServiceLine =
-  "sea_import" | "sea_export" | "air_import" | "air_export";
+  | "sea_import"
+  | "sea_export"
+  | "air_import"
+  | "air_export"
+  | "warehousing"
+  | "road_transport";
 
 export interface JobStatusChangeRecord {
   id: string;
@@ -359,6 +364,8 @@ export interface InvoiceRecord extends InvoiceTotals {
 export interface InvoicePaymentRecord {
   id: string;
   invoiceId: string;
+  /** Null only for payments recorded before receipts existed. */
+  receiptNumber: string | null;
   amountMinor: number;
   /** YYYY-MM-DD */
   receivedOn: string;
@@ -369,6 +376,55 @@ export interface InvoicePaymentRecord {
   recordedBy: string;
   recordedAt: string;
   reversal: { reason: string; reversedBy: string; reversedAt: string } | null;
+}
+
+export interface JobCorrespondenceRecord {
+  id: string;
+  jobId: string;
+  channel: "email" | "whatsapp" | "sms" | "phone" | "letter" | "other";
+  direction: "received" | "sent";
+  occurredAt: string;
+  counterparty: string | null;
+  subject: string | null;
+  body: string;
+  documentId: string | null;
+  recordedBy: string;
+  recordedAt: string;
+}
+
+export interface WarehouseLocationRecord {
+  id: string;
+  name: string;
+  createdAt: string;
+  deactivatedAt: string | null;
+}
+
+export interface StockMovementRecord {
+  id: string;
+  jobId: string;
+  locationId: string;
+  locationName: string;
+  kind: "receipt" | "release";
+  item: string;
+  unit: string;
+  quantity: number;
+  conditionNotes: string | null;
+  reference: string | null;
+  occurredAt: string;
+  recordedBy: string;
+  recordedAt: string;
+}
+
+export interface StockBalanceRecord {
+  jobId: string;
+  fileNumber: string;
+  customerCompanyId: string;
+  customerCompanyName: string;
+  locationId: string;
+  locationName: string;
+  item: string;
+  unit: string;
+  balance: number;
 }
 
 export interface ActivityEntry {
@@ -422,6 +478,14 @@ export interface CustomerMembershipRecord {
   grantedBy: string;
   grantedAt: string;
   revokedAt: string | null;
+}
+
+/** An active customer-company membership with the company's name. */
+export interface ActiveCustomerMembershipRecord {
+  userId: string;
+  companyId: string;
+  companyName: string;
+  grantedAt: string;
 }
 
 export type StaffRoleKey =
@@ -783,6 +847,7 @@ export abstract class DatabasePort {
       note: string | null;
     },
     recordedBy: string,
+    year: number,
   ): Promise<
     | InvoicePaymentRecord
     | "not_found"
@@ -797,9 +862,59 @@ export abstract class DatabasePort {
     reason: string,
     reversedBy: string,
   ): Promise<InvoicePaymentRecord | "not_found" | "already_reversed">;
+  abstract addJobCorrespondence(entry: {
+    jobId: string;
+    channel: JobCorrespondenceRecord["channel"];
+    direction: JobCorrespondenceRecord["direction"];
+    occurredAt: string;
+    counterparty: string | null;
+    subject: string | null;
+    body: string;
+    documentId: string | null;
+    recordedBy: string;
+  }): Promise<JobCorrespondenceRecord | "document_invalid">;
+  /** Newest first by the time the exchange happened. */
+  abstract listJobCorrespondence(
+    jobId: string,
+  ): Promise<JobCorrespondenceRecord[]>;
+  abstract listWarehouseLocations(): Promise<WarehouseLocationRecord[]>;
+  abstract createWarehouseLocation(
+    name: string,
+    createdBy: string,
+  ): Promise<WarehouseLocationRecord | "duplicate_name">;
+  abstract setWarehouseLocationActive(
+    id: string,
+    active: boolean,
+  ): Promise<WarehouseLocationRecord | null>;
+  abstract addStockMovement(movement: {
+    jobId: string;
+    locationId: string;
+    kind: StockMovementRecord["kind"];
+    item: string;
+    unit: string;
+    quantity: number;
+    conditionNotes: string | null;
+    reference: string | null;
+    occurredAt: string;
+    recordedBy: string;
+  }): Promise<
+    StockMovementRecord | "location_unavailable" | "insufficient_stock"
+  >;
+  /** Newest first by the time the goods moved. */
+  abstract listStockMovements(jobId: string): Promise<StockMovementRecord[]>;
+  /** Balances above zero as of the end of `asOf` (a YYYY-MM-DD date), or now. */
+  abstract listStockBalances(filter: {
+    asOf: string | null;
+    jobId: string | null;
+    companyId: string | null;
+    scope: JobScope;
+  }): Promise<StockBalanceRecord[]>;
   abstract recordActivity(entry: ActivityEntry): Promise<void>;
   abstract listActivity(filter: ActivityFilter): Promise<ActivityRecord[]>;
   abstract getActiveCustomerCompanyIds(userId: string): Promise<string[]>;
+  abstract listActiveCustomerMemberships(): Promise<
+    ActiveCustomerMembershipRecord[]
+  >;
   abstract listCustomerMemberships(
     userId: string,
   ): Promise<CustomerMembershipRecord[]>;

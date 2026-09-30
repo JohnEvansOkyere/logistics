@@ -24,6 +24,7 @@ import { JobsService } from "../jobs/jobs.service";
 import { JobChargesService } from "./job-charges.service";
 import { computeInvoiceTotals } from "./invoice-totals";
 import { renderInvoicePdf } from "./invoice-pdf";
+import { renderReceiptPdf } from "./receipt-pdf";
 
 export interface InvoiceView extends InvoiceRecord {
   /** Payments still standing (not reversed). */
@@ -281,6 +282,7 @@ export class InvoicesService {
           invoiceId,
           parsed.data,
           recordedBy,
+          new Date().getUTCFullYear(),
         )
       : "not_found";
     if (result === "not_found") {
@@ -364,6 +366,36 @@ export class InvoicesService {
       "-",
     );
     return { file, filename: `${base}.pdf` };
+  }
+
+  /** A payment's receipt: staff hand it to the customer; it is not a bank confirmation. */
+  async receiptPdf(
+    id: string,
+    invoiceId: string,
+    paymentId: string,
+    scope: JobScope,
+  ): Promise<{ file: Buffer; filename: string }> {
+    const job = await this.jobs.get(id, scope);
+    const invoice = await this.find(job.id, invoiceId);
+    const payments = await this.database.listInvoicePayments(job.id);
+    const forInvoice = payments.filter((item) => item.invoiceId === invoice.id);
+    const payment = isUuid(paymentId)
+      ? forInvoice.find((item) => item.id === paymentId)
+      : undefined;
+    if (!payment?.receiptNumber) {
+      throw new NotFoundException("Receipt was not found on this invoice");
+    }
+    const settings = await this.database.getBusinessSettings();
+    const file = await renderReceiptPdf({
+      payment,
+      invoice: this.view(invoice, forInvoice, false),
+      job,
+      settings: settings?.settings ?? null,
+    });
+    return {
+      file,
+      filename: `${payment.receiptNumber.replace(/[^A-Za-z0-9-]+/g, "-")}.pdf`,
+    };
   }
 
   private view(
