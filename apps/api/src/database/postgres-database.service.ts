@@ -33,6 +33,10 @@ import {
   BusinessSettingsRevisionRecord,
   ChargeActualRecord,
   DeliveryRecord,
+  InvoiceLineRecord,
+  InvoicePaymentRecord,
+  InvoiceRecord,
+  InvoiceTotals,
   DriverRecord,
   JobChargeRecord,
   VehicleRecord,
@@ -143,6 +147,12 @@ const customerSelect = `
     contact.created_at AS contact_created_at
   FROM app.customer_company AS company
   LEFT JOIN app.customer_contact AS contact ON contact.company_id = company.company_id`;
+
+/** A payment with its reversal (if any) and the receipt date as plain text. */
+const PAYMENT_COLUMNS = `p.payment_id, p.invoice_id, p.amount_minor,
+  to_char(p.received_on, 'YYYY-MM-DD') AS received_on_text, p.method,
+  p.reference, p.evidence_document_id, p.note, p.recorded_by, p.recorded_at,
+  r.reason AS reversal_reason, r.reversed_by, r.reversed_at`;
 
 @Injectable()
 export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
@@ -2120,6 +2130,397 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
     }
   }
 
+  async createInvoice(invoice: {
+    jobId: string;
+    currency: string;
+    lines: InvoiceLineRecord[];
+    dueDate: string | null;
+    notes: string | null;
+    totals: InvoiceTotals;
+    createdBy: string;
+  }): Promise<InvoiceRecord> {
+    const inserted = await this.pool.query(
+      `INSERT INTO app.invoice
+        (job_id, currency, lines, due_date, notes, subtotal_minor, tax_lines,
+         tax_total_minor, total_minor, created_by)
+       VALUES ($1::uuid, $2, $3::jsonb, $4::date, $5, $6, $7::jsonb, $8, $9, $10::uuid)
+       RETURNING *, to_char(due_date, 'YYYY-MM-DD') AS due_date_text`,
+      [
+        invoice.jobId,
+        invoice.currency,
+        JSON.stringify(invoice.lines),
+        invoice.dueDate,
+        invoice.notes,
+        invoice.totals.subtotalMinor,
+        JSON.stringify(invoice.totals.taxLines),
+        invoice.totals.taxTotalMinor,
+        invoice.totals.totalMinor,
+        invoice.createdBy,
+      ],
+    );
+    return this.mapInvoice(inserted.rows[0]);
+  }
+
+  async listInvoices(jobId: string): Promise<InvoiceRecord[]> {
+    const result = await this.pool.query(
+      `SELECT *, to_char(due_date, 'YYYY-MM-DD') AS due_date_text
+       FROM app.invoice WHERE job_id = $1::uuid ORDER BY created_at, invoice_id`,
+      [jobId],
+    );
+    return result.rows.map((row) => this.mapInvoice(row));
+  }
+
+  async listInvoicePayments(jobId: string): Promise<InvoicePaymentRecord[]> {
+    const result = await this.pool.query(
+      `SELECT ${PAYMENT_COLUMNS}
+       FROM app.invoice_payment p
+       JOIN app.invoice i ON i.invoice_id = p.invoice_id
+       LEFT JOIN app.invoice_payment_reversal r ON r.payment_id = p.payment_id
+       WHERE i.job_id = $1::uuid
+       ORDER BY p.recorded_at, p.payment_id`,
+      [jobId],
+    );
+    return result.rows.map((row) => this.mapPayment(row));
+  }
+
+  async updateDraftInvoice(
+    jobId: string,
+    invoiceId: string,
+    draft: {
+      currency: string;
+      lines: InvoiceLineRecord[];
+      dueDate: string | null;
+      notes: string | null;
+      totals: InvoiceTotals;
+    },
+  ): Promise<InvoiceRecord | "not_found" | "not_draft"> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const current = await client.query(
+        `SELECT status FROM app.invoice
+         WHERE invoice_id = $2::uuid AND job_id = $1::uuid FOR UPDATE`,
+        [jobId, invoiceId],
+      );
+      if (current.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return "not_found";
+      }
+      if (current.rows[0].status !== "draft") {
+        await client.query("ROLLBACK");
+        return "not_draft";
+      }
+      const updated = await client.query(
+        `UPDATE app.invoice
+         SET currency = $3, lines = $4::jsonb, due_date = $5::date, notes = $6,
+             subtotal_minor = $7, tax_lines = $8::jsonb, tax_total_minor = $9,
+             total_minor = $10, updated_at = clock_timestamp()
+         WHERE invoice_id = $2::uuid AND job_id = $1::uuid
+         RETURNING *, to_char(due_date, 'YYYY-MM-DD') AS due_date_text`,
+        [
+          jobId,
+          invoiceId,
+          draft.currency,
+          JSON.stringify(draft.lines),
+          draft.dueDate,
+          draft.notes,
+          draft.totals.subtotalMinor,
+          JSON.stringify(draft.totals.taxLines),
+          draft.totals.taxTotalMinor,
+          draft.totals.totalMinor,
+        ],
+      );
+      await client.query("COMMIT");
+      return this.mapInvoice(updated.rows[0]);
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async issueInvoice(
+    jobId: string,
+    invoiceId: string,
+    issue: {
+      issuedBy: string;
+      year: number;
+      dueDate: string | null;
+      totals: InvoiceTotals;
+    },
+  ): Promise<InvoiceRecord | "not_found" | "not_draft" | "no_lines"> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const current = await client.query(
+        `SELECT status, jsonb_array_length(lines) AS line_count FROM app.invoice
+         WHERE invoice_id = $2::uuid AND job_id = $1::uuid FOR UPDATE`,
+        [jobId, invoiceId],
+      );
+      if (current.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return "not_found";
+      }
+      if (current.rows[0].status !== "draft") {
+        await client.query("ROLLBACK");
+        return "not_draft";
+      }
+      if (Number(current.rows[0].line_count) === 0) {
+        await client.query("ROLLBACK");
+        return "no_lines";
+      }
+      const allocated = await client.query(
+        `SELECT app.allocate_invoice_number($1, COALESCE(
+           (SELECT settings #>> '{numbering,invoicePrefix}'
+            FROM app.business_settings_revision
+            ORDER BY revision_number DESC LIMIT 1), 'BJH/INV')) AS invoice_number`,
+        [issue.year],
+      );
+      const updated = await client.query(
+        `UPDATE app.invoice
+         SET status = 'issued', invoice_number = $3, issued_by = $4::uuid,
+             issued_at = clock_timestamp(), due_date = $5::date,
+             subtotal_minor = $6, tax_lines = $7::jsonb, tax_total_minor = $8,
+             total_minor = $9, updated_at = clock_timestamp()
+         WHERE invoice_id = $2::uuid AND job_id = $1::uuid
+         RETURNING *, to_char(due_date, 'YYYY-MM-DD') AS due_date_text`,
+        [
+          jobId,
+          invoiceId,
+          String(allocated.rows[0].invoice_number),
+          issue.issuedBy,
+          issue.dueDate,
+          issue.totals.subtotalMinor,
+          JSON.stringify(issue.totals.taxLines),
+          issue.totals.taxTotalMinor,
+          issue.totals.totalMinor,
+        ],
+      );
+      await client.query("COMMIT");
+      return this.mapInvoice(updated.rows[0]);
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async voidInvoice(
+    jobId: string,
+    invoiceId: string,
+    voidedBy: string,
+    reason: string,
+  ): Promise<InvoiceRecord | "not_found" | "already_void" | "has_payments"> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const current = await client.query(
+        `SELECT status FROM app.invoice
+         WHERE invoice_id = $2::uuid AND job_id = $1::uuid FOR UPDATE`,
+        [jobId, invoiceId],
+      );
+      if (current.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return "not_found";
+      }
+      if (current.rows[0].status === "void") {
+        await client.query("ROLLBACK");
+        return "already_void";
+      }
+      const standing = await client.query(
+        `SELECT 1 FROM app.invoice_payment p
+         WHERE p.invoice_id = $1::uuid
+           AND NOT EXISTS (
+             SELECT 1 FROM app.invoice_payment_reversal r WHERE r.payment_id = p.payment_id
+           )`,
+        [invoiceId],
+      );
+      if (standing.rows.length > 0) {
+        await client.query("ROLLBACK");
+        return "has_payments";
+      }
+      const updated = await client.query(
+        `UPDATE app.invoice
+         SET status = 'void', voided_by = $3::uuid, voided_at = clock_timestamp(),
+             void_reason = $4, updated_at = clock_timestamp()
+         WHERE invoice_id = $2::uuid AND job_id = $1::uuid
+         RETURNING *, to_char(due_date, 'YYYY-MM-DD') AS due_date_text`,
+        [jobId, invoiceId, voidedBy, reason],
+      );
+      await client.query("COMMIT");
+      return this.mapInvoice(updated.rows[0]);
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async recordInvoicePayment(
+    jobId: string,
+    invoiceId: string,
+    payment: {
+      amountMinor: number;
+      receivedOn: string;
+      method: InvoicePaymentRecord["method"];
+      reference: string | null;
+      evidenceDocumentId: string | null;
+      note: string | null;
+    },
+    recordedBy: string,
+  ): Promise<
+    | InvoicePaymentRecord
+    | "not_found"
+    | "not_issued"
+    | "exceeds_balance"
+    | "document_invalid"
+  > {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      // The invoice row is locked so simultaneous payments are checked one by one.
+      const invoice = await client.query(
+        `SELECT status, total_minor FROM app.invoice
+         WHERE invoice_id = $2::uuid AND job_id = $1::uuid FOR UPDATE`,
+        [jobId, invoiceId],
+      );
+      if (invoice.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return "not_found";
+      }
+      if (invoice.rows[0].status !== "issued") {
+        await client.query("ROLLBACK");
+        return "not_issued";
+      }
+      const standing = await client.query(
+        `SELECT COALESCE(sum(p.amount_minor), 0) AS paid
+         FROM app.invoice_payment p
+         WHERE p.invoice_id = $1::uuid
+           AND NOT EXISTS (
+             SELECT 1 FROM app.invoice_payment_reversal r WHERE r.payment_id = p.payment_id
+           )`,
+        [invoiceId],
+      );
+      if (
+        Number(standing.rows[0].paid) + payment.amountMinor >
+        Number(invoice.rows[0].total_minor)
+      ) {
+        await client.query("ROLLBACK");
+        return "exceeds_balance";
+      }
+      if (payment.evidenceDocumentId) {
+        const document = await client.query(
+          `SELECT 1 FROM app.document
+           WHERE document_id = $2::uuid AND job_id = $1::uuid`,
+          [jobId, payment.evidenceDocumentId],
+        );
+        if (document.rows.length === 0) {
+          await client.query("ROLLBACK");
+          return "document_invalid";
+        }
+      }
+      const inserted = await client.query(
+        `INSERT INTO app.invoice_payment
+          (invoice_id, amount_minor, received_on, method, reference,
+           evidence_document_id, note, recorded_by)
+         VALUES ($1::uuid, $2, $3::date, $4, $5, $6::uuid, $7, $8::uuid)
+         RETURNING payment_id`,
+        [
+          invoiceId,
+          payment.amountMinor,
+          payment.receivedOn,
+          payment.method,
+          payment.reference,
+          payment.evidenceDocumentId,
+          payment.note,
+          recordedBy,
+        ],
+      );
+      const saved = await this.selectPayment(
+        client,
+        String(inserted.rows[0].payment_id),
+      );
+      await client.query("COMMIT");
+      return saved;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async reverseInvoicePayment(
+    jobId: string,
+    invoiceId: string,
+    paymentId: string,
+    reason: string,
+    reversedBy: string,
+  ): Promise<InvoicePaymentRecord | "not_found" | "already_reversed"> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const payment = await client.query(
+        `SELECT 1
+         FROM app.invoice_payment p
+         JOIN app.invoice i ON i.invoice_id = p.invoice_id
+         WHERE p.payment_id = $3::uuid AND p.invoice_id = $2::uuid
+           AND i.job_id = $1::uuid
+         FOR UPDATE OF p`,
+        [jobId, invoiceId, paymentId],
+      );
+      if (payment.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return "not_found";
+      }
+      // A separate statement, so a reversal committed while this one waited
+      // for the row lock is seen.
+      const reversed = await client.query(
+        `SELECT 1 FROM app.invoice_payment_reversal WHERE payment_id = $1::uuid`,
+        [paymentId],
+      );
+      if (reversed.rows.length > 0) {
+        await client.query("ROLLBACK");
+        return "already_reversed";
+      }
+      await client.query(
+        `INSERT INTO app.invoice_payment_reversal (payment_id, reason, reversed_by)
+         VALUES ($1::uuid, $2, $3::uuid)`,
+        [paymentId, reason, reversedBy],
+      );
+      const saved = await this.selectPayment(client, paymentId);
+      await client.query("COMMIT");
+      return saved;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private async selectPayment(
+    client: {
+      query: (
+        text: string,
+        values: unknown[],
+      ) => Promise<{ rows: Record<string, unknown>[] }>;
+    },
+    paymentId: string,
+  ): Promise<InvoicePaymentRecord> {
+    const result = await client.query(
+      `SELECT ${PAYMENT_COLUMNS}
+       FROM app.invoice_payment p
+       LEFT JOIN app.invoice_payment_reversal r ON r.payment_id = p.payment_id
+       WHERE p.payment_id = $1::uuid`,
+      [paymentId],
+    );
+    return this.mapPayment(result.rows[0]);
+  }
+
   private mapDriver(row: Record<string, unknown>): DriverRecord {
     return {
       id: String(row.driver_id),
@@ -2140,6 +2541,57 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       createdAt: this.toIsoString(row.created_at),
       deactivatedAt: row.deactivated_at
         ? this.toIsoString(row.deactivated_at)
+        : null,
+    };
+  }
+
+  private mapInvoice(row: Record<string, unknown>): InvoiceRecord {
+    const optional = (value: unknown) => (value ? String(value) : null);
+    const timestamp = (value: unknown) =>
+      value ? this.toIsoString(value) : null;
+    return {
+      id: String(row.invoice_id),
+      jobId: String(row.job_id),
+      invoiceNumber: optional(row.invoice_number),
+      status: row.status as InvoiceRecord["status"],
+      currency: String(row.currency),
+      lines: row.lines as InvoiceLineRecord[],
+      dueDate: optional(row.due_date_text),
+      notes: optional(row.notes),
+      subtotalMinor: Number(row.subtotal_minor),
+      taxLines: row.tax_lines as InvoiceRecord["taxLines"],
+      taxTotalMinor: Number(row.tax_total_minor),
+      totalMinor: Number(row.total_minor),
+      createdBy: String(row.created_by),
+      createdAt: this.toIsoString(row.created_at),
+      updatedAt: this.toIsoString(row.updated_at),
+      issuedBy: optional(row.issued_by),
+      issuedAt: timestamp(row.issued_at),
+      voidedBy: optional(row.voided_by),
+      voidedAt: timestamp(row.voided_at),
+      voidReason: optional(row.void_reason),
+    };
+  }
+
+  private mapPayment(row: Record<string, unknown>): InvoicePaymentRecord {
+    const optional = (value: unknown) => (value ? String(value) : null);
+    return {
+      id: String(row.payment_id),
+      invoiceId: String(row.invoice_id),
+      amountMinor: Number(row.amount_minor),
+      receivedOn: String(row.received_on_text),
+      method: row.method as InvoicePaymentRecord["method"],
+      reference: optional(row.reference),
+      evidenceDocumentId: optional(row.evidence_document_id),
+      note: optional(row.note),
+      recordedBy: String(row.recorded_by),
+      recordedAt: this.toIsoString(row.recorded_at),
+      reversal: row.reversal_reason
+        ? {
+            reason: String(row.reversal_reason),
+            reversedBy: String(row.reversed_by),
+            reversedAt: this.toIsoString(row.reversed_at),
+          }
         : null,
     };
   }

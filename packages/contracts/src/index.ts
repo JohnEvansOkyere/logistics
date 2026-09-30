@@ -975,3 +975,93 @@ export const proofOfDeliveryInputSchema = z.object(
   objectError("A proof of delivery object is required"),
 );
 export type ProofOfDeliveryInput = z.infer<typeof proofOfDeliveryInputSchema>;
+
+const isoDate = (field: string) =>
+  z
+    .string({ error: `${field} must be a date (YYYY-MM-DD)` })
+    .transform((value) => value.trim())
+    .refine(
+      (value) =>
+        /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+        !Number.isNaN(Date.parse(value)) &&
+        new Date(value).toISOString().slice(0, 10) === value,
+      { error: `${field} must be a date (YYYY-MM-DD)` },
+    );
+
+export const invoiceLineSchema = z.object(
+  {
+    description: requiredText("description", 300),
+    amountMinor: z
+      .number({ error: "amountMinor must be a whole number of minor units" })
+      .int({ error: "amountMinor must be a whole number of minor units" })
+      .min(0, { error: "amountMinor cannot be negative" })
+      .max(MAX_MINOR_AMOUNT, { error: "amountMinor is too large" }),
+    taxable: z
+      .boolean({ error: "taxable must be true or false" })
+      .nullish()
+      .transform((value) => value ?? true),
+  },
+  objectError("An invoice line object is required"),
+);
+export type InvoiceLineInput = z.infer<typeof invoiceLineSchema>;
+
+export const invoiceInputSchema = z.object(
+  {
+    currency: currencyCode("currency"),
+    lines: z
+      .array(invoiceLineSchema, { error: "lines must be a list" })
+      .max(100, { error: "An invoice can have at most 100 lines" })
+      .nullish()
+      .transform((value) => value ?? []),
+    dueDate: isoDate("dueDate")
+      .nullish()
+      .transform((value) => value ?? null),
+    notes: optionalText("notes", 2000),
+  },
+  objectError("An invoice object is required"),
+);
+export type InvoiceInput = z.infer<typeof invoiceInputSchema>;
+
+/** Starting an invoice from the job's charges: no lines are sent. */
+export const invoiceFromChargesInputSchema = invoiceInputSchema.omit({
+  lines: true,
+});
+export type InvoiceFromChargesInput = z.infer<
+  typeof invoiceFromChargesInputSchema
+>;
+
+export const invoiceReasonInputSchema = z.object(
+  { reason: requiredText("reason", 500) },
+  objectError("A reason is required"),
+);
+
+export const paymentMethodKeys = [
+  "cash",
+  "bank_transfer",
+  "cheque",
+  "mobile_money",
+  "other",
+] as const;
+export type PaymentMethod = (typeof paymentMethodKeys)[number];
+
+/** A payment received outside the system; staff record it, nothing is charged here. */
+export const paymentInputSchema = z.object(
+  {
+    amountMinor: z
+      .number({ error: "amountMinor must be a whole number of minor units" })
+      .int({ error: "amountMinor must be a whole number of minor units" })
+      .min(1, { error: "amountMinor must be more than zero" })
+      .max(MAX_MINOR_AMOUNT, { error: "amountMinor is too large" }),
+    receivedOn: isoDate("receivedOn"),
+    method: z.enum(paymentMethodKeys, {
+      error: `method must be one of ${paymentMethodKeys.join(", ")}`,
+    }),
+    reference: optionalText("reference", 200),
+    evidenceDocumentId: uuidField("evidenceDocumentId")
+      .nullish()
+      .transform((value) => value ?? null),
+    note: optionalText("note", 2000),
+  },
+  objectError("A payment object is required"),
+);
+export type PaymentInput = z.infer<typeof paymentInputSchema>;

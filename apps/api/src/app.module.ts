@@ -29,6 +29,8 @@ import { SettingsController } from "./settings/settings.controller";
 import { SettingsService } from "./settings/settings.service";
 import { JobChargesController } from "./finance/job-charges.controller";
 import { JobChargesService } from "./finance/job-charges.service";
+import { InvoicesController } from "./finance/invoices.controller";
+import { InvoicesService } from "./finance/invoices.service";
 import {
   DeliveriesController,
   DriversController,
@@ -53,6 +55,7 @@ import { QuotesService } from "./quotations/quotes.service";
     JobsController,
     JobDetailsController,
     JobChargesController,
+    InvoicesController,
     DriversController,
     VehiclesController,
     DeliveriesController,
@@ -68,6 +71,7 @@ import { QuotesService } from "./quotations/quotes.service";
     JobsService,
     JobDetailsService,
     JobChargesService,
+    InvoicesService,
     TransportService,
     DocumentsService,
     { provide: DOCUMENT_STORAGE, useClass: SupabaseDocumentStorage },

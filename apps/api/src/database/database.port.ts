@@ -315,6 +315,62 @@ export interface DeliveryRecord {
   podRecordedAt: string | null;
 }
 
+export interface InvoiceLineRecord {
+  description: string;
+  amountMinor: number;
+  taxable: boolean;
+}
+
+export interface InvoiceTaxLineRecord {
+  name: string;
+  rateBasisPoints: number;
+  amountMinor: number;
+}
+
+/** Subtotal, tax lines and total, computed by the service and stored with the invoice. */
+export interface InvoiceTotals {
+  subtotalMinor: number;
+  taxLines: InvoiceTaxLineRecord[];
+  taxTotalMinor: number;
+  totalMinor: number;
+}
+
+export interface InvoiceRecord extends InvoiceTotals {
+  id: string;
+  jobId: string;
+  /** Null until the invoice is issued. */
+  invoiceNumber: string | null;
+  status: "draft" | "issued" | "void";
+  currency: string;
+  lines: InvoiceLineRecord[];
+  /** YYYY-MM-DD */
+  dueDate: string | null;
+  notes: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  issuedBy: string | null;
+  issuedAt: string | null;
+  voidedBy: string | null;
+  voidedAt: string | null;
+  voidReason: string | null;
+}
+
+export interface InvoicePaymentRecord {
+  id: string;
+  invoiceId: string;
+  amountMinor: number;
+  /** YYYY-MM-DD */
+  receivedOn: string;
+  method: "cash" | "bank_transfer" | "cheque" | "mobile_money" | "other";
+  reference: string | null;
+  evidenceDocumentId: string | null;
+  note: string | null;
+  recordedBy: string;
+  recordedAt: string;
+  reversal: { reason: string; reversedBy: string; reversedAt: string } | null;
+}
+
 export interface ActivityEntry {
   actorUserId: string;
   actorEmail: string | null;
@@ -676,6 +732,71 @@ export abstract class DatabasePort {
   ): Promise<
     DeliveryRecord | "not_found" | "already_delivered" | "document_invalid"
   >;
+  abstract createInvoice(invoice: {
+    jobId: string;
+    currency: string;
+    lines: InvoiceLineRecord[];
+    dueDate: string | null;
+    notes: string | null;
+    totals: InvoiceTotals;
+    createdBy: string;
+  }): Promise<InvoiceRecord>;
+  abstract listInvoices(jobId: string): Promise<InvoiceRecord[]>;
+  /** Every payment on the job's invoices, oldest first, with any reversal. */
+  abstract listInvoicePayments(jobId: string): Promise<InvoicePaymentRecord[]>;
+  abstract updateDraftInvoice(
+    jobId: string,
+    invoiceId: string,
+    draft: {
+      currency: string;
+      lines: InvoiceLineRecord[];
+      dueDate: string | null;
+      notes: string | null;
+      totals: InvoiceTotals;
+    },
+  ): Promise<InvoiceRecord | "not_found" | "not_draft">;
+  abstract issueInvoice(
+    jobId: string,
+    invoiceId: string,
+    issue: {
+      issuedBy: string;
+      year: number;
+      dueDate: string | null;
+      totals: InvoiceTotals;
+    },
+  ): Promise<InvoiceRecord | "not_found" | "not_draft" | "no_lines">;
+  abstract voidInvoice(
+    jobId: string,
+    invoiceId: string,
+    voidedBy: string,
+    reason: string,
+  ): Promise<InvoiceRecord | "not_found" | "already_void" | "has_payments">;
+  abstract recordInvoicePayment(
+    jobId: string,
+    invoiceId: string,
+    payment: {
+      amountMinor: number;
+      receivedOn: string;
+      method: InvoicePaymentRecord["method"];
+      reference: string | null;
+      evidenceDocumentId: string | null;
+      note: string | null;
+    },
+    recordedBy: string,
+  ): Promise<
+    | InvoicePaymentRecord
+    | "not_found"
+    | "not_issued"
+    | "exceeds_balance"
+    | "document_invalid"
+  >;
+  abstract reverseInvoicePayment(
+    jobId: string,
+    invoiceId: string,
+    paymentId: string,
+    reason: string,
+    reversedBy: string,
+  ): Promise<InvoicePaymentRecord | "not_found" | "already_reversed">;
   abstract recordActivity(entry: ActivityEntry): Promise<void>;
   abstract listActivity(filter: ActivityFilter): Promise<ActivityRecord[]>;
   abstract getActiveCustomerCompanyIds(userId: string): Promise<string[]>;

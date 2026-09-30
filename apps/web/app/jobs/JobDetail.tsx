@@ -38,6 +38,7 @@ import type {
 import { JobCharges } from "./JobCharges";
 import { JobDeliveries } from "./JobDeliveries";
 import { JobEta } from "./JobEta";
+import { JobInvoices } from "./JobInvoices";
 import { JobTasks } from "./JobTasks";
 import styles from "./jobs.module.css";
 
@@ -552,6 +553,13 @@ export function JobDetail({ jobId }: { jobId: string }) {
       <JobDeliveries
         canEdit={isStaff && !closedJob}
         documents={data.documents}
+        jobId={job.id}
+      />
+
+      <JobInvoices
+        canEdit={!closedJob}
+        documents={data.documents}
+        isStaff={isStaff}
         jobId={job.id}
       />
 

@@ -8,6 +8,7 @@ import type {
   StaffRoleKey,
   TaskKind,
   ChargeKind,
+  PaymentMethod,
 } from "@bjh/contracts";
 import { authenticatedFetch } from "../auth/authenticatedFetch";
 
@@ -365,3 +366,127 @@ export const recordActual = (
     "POST",
     input,
   );
+
+export type InvoiceLine = {
+  description: string;
+  amountMinor: number;
+  taxable: boolean;
+};
+
+export type InvoicePayment = {
+  id: string;
+  amountMinor: number;
+  receivedOn: string;
+  method: PaymentMethod;
+  reference: string | null;
+  evidenceDocumentId: string | null;
+  note: string | null;
+  recordedAt: string;
+  reversal: { reason: string; reversedAt: string } | null;
+};
+
+export type Invoice = {
+  id: string;
+  invoiceNumber: string | null;
+  status: "draft" | "issued" | "void";
+  currency: string;
+  lines: InvoiceLine[];
+  dueDate: string | null;
+  notes: string | null;
+  subtotalMinor: number;
+  taxLines: Array<{
+    name: string;
+    rateBasisPoints: number;
+    amountMinor: number;
+  }>;
+  taxTotalMinor: number;
+  totalMinor: number;
+  issuedAt: string | null;
+  voidReason: string | null;
+  paidMinor: number;
+  outstandingMinor: number;
+  paymentStatus: "draft" | "void" | "unpaid" | "partial" | "paid";
+  /** Staff only; customers see the balance but not the ledger. */
+  payments?: InvoicePayment[];
+};
+
+export type InvoiceDraftInput = {
+  currency: string;
+  lines: InvoiceLine[];
+  dueDate?: string;
+  notes?: string;
+};
+
+export const listInvoices = (id: string) =>
+  send<Invoice[]>(`/${encodeURIComponent(id)}/invoices`, "GET");
+export const createInvoice = (id: string, input: InvoiceDraftInput) =>
+  send<Invoice>(`/${encodeURIComponent(id)}/invoices`, "POST", input);
+export const createInvoiceFromCharges = (
+  id: string,
+  input: { currency: string; dueDate?: string; notes?: string },
+) =>
+  send<{ invoice: Invoice; skipped: number }>(
+    `/${encodeURIComponent(id)}/invoices/from-charges`,
+    "POST",
+    input,
+  );
+export const updateInvoice = (
+  id: string,
+  invoiceId: string,
+  input: InvoiceDraftInput,
+) =>
+  send<Invoice>(
+    `/${encodeURIComponent(id)}/invoices/${encodeURIComponent(invoiceId)}`,
+    "PUT",
+    input,
+  );
+export const issueInvoice = (id: string, invoiceId: string) =>
+  send<Invoice>(
+    `/${encodeURIComponent(id)}/invoices/${encodeURIComponent(invoiceId)}/issue`,
+    "POST",
+    {},
+  );
+export const voidInvoice = (id: string, invoiceId: string, reason: string) =>
+  send<Invoice>(
+    `/${encodeURIComponent(id)}/invoices/${encodeURIComponent(invoiceId)}/void`,
+    "POST",
+    { reason },
+  );
+export const recordInvoicePayment = (
+  id: string,
+  invoiceId: string,
+  input: {
+    amountMinor: number;
+    receivedOn: string;
+    method: PaymentMethod;
+    reference?: string;
+    evidenceDocumentId?: string;
+    note?: string;
+  },
+) =>
+  send<InvoicePayment>(
+    `/${encodeURIComponent(id)}/invoices/${encodeURIComponent(invoiceId)}/payments`,
+    "POST",
+    input,
+  );
+export const reverseInvoicePayment = (
+  id: string,
+  invoiceId: string,
+  paymentId: string,
+  reason: string,
+) =>
+  send<InvoicePayment>(
+    `/${encodeURIComponent(id)}/invoices/${encodeURIComponent(invoiceId)}/payments/${encodeURIComponent(paymentId)}/reverse`,
+    "POST",
+    { reason },
+  );
+export async function fetchInvoicePdf(
+  id: string,
+  invoiceId: string,
+): Promise<Blob> {
+  const response = await authenticatedFetch(
+    `${jobsUrl}/${encodeURIComponent(id)}/invoices/${encodeURIComponent(invoiceId)}/pdf`,
+  );
+  if (!response.ok) throw new Error("The invoice could not be created");
+  return response.blob();
+}
