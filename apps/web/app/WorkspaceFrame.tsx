@@ -18,6 +18,7 @@ export function WorkspaceFrame({ children }: { children: ReactNode }) {
   const quotesActive = pathname.startsWith("/quotes");
   const transportActive = pathname.startsWith("/transport");
   const warehouseActive = pathname.startsWith("/warehouse");
+  const invoicesActive = pathname.startsWith("/invoices");
   const tasksActive = pathname.startsWith("/tasks");
   const quotationsActive = pathname.startsWith("/quotations");
   const settingsActive =
@@ -78,6 +79,16 @@ export function WorkspaceFrame({ children }: { children: ReactNode }) {
                 ▦
               </span>
               Your stock
+            </Link>
+            <Link
+              className={`nav-link${invoicesActive ? " active" : ""}`}
+              href="/invoices"
+              aria-current={invoicesActive ? "page" : undefined}
+            >
+              <span className="nav-icon" aria-hidden="true">
+                ¤
+              </span>
+              Your invoices
             </Link>
           </nav>
         ) : (
@@ -141,6 +152,16 @@ export function WorkspaceFrame({ children }: { children: ReactNode }) {
                 ▦
               </span>
               Warehouse
+            </Link>
+            <Link
+              className={`nav-link${invoicesActive ? " active" : ""}`}
+              href="/invoices"
+              aria-current={invoicesActive ? "page" : undefined}
+            >
+              <span className="nav-icon" aria-hidden="true">
+                ¤
+              </span>
+              Receivables
             </Link>
             <Link
               className={`nav-link${tasksActive ? " active" : ""}`}

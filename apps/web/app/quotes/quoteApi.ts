@@ -145,6 +145,21 @@ export const recordQuoteDecision = (
     job: { id: string; fileNumber: string } | null;
   }>(`/${encodeURIComponent(id)}/decision`, "POST", input);
 
+/** A customer answers the latest issued version of their own company's quote. */
+export const respondToQuote = (
+  id: string,
+  input: {
+    versionNumber: number;
+    decision: "accepted" | "rejected";
+    clientSignatory: string;
+    note?: string;
+  },
+) =>
+  send<{
+    decision: QuoteDecision;
+    job: { id: string; fileNumber: string } | null;
+  }>(`/${encodeURIComponent(id)}/respond`, "POST", input);
+
 /** The quote version as a PDF file. */
 export async function fetchQuotePdf(
   id: string,

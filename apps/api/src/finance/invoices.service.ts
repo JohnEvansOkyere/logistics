@@ -385,6 +385,48 @@ export class InvoicesService {
     return result;
   }
 
+  /**
+   * Every issued invoice that still has a balance, oldest due date first, with
+   * what is overdue and the totals per currency. Staff see their service
+   * lines; a customer sees only their own company's.
+   */
+  async outstanding(companyId: unknown, scope: JobScope) {
+    if (companyId !== undefined && !isUuid(companyId)) {
+      throw new BadRequestException("companyId must be a valid ID");
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const rows = (
+      await this.database.listOutstandingInvoices({
+        companyId: (companyId as string | undefined) ?? null,
+        scope,
+      })
+    ).map((row) => ({
+      ...row,
+      overdue: row.dueDate !== null && row.dueDate < today,
+      daysOverdue:
+        row.dueDate !== null && row.dueDate < today
+          ? Math.floor(
+              (Date.parse(today) - Date.parse(row.dueDate)) / 86_400_000,
+            )
+          : 0,
+    }));
+    const totals = new Map<
+      string,
+      { currency: string; outstandingMinor: number; overdueMinor: number }
+    >();
+    for (const row of rows) {
+      const entry = totals.get(row.currency) ?? {
+        currency: row.currency,
+        outstandingMinor: 0,
+        overdueMinor: 0,
+      };
+      entry.outstandingMinor += row.outstandingMinor;
+      if (row.overdue) entry.overdueMinor += row.outstandingMinor;
+      totals.set(row.currency, entry);
+    }
+    return { invoices: rows, totals: [...totals.values()] };
+  }
+
   /** Customers reach only invoices that were issued, on their own company's jobs. */
   async pdf(
     id: string,

@@ -212,6 +212,30 @@ export class QuotesService {
     return result;
   }
 
+  /**
+   * A customer accepts or declines the latest issued version of their own
+   * company's quote from the portal. It is the same recorded decision as one
+   * entered by staff, made by the customer's account and stamped with the time
+   * it happens (they cannot backdate it); accepting opens the job.
+   */
+  async respond(
+    id: string,
+    input: unknown,
+    userId: string,
+    scope: JobScope,
+  ): Promise<{ decision: QuoteDecisionRecord; job: JobRecord | null }> {
+    if (scope.companyIds === undefined) {
+      throw new ForbiddenException(
+        "Staff record a client's decision on the quote's decision endpoint",
+      );
+    }
+    const body =
+      input && typeof input === "object" && !Array.isArray(input)
+        ? { ...input, decidedAt: null }
+        : input;
+    return this.decide(id, body, userId, scope);
+  }
+
   private requireNotAccepted(quote: QuoteRecord): void {
     if (quote.decisions.some((item) => item.decision === "accepted")) {
       throw new ConflictException(

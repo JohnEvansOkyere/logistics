@@ -37,23 +37,24 @@ VALUES ('00000000-0000-4000-8000-0000000006e0', '00000000-0000-4000-8000-0000000
         '[{"key":"container","value":"CSQU3054383"}]'::jsonb, '00000000-0000-4000-8000-0000000006aa');
 
 SELECT extensions.throws_ok(
-  $$UPDATE app.document_extraction SET fields = '[]'::jsonb$$,
+  $$UPDATE app.document_extraction SET fields = '[]'::jsonb WHERE extraction_id = '00000000-0000-4000-8000-0000000006e0'$$,
   'P0001', 'the proposed fields of an extraction never change', 'the proposed fields never change'
 );
 SELECT extensions.throws_ok(
-  $$UPDATE app.document_extraction SET status = 'approved'$$,
+  $$UPDATE app.document_extraction SET status = 'approved' WHERE extraction_id = '00000000-0000-4000-8000-0000000006e0'$$,
   '23514', NULL, 'an approval needs its reviewer and time'
 );
 UPDATE app.document_extraction
 SET status = 'approved', reviewed_at = now(), reviewed_by = '00000000-0000-4000-8000-0000000006aa',
-    applied = '[{"key":"container","result":"added"}]'::jsonb;
+    applied = '[{"key":"container","result":"added"}]'::jsonb
+WHERE extraction_id = '00000000-0000-4000-8000-0000000006e0';
 SELECT extensions.throws_ok(
   $$UPDATE app.document_extraction SET status = 'rejected', reviewed_at = now(),
-      reviewed_by = '00000000-0000-4000-8000-0000000006aa'$$,
+      reviewed_by = '00000000-0000-4000-8000-0000000006aa' WHERE extraction_id = '00000000-0000-4000-8000-0000000006e0'$$,
   'P0001', 'a reviewed extraction cannot change', 'a reviewed draft is final'
 );
 SELECT extensions.throws_ok(
-  $$DELETE FROM app.document_extraction$$,
+  $$DELETE FROM app.document_extraction WHERE extraction_id = '00000000-0000-4000-8000-0000000006e0'$$,
   'P0001', 'extraction drafts cannot be deleted', 'drafts cannot be deleted'
 );
 

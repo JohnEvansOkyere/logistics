@@ -45,13 +45,18 @@ import { SettingsController } from "./settings/settings.controller";
 import { SettingsService } from "./settings/settings.service";
 import { JobChargesController } from "./finance/job-charges.controller";
 import { JobChargesService } from "./finance/job-charges.service";
-import { InvoicesController } from "./finance/invoices.controller";
+import {
+  InvoicesController,
+  OutstandingInvoicesController,
+} from "./finance/invoices.controller";
 import { InvoicesService } from "./finance/invoices.service";
 import {
   DeliveriesController,
   DriversController,
   VehiclesController,
 } from "./transport/transport.controller";
+import { TransportDocumentsController } from "./transport/transport-documents.controller";
+import { TransportDocumentsService } from "./transport/transport-documents.service";
 import { TransportService } from "./transport/transport.service";
 import {
   JobStockController,
@@ -81,9 +86,11 @@ import { QuotesService } from "./quotations/quotes.service";
     JobMessagesController,
     JobChargesController,
     InvoicesController,
+    OutstandingInvoicesController,
     DriversController,
     VehiclesController,
     DeliveriesController,
+    TransportDocumentsController,
     WarehouseLocationsController,
     JobStockController,
     StockReportController,
@@ -110,6 +117,7 @@ import { QuotesService } from "./quotations/quotes.service";
     JobChargesService,
     InvoicesService,
     TransportService,
+    TransportDocumentsService,
     WarehouseService,
     DocumentsService,
     ExtractionsService,

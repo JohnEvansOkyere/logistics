@@ -43,6 +43,7 @@ import { JobExtractions } from "./JobExtractions";
 import { JobInvoices } from "./JobInvoices";
 import { JobMessages } from "./JobMessages";
 import { JobStock } from "./JobStock";
+import { JobTransportDocuments } from "./JobTransportDocuments";
 import { JobTasks } from "./JobTasks";
 import styles from "./jobs.module.css";
 
@@ -562,6 +563,13 @@ export function JobDetail({ jobId }: { jobId: string }) {
         canEdit={isStaff && !closedJob}
         documents={data.documents}
         jobId={job.id}
+      />
+
+      <JobTransportDocuments
+        canEdit={!closedJob}
+        isStaff={isStaff}
+        jobId={job.id}
+        serviceLine={job.serviceLine}
       />
 
       <JobInvoices

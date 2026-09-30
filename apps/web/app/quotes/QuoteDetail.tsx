@@ -14,6 +14,7 @@ import {
   getQuote,
   issueQuote,
   recordQuoteDecision,
+  respondToQuote,
   startQuoteVersion,
 } from "./quoteApi";
 import type { Quote, QuoteLine, QuoteVersion } from "./quoteApi";
@@ -220,13 +221,22 @@ export function QuoteDetail({ quoteId }: { quoteId: string }) {
     if (!latest) return;
     setError("");
     try {
-      const result = await recordQuoteDecision(quote.id, {
-        versionNumber: latest.versionNumber,
-        decision,
-        clientSignatory: signatory.trim(),
-        decidedAt: decidedAt ? new Date(decidedAt).toISOString() : undefined,
-        note: decisionNote.trim() || undefined,
-      });
+      const result = isStaff
+        ? await recordQuoteDecision(quote.id, {
+            versionNumber: latest.versionNumber,
+            decision,
+            clientSignatory: signatory.trim(),
+            decidedAt: decidedAt
+              ? new Date(decidedAt).toISOString()
+              : undefined,
+            note: decisionNote.trim() || undefined,
+          })
+        : await respondToQuote(quote.id, {
+            versionNumber: latest.versionNumber,
+            decision,
+            clientSignatory: signatory.trim(),
+            note: decisionNote.trim() || undefined,
+          });
       setOpenedJob(result.job);
       setSignatory("");
       setDecidedAt("");
@@ -390,6 +400,54 @@ export function QuoteDetail({ quoteId }: { quoteId: string }) {
             </label>
             <button className={styles.button} type="submit">
               Record decision
+            </button>
+          </form>
+        </section>
+      )}
+
+      {!isStaff && latestIssued && !latestDecided && (
+        <section className={styles.card} aria-labelledby="respond-title">
+          <h2 id="respond-title">
+            Your answer on quotation version {latestIssued.versionNumber}
+          </h2>
+          <p className={styles.muted}>
+            Accepting confirms this version of the quotation and BJH will open
+            your job. If you want a change, decline it and tell us what to
+            change in the note.
+          </p>
+          <form
+            className={styles.form}
+            onSubmit={(event) => void submitDecision(event)}
+          >
+            <label className={styles.field}>
+              Your answer
+              <select
+                onChange={(event) =>
+                  setDecision(event.target.value as "accepted" | "rejected")
+                }
+                value={decision}
+              >
+                <option value="accepted">Accept this quotation</option>
+                <option value="rejected">Decline this quotation</option>
+              </select>
+            </label>
+            <label className={styles.field}>
+              Your full name
+              <input
+                onChange={(event) => setSignatory(event.target.value)}
+                required
+                value={signatory}
+              />
+            </label>
+            <label className={styles.field}>
+              Note (optional)
+              <input
+                onChange={(event) => setDecisionNote(event.target.value)}
+                value={decisionNote}
+              />
+            </label>
+            <button className={styles.button} type="submit">
+              Send my answer
             </button>
           </form>
         </section>

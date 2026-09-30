@@ -519,6 +519,38 @@ export interface DocumentExtractionRecord {
   reviewedAt: string | null;
 }
 
+export interface TransportDocumentRecord {
+  id: string;
+  jobId: string;
+  kind: "house_bl" | "house_awb" | "air_manifest";
+  documentNumber: string | null;
+  status: "draft" | "issued" | "void";
+  fields: Record<string, string>;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  issuedBy: string | null;
+  issuedAt: string | null;
+  voidedBy: string | null;
+  voidedAt: string | null;
+  voidReason: string | null;
+}
+
+export interface OutstandingInvoiceRecord {
+  invoiceId: string;
+  invoiceNumber: string;
+  jobId: string;
+  fileNumber: string;
+  customerCompanyId: string;
+  customerCompanyName: string;
+  currency: string;
+  totalMinor: number;
+  outstandingMinor: number;
+  /** YYYY-MM-DD */
+  dueDate: string | null;
+  issuedAt: string;
+}
+
 export interface ActivityEntry {
   actorUserId: string;
   actorEmail: string | null;
@@ -1076,6 +1108,43 @@ export abstract class DatabasePort {
       reviewedBy: string;
     },
   ): Promise<DocumentExtractionRecord | "not_found" | "not_draft">;
+  abstract createTransportDocument(document: {
+    jobId: string;
+    kind: TransportDocumentRecord["kind"];
+    documentNumber: string | null;
+    fields: Record<string, string>;
+    createdBy: string;
+  }): Promise<TransportDocumentRecord>;
+  abstract listTransportDocuments(
+    jobId: string,
+  ): Promise<TransportDocumentRecord[]>;
+  abstract updateTransportDocumentDraft(
+    jobId: string,
+    documentId: string,
+    draft: { documentNumber: string | null; fields: Record<string, string> },
+  ): Promise<TransportDocumentRecord | "not_found" | "not_draft">;
+  abstract issueTransportDocument(
+    jobId: string,
+    documentId: string,
+    issuedBy: string,
+  ): Promise<
+    | TransportDocumentRecord
+    | "not_found"
+    | "not_draft"
+    | "no_number"
+    | "number_taken"
+  >;
+  abstract voidTransportDocument(
+    jobId: string,
+    documentId: string,
+    voidedBy: string,
+    reason: string,
+  ): Promise<TransportDocumentRecord | "not_found" | "already_void">;
+  /** Issued invoices with something still owing, within the caller's scope. */
+  abstract listOutstandingInvoices(filter: {
+    companyId: string | null;
+    scope: JobScope;
+  }): Promise<OutstandingInvoiceRecord[]>;
   abstract recordActivity(entry: ActivityEntry): Promise<void>;
   abstract listActivity(filter: ActivityFilter): Promise<ActivityRecord[]>;
   abstract getActiveCustomerCompanyIds(userId: string): Promise<string[]>;

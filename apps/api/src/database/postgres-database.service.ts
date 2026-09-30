@@ -38,6 +38,8 @@ import {
   InvoiceLineRecord,
   DocumentExtractionRecord,
   DueDelivery,
+  OutstandingInvoiceRecord,
+  TransportDocumentRecord,
   ExtractionApplyResult,
   ExtractionFieldRecord,
   EtaReminderCandidate,
@@ -3267,6 +3269,193 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       createdAt: this.toIsoString(row.created_at),
       reviewedBy: row.reviewed_by ? String(row.reviewed_by) : null,
       reviewedAt: row.reviewed_at ? this.toIsoString(row.reviewed_at) : null,
+    }));
+  }
+
+  async createTransportDocument(document: {
+    jobId: string;
+    kind: TransportDocumentRecord["kind"];
+    documentNumber: string | null;
+    fields: Record<string, string>;
+    createdBy: string;
+  }): Promise<TransportDocumentRecord> {
+    const inserted = await this.pool.query(
+      `INSERT INTO app.transport_document (job_id, kind, document_number, fields, created_by)
+       VALUES ($1::uuid, $2, $3, $4::jsonb, $5::uuid) RETURNING *`,
+      [
+        document.jobId,
+        document.kind,
+        document.documentNumber,
+        JSON.stringify(document.fields),
+        document.createdBy,
+      ],
+    );
+    return this.mapTransportDocument(inserted.rows[0]);
+  }
+
+  async listTransportDocuments(
+    jobId: string,
+  ): Promise<TransportDocumentRecord[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM app.transport_document WHERE job_id = $1::uuid
+       ORDER BY created_at, document_id`,
+      [jobId],
+    );
+    return result.rows.map((row) => this.mapTransportDocument(row));
+  }
+
+  async updateTransportDocumentDraft(
+    jobId: string,
+    documentId: string,
+    draft: { documentNumber: string | null; fields: Record<string, string> },
+  ): Promise<TransportDocumentRecord | "not_found" | "not_draft"> {
+    const updated = await this.pool.query(
+      `UPDATE app.transport_document
+       SET document_number = $3, fields = $4::jsonb, updated_at = clock_timestamp()
+       WHERE document_id = $2::uuid AND job_id = $1::uuid AND status = 'draft'
+       RETURNING *`,
+      [jobId, documentId, draft.documentNumber, JSON.stringify(draft.fields)],
+    );
+    if (updated.rows[0]) return this.mapTransportDocument(updated.rows[0]);
+    const exists = await this.pool.query(
+      `SELECT 1 FROM app.transport_document WHERE document_id = $2::uuid AND job_id = $1::uuid`,
+      [jobId, documentId],
+    );
+    return exists.rows.length > 0 ? "not_draft" : "not_found";
+  }
+
+  async issueTransportDocument(
+    jobId: string,
+    documentId: string,
+    issuedBy: string,
+  ): Promise<
+    | TransportDocumentRecord
+    | "not_found"
+    | "not_draft"
+    | "no_number"
+    | "number_taken"
+  > {
+    const current = await this.pool.query(
+      `SELECT status, document_number FROM app.transport_document
+       WHERE document_id = $2::uuid AND job_id = $1::uuid`,
+      [jobId, documentId],
+    );
+    if (current.rows.length === 0) return "not_found";
+    if (current.rows[0].status !== "draft") return "not_draft";
+    if (!current.rows[0].document_number) return "no_number";
+    try {
+      const updated = await this.pool.query(
+        `UPDATE app.transport_document
+         SET status = 'issued', issued_by = $3::uuid, issued_at = clock_timestamp(),
+             updated_at = clock_timestamp()
+         WHERE document_id = $2::uuid AND job_id = $1::uuid AND status = 'draft'
+         RETURNING *`,
+        [jobId, documentId, issuedBy],
+      );
+      return updated.rows[0]
+        ? this.mapTransportDocument(updated.rows[0])
+        : "not_draft";
+    } catch (error) {
+      if ((error as { code?: string }).code === "23505") return "number_taken";
+      throw error;
+    }
+  }
+
+  async voidTransportDocument(
+    jobId: string,
+    documentId: string,
+    voidedBy: string,
+    reason: string,
+  ): Promise<TransportDocumentRecord | "not_found" | "already_void"> {
+    const current = await this.pool.query(
+      `SELECT status FROM app.transport_document
+       WHERE document_id = $2::uuid AND job_id = $1::uuid`,
+      [jobId, documentId],
+    );
+    if (current.rows.length === 0) return "not_found";
+    if (current.rows[0].status === "void") return "already_void";
+    const updated = await this.pool.query(
+      `UPDATE app.transport_document
+       SET status = 'void', voided_by = $3::uuid, voided_at = clock_timestamp(),
+           void_reason = $4, updated_at = clock_timestamp()
+       WHERE document_id = $2::uuid AND job_id = $1::uuid AND status <> 'void'
+       RETURNING *`,
+      [jobId, documentId, voidedBy, reason],
+    );
+    return updated.rows[0]
+      ? this.mapTransportDocument(updated.rows[0])
+      : "already_void";
+  }
+
+  private mapTransportDocument(
+    row: Record<string, unknown>,
+  ): TransportDocumentRecord {
+    const optional = (value: unknown) => (value ? String(value) : null);
+    const timestamp = (value: unknown) =>
+      value ? this.toIsoString(value) : null;
+    return {
+      id: String(row.document_id),
+      jobId: String(row.job_id),
+      kind: row.kind as TransportDocumentRecord["kind"],
+      documentNumber: optional(row.document_number),
+      status: row.status as TransportDocumentRecord["status"],
+      fields: row.fields as Record<string, string>,
+      createdBy: String(row.created_by),
+      createdAt: this.toIsoString(row.created_at),
+      updatedAt: this.toIsoString(row.updated_at),
+      issuedBy: optional(row.issued_by),
+      issuedAt: timestamp(row.issued_at),
+      voidedBy: optional(row.voided_by),
+      voidedAt: timestamp(row.voided_at),
+      voidReason: optional(row.void_reason),
+    };
+  }
+
+  async listOutstandingInvoices(filter: {
+    companyId: string | null;
+    scope: JobScope;
+  }): Promise<OutstandingInvoiceRecord[]> {
+    const { scope } = filter;
+    if (scope.companyIds?.length === 0 || scope.serviceLines?.length === 0) {
+      return [];
+    }
+    const result = await this.pool.query(
+      `SELECT * FROM (
+         SELECT i.invoice_id, i.invoice_number, i.currency, i.total_minor,
+                to_char(i.due_date, 'YYYY-MM-DD') AS due_date_text, i.issued_at,
+                job.job_id, job.file_number, job.customer_company_id,
+                company.company_name,
+                i.total_minor - COALESCE((
+                  SELECT sum(p.amount_minor) FROM app.invoice_payment p
+                  WHERE p.invoice_id = i.invoice_id
+                    AND NOT EXISTS (
+                      SELECT 1 FROM app.invoice_payment_reversal r
+                      WHERE r.payment_id = p.payment_id)
+                ), 0) AS outstanding_minor
+         FROM app.invoice i
+         JOIN app.job job ON job.job_id = i.job_id
+         JOIN app.customer_company company ON company.company_id = job.customer_company_id
+         WHERE i.status = 'issued'
+           AND ($1::uuid IS NULL OR job.customer_company_id = $1::uuid)
+           AND ($2::uuid[] IS NULL OR job.customer_company_id = ANY($2::uuid[]))
+           AND ($3::text[] IS NULL OR job.service_line = ANY($3::text[]))
+       ) owing
+       WHERE outstanding_minor > 0
+       ORDER BY due_date_text NULLS LAST, issued_at, invoice_id`,
+      [filter.companyId, scope.companyIds ?? null, scope.serviceLines ?? null],
+    );
+    return result.rows.map((row) => ({
+      invoiceId: String(row.invoice_id),
+      invoiceNumber: String(row.invoice_number),
+      jobId: String(row.job_id),
+      fileNumber: String(row.file_number),
+      customerCompanyId: String(row.customer_company_id),
+      customerCompanyName: String(row.company_name),
+      currency: String(row.currency),
+      totalMinor: Number(row.total_minor),
+      outstandingMinor: Number(row.outstanding_minor),
+      dueDate: row.due_date_text ? String(row.due_date_text) : null,
+      issuedAt: this.toIsoString(row.issued_at),
     }));
   }
 

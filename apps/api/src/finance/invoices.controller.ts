@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   Req,
   Res,
   UseGuards,
@@ -192,5 +193,23 @@ export class InvoicesController {
       request.authUser!.userId,
       scopeOf(request),
     );
+  }
+}
+
+/** Unpaid invoices across jobs: staff see their service lines, customers their own company. */
+@Controller("api/v1/invoices/outstanding")
+@UseGuards(SupabaseIdentityGuard)
+export class OutstandingInvoicesController {
+  constructor(
+    @Inject(InvoicesService) private readonly invoices: InvoicesService,
+  ) {}
+
+  @Get()
+  @UseGuards(JobScopeGuard)
+  list(
+    @Query("companyId") companyId: string | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.invoices.outstanding(companyId, scopeOf(request));
   }
 }

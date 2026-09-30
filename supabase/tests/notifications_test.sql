@@ -33,7 +33,7 @@ SELECT extensions.throws_ok(
   '23505', NULL, 'the same event cannot be queued twice'
 );
 SELECT extensions.throws_ok(
-  $$UPDATE app.notification SET subject = 'Changed'$$,
+  $$UPDATE app.notification SET subject = 'Changed' WHERE notification_id = '00000000-0000-4000-8000-0000000005e0'$$,
   'P0001', 'notifications are append-only', 'a notification cannot be edited'
 );
 
@@ -47,17 +47,17 @@ SELECT extensions.throws_ok(
   '23514', NULL, 'a sent delivery needs its sent time'
 );
 SELECT extensions.throws_ok(
-  $$UPDATE app.notification_delivery SET channel = 'sms'$$,
+  $$UPDATE app.notification_delivery SET channel = 'sms' WHERE delivery_id = '00000000-0000-4000-8000-0000000005d0'$$,
   'P0001', 'delivery identity fields are immutable', 'a delivery keeps its channel and recipient'
 );
 UPDATE app.notification_delivery SET status = 'sent', sent_at = now(), attempts = 1
 WHERE delivery_id = '00000000-0000-4000-8000-0000000005d0';
 SELECT extensions.throws_ok(
-  $$UPDATE app.notification_delivery SET status = 'pending'$$,
+  $$UPDATE app.notification_delivery SET status = 'pending' WHERE delivery_id = '00000000-0000-4000-8000-0000000005d0'$$,
   'P0001', 'a sent delivery cannot change', 'a sent delivery is final'
 );
 SELECT extensions.throws_ok(
-  $$DELETE FROM app.notification_delivery$$,
+  $$DELETE FROM app.notification_delivery WHERE delivery_id = '00000000-0000-4000-8000-0000000005d0'$$,
   'P0001', 'deliveries cannot be deleted', 'deliveries cannot be deleted'
 );
 

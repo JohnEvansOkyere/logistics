@@ -1262,3 +1262,205 @@ export const extractionApproveInputSchema = z.object(
 export type ExtractionApproveInput = z.infer<
   typeof extractionApproveInputSchema
 >;
+
+export const transportDocumentKinds = [
+  "house_bl",
+  "house_awb",
+  "air_manifest",
+] as const;
+export type TransportDocumentKind = (typeof transportDocumentKinds)[number];
+
+export const transportDocumentTitles: Record<TransportDocumentKind, string> = {
+  house_bl: "Transport bill of lading (house B/L)",
+  house_awb: "House air waybill (HAWB)",
+  air_manifest: "Air cargo manifest",
+};
+
+export interface TransportDocumentField {
+  key: string;
+  label: string;
+  /** Several lines of text rather than a single line. */
+  multiline?: boolean;
+  /** Sits beside its neighbours in the printed grid; multiline fields span the row. */
+  group: string;
+}
+
+const line = (key: string, label: string, group: string) => ({
+  key,
+  label,
+  group,
+});
+const block = (key: string, label: string, group: string) => ({
+  key,
+  label,
+  group,
+  multiline: true,
+});
+
+/**
+ * The fields of each document, laid out like BJH's own house B/L, HAWB and
+ * manifest samples. Values are free text: BJH types what the document says.
+ */
+export const transportDocumentFields: Record<
+  TransportDocumentKind,
+  TransportDocumentField[]
+> = {
+  house_bl: [
+    block("shipper", "Shipper", "Parties"),
+    block("forwardingAgent", "Forwarding agent", "Parties"),
+    block("consignee", "Consignee", "Parties"),
+    line("masterReference", "MBL / booking no.", "Parties"),
+    block("notifyParty", "Notify party", "Parties"),
+    block("deliveryAgent", "Port delivery agent", "Parties"),
+    line("portOfLoading", "Port of loading", "Route"),
+    line("portOfDischarge", "Port of discharge", "Route"),
+    line("placeOfReceipt", "Place of receipt", "Route"),
+    line("placeOfDelivery", "Final place of delivery", "Route"),
+    line("vessel", "Vessel", "Route"),
+    line("voyage", "Voyage", "Route"),
+    block("containers", "Containers and seals (one per line)", "Cargo"),
+    block(
+      "goods",
+      "Number and kind of packages, description of goods",
+      "Cargo",
+    ),
+    line("grossWeight", "Gross weight (kg)", "Cargo"),
+    line("measurement", "Measurement (CBM)", "Cargo"),
+    line("freightTerms", "Freight (prepaid or collect)", "Terms"),
+    line("containerStatus", "Container status (FCL/LCL)", "Terms"),
+    line("shippedOnBoard", "Shipped on board date", "Terms"),
+    line("placeAndDateOfIssue", "Place and date of issue", "Terms"),
+    line("originals", "Number of original bills of lading", "Terms"),
+    line("signatory", "Signed for the shipper by", "Terms"),
+  ],
+  house_awb: [
+    block("shipper", "Shipper", "Parties"),
+    block("forwardingAgent", "Forwarding agent", "Parties"),
+    block("consignee", "Consignee", "Parties"),
+    block("notifyParty", "Notify", "Parties"),
+    line("masterAwb", "MAWB number", "Route"),
+    line("agentCode", "Agent IATA code", "Route"),
+    line("carrier", "Ship by (airline)", "Route"),
+    line("airportOfDeparture", "Airport of departure", "Route"),
+    line("airportOfDestination", "Airport of destination", "Route"),
+    line("routing", "Routing and destination", "Route"),
+    line("flightDate", "Flight / date", "Route"),
+    line("currency", "Currency", "Charges"),
+    line("airFreight", "Air freight", "Charges"),
+    line("hawbFee", "HAWB fee", "Charges"),
+    line("originFee", "Origin fee", "Charges"),
+    line("totalFreight", "Total freight (prepaid or collect)", "Charges"),
+    line("pieces", "No. of pieces", "Cargo"),
+    line("grossWeight", "Gross weight (kg)", "Cargo"),
+    line("chargeableWeight", "Chargeable weight", "Cargo"),
+    line("rate", "Rate / charge", "Cargo"),
+    block("goods", "Nature and quantity of goods, dimensions", "Cargo"),
+    block("handlingInformation", "Handling information", "Terms"),
+    line("dateAndPlaceOfDeparture", "Date and place of departure", "Terms"),
+    line("issuingSignatory", "Signature of issuing carrier (name)", "Terms"),
+  ],
+  air_manifest: [
+    line("masterAwb", "Master air waybill", "Reference"),
+    line("houseAwb", "House air waybill", "Reference"),
+    line("issueDate", "Issue date", "Reference"),
+    line("carrierFlight", "Carrier / flight", "Reference"),
+    line("route", "Route", "Reference"),
+    block("shipper", "Shipper", "Parties"),
+    block("hawbConsignee", "HAWB consignee", "Parties"),
+    block("handlingAgent", "MAWB consignee / handling agent", "Parties"),
+    block("forwardingAgent", "Forwarding agent", "Parties"),
+    block("notifyParty", "Notify party", "Parties"),
+    block("handlingInformation", "Handling information", "Parties"),
+    block(
+      "shipmentLines",
+      "Shipment details (one house waybill per line: HAWB, packages, weights, volume, goods, origin)",
+      "Cargo",
+    ),
+    line("departure", "Departure", "Cargo"),
+    line("destination", "Destination", "Cargo"),
+    line("cargoStatus", "Cargo status", "Cargo"),
+    line("preparedBy", "Prepared by", "Cargo"),
+  ],
+};
+
+/** Which documents belong to which service line. */
+export function transportDocumentKindsFor(
+  serviceLine: ServiceLine,
+): TransportDocumentKind[] {
+  if (serviceLine.startsWith("sea")) return ["house_bl"];
+  if (serviceLine.startsWith("air")) return ["house_awb", "air_manifest"];
+  return [];
+}
+
+export const transportDocumentCreateSchema = z.object(
+  {
+    kind: z.enum(transportDocumentKinds, {
+      error: `kind must be one of ${transportDocumentKinds.join(", ")}`,
+    }),
+    documentNumber: optionalText("documentNumber", 80),
+    fields: z
+      .record(z.string(), z.string({ error: "field values must be text" }), {
+        error: "fields must be an object",
+      })
+      .nullish()
+      .transform((value) => value ?? {}),
+  },
+  objectError("A document object is required"),
+);
+export type TransportDocumentCreate = z.infer<
+  typeof transportDocumentCreateSchema
+>;
+
+export const transportDocumentUpdateSchema = z.object(
+  {
+    documentNumber: optionalText("documentNumber", 80),
+    fields: z
+      .record(z.string(), z.string({ error: "field values must be text" }), {
+        error: "fields must be an object",
+      })
+      .nullish()
+      .transform((value) => value ?? {}),
+  },
+  objectError("A document object is required"),
+);
+export type TransportDocumentUpdate = z.infer<
+  typeof transportDocumentUpdateSchema
+>;
+
+/**
+ * Checks the fields of one document: only known fields, trimmed, empty ones
+ * dropped, single-line fields up to 300 characters and blocks up to 2000.
+ */
+export function cleanTransportDocumentFields(
+  kind: TransportDocumentKind,
+  fields: Record<string, string>,
+):
+  | { success: true; data: Record<string, string> }
+  | {
+      success: false;
+      message: string;
+    } {
+  const known = new Map(
+    transportDocumentFields[kind].map((field) => [field.key, field]),
+  );
+  const cleaned: Record<string, string> = {};
+  for (const [key, raw] of Object.entries(fields)) {
+    const field = known.get(key);
+    if (!field) {
+      return {
+        success: false,
+        message: `${key} is not a field of this document`,
+      };
+    }
+    const value = raw.trim();
+    const limit = field.multiline ? 2000 : 300;
+    if (value.length > limit) {
+      return {
+        success: false,
+        message: `${field.label} must be at most ${limit} characters`,
+      };
+    }
+    if (value) cleaned[key] = value;
+  }
+  return { success: true, data: cleaned };
+}

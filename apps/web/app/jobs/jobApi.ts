@@ -12,6 +12,7 @@ import type {
   CorrespondenceChannel,
   CorrespondenceDirection,
   StockKind,
+  TransportDocumentKind,
 } from "@bjh/contracts";
 import { authenticatedFetch } from "../auth/authenticatedFetch";
 
@@ -704,4 +705,105 @@ export const rejectExtraction = (id: string, extractionId: string) =>
   send<Extraction>(
     `/${encodeURIComponent(id)}/extractions/${encodeURIComponent(extractionId)}/reject`,
     "POST",
+  );
+
+export type TransportDocument = {
+  id: string;
+  kind: TransportDocumentKind;
+  documentNumber: string | null;
+  status: "draft" | "issued" | "void";
+  fields: Record<string, string>;
+  issuedAt: string | null;
+  voidReason: string | null;
+};
+
+export const listTransportDocuments = (id: string) =>
+  send<TransportDocument[]>(
+    `/${encodeURIComponent(id)}/transport-documents`,
+    "GET",
+  );
+export const prefillTransportDocument = (
+  id: string,
+  kind: TransportDocumentKind,
+) =>
+  send<{ documentNumber: string | null; fields: Record<string, string> }>(
+    `/${encodeURIComponent(id)}/transport-documents/prefill?kind=${kind}`,
+    "GET",
+  );
+export const createTransportDocument = (
+  id: string,
+  input: {
+    kind: TransportDocumentKind;
+    documentNumber?: string;
+    fields: Record<string, string>;
+  },
+) =>
+  send<TransportDocument>(
+    `/${encodeURIComponent(id)}/transport-documents`,
+    "POST",
+    input,
+  );
+export const updateTransportDocument = (
+  id: string,
+  documentId: string,
+  input: { documentNumber?: string; fields: Record<string, string> },
+) =>
+  send<TransportDocument>(
+    `/${encodeURIComponent(id)}/transport-documents/${encodeURIComponent(documentId)}`,
+    "PUT",
+    input,
+  );
+export const issueTransportDocument = (id: string, documentId: string) =>
+  send<TransportDocument>(
+    `/${encodeURIComponent(id)}/transport-documents/${encodeURIComponent(documentId)}/issue`,
+    "POST",
+    {},
+  );
+export const voidTransportDocument = (
+  id: string,
+  documentId: string,
+  reason: string,
+) =>
+  send<TransportDocument>(
+    `/${encodeURIComponent(id)}/transport-documents/${encodeURIComponent(documentId)}/void`,
+    "POST",
+    { reason },
+  );
+export async function fetchTransportDocumentPdf(
+  id: string,
+  documentId: string,
+): Promise<Blob> {
+  const response = await authenticatedFetch(
+    `${jobsUrl}/${encodeURIComponent(id)}/transport-documents/${encodeURIComponent(documentId)}/pdf`,
+  );
+  if (!response.ok) throw new Error("The document could not be created");
+  return response.blob();
+}
+
+export type OutstandingInvoice = {
+  invoiceId: string;
+  invoiceNumber: string;
+  jobId: string;
+  fileNumber: string;
+  customerCompanyId: string;
+  customerCompanyName: string;
+  currency: string;
+  totalMinor: number;
+  outstandingMinor: number;
+  dueDate: string | null;
+  overdue: boolean;
+  daysOverdue: number;
+};
+
+export const getOutstandingInvoices = (companyId: string) =>
+  sendApi<{
+    invoices: OutstandingInvoice[];
+    totals: Array<{
+      currency: string;
+      outstandingMinor: number;
+      overdueMinor: number;
+    }>;
+  }>(
+    `/invoices/outstanding${companyId ? `?companyId=${encodeURIComponent(companyId)}` : ""}`,
+    "GET",
   );
