@@ -23,6 +23,11 @@ import {
   VehicleRecord,
 } from "../database/database.port";
 import { JobsService } from "../jobs/jobs.service";
+import {
+  deliveryDeliveredMessage,
+  deliveryDispatchedMessage,
+} from "../notifications/notification-messages";
+import { NotificationsService } from "../notifications/notifications.service";
 import { renderWaybillPdf } from "./waybill-pdf";
 
 /**
@@ -35,6 +40,8 @@ export class TransportService {
   constructor(
     @Inject(DatabasePort) private readonly database: DatabasePort,
     @Inject(JobsService) private readonly jobs: JobsService,
+    @Inject(NotificationsService)
+    private readonly notifications: NotificationsService,
   ) {}
 
   listDrivers(): Promise<DriverRecord[]> {
@@ -109,6 +116,23 @@ export class TransportService {
     if (result === "vehicle_unavailable") {
       throw new BadRequestException("vehicleId must be an active vehicle");
     }
+    await this.notifications.notify({
+      companyId: job.customerCompanyId,
+      jobId: job.id,
+      event: "delivery_dispatched",
+      dedupeKey: `delivery-dispatched:${result.id}`,
+      message: (sender) =>
+        deliveryDispatchedMessage(
+          sender,
+          result.waybillNumber,
+          result.driverName,
+          result.driverPhone,
+          result.vehicleRegistration,
+          result.deliveryAddress,
+        ),
+      linkPath: `/jobs/${job.id}`,
+      createdBy: dispatchedBy,
+    });
     return result;
   }
 
@@ -178,6 +202,20 @@ export class TransportService {
         "podDocumentId must be a delivery note document on this job",
       );
     }
+    await this.notifications.notify({
+      companyId: job.customerCompanyId,
+      jobId: job.id,
+      event: "delivery_delivered",
+      dedupeKey: `delivery-proof:${result.id}`,
+      message: (sender) =>
+        deliveryDeliveredMessage(
+          sender,
+          result.waybillNumber,
+          result.receiverName ?? "the receiver",
+        ),
+      linkPath: `/jobs/${job.id}`,
+      createdBy: recordedBy,
+    });
     return result;
   }
 

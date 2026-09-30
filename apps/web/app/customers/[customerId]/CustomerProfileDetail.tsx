@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { getCustomer } from "../customerApi";
+import { useStaffAccess } from "../../auth/useStaffAccess";
+import { addContact, getCustomer, updateContact } from "../customerApi";
 import type { CustomerCompany } from "../customerApi";
 import { listQuoteRequests } from "../../quotations/quoteRequestApi";
 import type { QuoteRequest } from "../../quotations/quoteRequestApi";
@@ -19,6 +20,50 @@ export function CustomerProfileDetail() {
   const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>([]);
   const [historyState, setHistoryState] = useState<LoadState>("loading");
   const [historyError, setHistoryError] = useState("");
+  const { isSuperAdmin } = useStaffAccess();
+  const [contactError, setContactError] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+
+  async function changeContact(
+    contactId: string,
+    update: { phone: string; notify: boolean },
+  ) {
+    setContactError("");
+    try {
+      await updateContact(customerId, contactId, update);
+      setCustomer(await getCustomer(customerId));
+    } catch (cause) {
+      setContactError(
+        cause instanceof Error
+          ? cause.message
+          : "The contact could not be saved",
+      );
+    }
+  }
+
+  async function submitContact(event: React.FormEvent) {
+    event.preventDefault();
+    setContactError("");
+    try {
+      await addContact(customerId, {
+        name: newName.trim(),
+        email: newEmail.trim(),
+        phone: newPhone.trim() || undefined,
+      });
+      setNewName("");
+      setNewEmail("");
+      setNewPhone("");
+      setCustomer(await getCustomer(customerId));
+    } catch (cause) {
+      setContactError(
+        cause instanceof Error
+          ? cause.message
+          : "The contact could not be added",
+      );
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -120,9 +165,84 @@ export function CustomerProfileDetail() {
                 <div key={contact.id}>
                   <dt>{contact.name}</dt>
                   <dd>{contact.email}</dd>
+                  <dd>{contact.phone ?? "No phone number"}</dd>
+                  <dd>
+                    {contact.notify
+                      ? "Receives customer messages"
+                      : "Messages switched off"}
+                  </dd>
+                  {isSuperAdmin && (
+                    <dd>
+                      <button
+                        onClick={() =>
+                          void changeContact(contact.id, {
+                            phone: contact.phone ?? "",
+                            notify: !contact.notify,
+                          })
+                        }
+                        type="button"
+                      >
+                        {contact.notify
+                          ? "Switch messages off"
+                          : "Switch messages on"}
+                      </button>{" "}
+                      <button
+                        onClick={() => {
+                          const phone = window.prompt(
+                            "Phone number for SMS (leave empty to remove)",
+                            contact.phone ?? "",
+                          );
+                          if (phone !== null) {
+                            void changeContact(contact.id, {
+                              phone,
+                              notify: contact.notify,
+                            });
+                          }
+                        }}
+                        type="button"
+                      >
+                        Change phone
+                      </button>
+                    </dd>
+                  )}
                 </div>
               ))}
             </dl>
+            {contactError && <p role="alert">{contactError}</p>}
+            {isSuperAdmin && (
+              <form onSubmit={submitContact}>
+                <h3>Add a contact</h3>
+                <label>
+                  Name{" "}
+                  <input
+                    maxLength={160}
+                    onChange={(event) => setNewName(event.target.value)}
+                    required
+                    value={newName}
+                  />
+                </label>{" "}
+                <label>
+                  Email{" "}
+                  <input
+                    maxLength={254}
+                    onChange={(event) => setNewEmail(event.target.value)}
+                    required
+                    type="email"
+                    value={newEmail}
+                  />
+                </label>{" "}
+                <label>
+                  Phone (optional){" "}
+                  <input
+                    maxLength={40}
+                    onChange={(event) => setNewPhone(event.target.value)}
+                    type="tel"
+                    value={newPhone}
+                  />
+                </label>{" "}
+                <button type="submit">Add contact</button>
+              </form>
+            )}
           </section>
 
           <section

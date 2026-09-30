@@ -160,6 +160,7 @@ const settings = {
     timeline: null,
     terms: [],
   },
+  notifications: { channels: "both" as const },
 };
 
 /** The text drawn on the pages of an uncompressed pdfkit document. */

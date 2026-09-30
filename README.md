@@ -45,6 +45,25 @@ Track verified milestones in [CHECKLIST.md](CHECKLIST.md): its evidence log reco
 
 PostgreSQL is the only database adapter; `supabase/migrations/` is the only schema source. The current business slice persists quote requests, customer companies with contacts, explicit request-to-company links, quote drafts, immutable draft revisions, customer-company membership history and request-to-department assignment history; it does not yet implement priced quotations, jobs, shipments, invoices, receipts, or documents. The PostgreSQL migrations establish the private `app` schema and persist the current quote/customer/draft slice plus staff-role assignments, audit history, customer-company memberships and request-to-department assignments. Customer users see only companies linked by active membership. Department-role staff can read all customers and quote requests; only a rep whose active role matches the assigned department can read or revise a linked quote draft. Super admins control assignments and review departmental work; drafts remain unissued. API E2E tests run on local PostgreSQL, and PostgreSQL query unit tests use a mocked pool. An opt-in live local API check is available with `BJH_POSTGRES_ACCESS_TEST=1 corepack pnpm --filter @bjh/api exec tsx --test test/postgres-company-access.integration.ts`; its synthetic fixtures roll back in a transaction. Before production, add the remaining agreed business schema, least-privilege API grants and hosted-environment authorization verification. Do not treat local tests as production access-control proof.
 
+### Trying the system yourself
+
+1. `corepack pnpm dev`, open <http://127.0.0.1:3002/sign-in>, and sign in with your super-admin account (the first sign-up on a fresh database claims it).
+2. Optional: `corepack pnpm seed:demo` adds two clearly labelled DEMO companies with contacts, four jobs (sea import, air export, road transport, warehousing), some warehouse stock, and two demo logins to the **local** database. It needs the super admin to exist and is safe to run again.
+
+   | Demo login (local only)      | Password            | Sees                                                                                                                          |
+   | ---------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+   | `demo.rep@example.test`      | `demo-password-123` | A sea-import representative: the sea-import jobs plus the shared warehousing and road jobs, all staff screens except Settings |
+   | `demo.customer@example.test` | `demo-password-123` | A customer of DEMO Northstar Trading Ltd: the customer portal, only that company's records                                    |
+
+   These are throwaway accounts for the local database; never create them anywhere else.
+
+3. **Customers → open a company** to change a contact's phone number or switch its messages off. Put your own email and phone number on a demo contact to see messages arrive once email/SMS are connected (below).
+4. **Settings → Customer accounts** creates a customer login (email and a password you choose) linked to a company. Sign in with it in a private window to see the customer portal: only that company's jobs, quotations, invoices, waybills and stock, and a form to ask for a quotation.
+5. **Settings → Business settings** holds the issuer details, currencies, tax lines (none by default), numbering and **Customer messages: email, SMS or both**. Issue a quotation or invoice only after saving these once.
+6. **Settings → Customer messages** shows everything sent, what failed and why, with a Retry button. A job's page shows its own messages and lets you send one.
+
+Messages are only _recorded_ (a "stub", visible in the API log and the messages page) until real credentials are set in `.env` (see `.env.example`): `EMAIL_SMTP_HOST` and `EMAIL_FROM` for email through any mailbox provider, and `ARKESEL_API_KEY` with `SMS_SENDER_ID` for SMS. The links inside messages use `PUBLIC_WEB_URL`. `corepack pnpm supabase:reset` wipes the local data if you want to start again.
+
 ### Local super-admin test account
 
 Start only the local Supabase stack; do **not** reset it to create an account:

@@ -53,6 +53,7 @@ export function BusinessSettingsForm() {
   const [documentsNote, setDocumentsNote] = useState("");
   const [timeline, setTimeline] = useState("");
   const [quoteTerms, setQuoteTerms] = useState("");
+  const [channels, setChannels] = useState<"email" | "sms" | "both">("both");
 
   const fill = useCallback((current: SettingsRevision | null) => {
     setRevision(current);
@@ -80,6 +81,7 @@ export function BusinessSettingsForm() {
     setInvoicePrefix(settings.numbering.invoicePrefix);
     setReceiptPrefix(settings.numbering.receiptPrefix);
     setWaybillPrefix(settings.numbering.waybillPrefix ?? "BJH/WB");
+    setChannels(settings.notifications?.channels ?? "both");
     setIntro(settings.quoteDefaults.intro ?? "");
     setAtCostNote(settings.quoteDefaults.atCostNote ?? "");
     setSteps(settings.quoteDefaults.procedureSteps.join("\n"));
@@ -145,6 +147,7 @@ export function BusinessSettingsForm() {
           receiptPrefix,
           waybillPrefix,
         },
+        notifications: { channels },
         quoteDefaults: {
           intro,
           atCostNote,
@@ -298,6 +301,27 @@ export function BusinessSettingsForm() {
             {text("Invoice prefix", invoicePrefix, setInvoicePrefix, true)}
             {text("Receipt prefix", receiptPrefix, setReceiptPrefix, true)}
             {text("Waybill prefix", waybillPrefix, setWaybillPrefix, true)}
+
+            <h2>Customer messages</h2>
+            <p className={styles.muted}>
+              Every message to a customer (milestones, expected arrival,
+              quotations, invoices, payments, deliveries and messages staff
+              send) goes out by the channel chosen here. SMS messages carry a
+              link to the customer&apos;s page.
+            </p>
+            <label className={styles.field}>
+              Send customer messages by
+              <select
+                onChange={(event) =>
+                  setChannels(event.target.value as "email" | "sms" | "both")
+                }
+                value={channels}
+              >
+                <option value="both">Email and SMS</option>
+                <option value="email">Email only</option>
+                <option value="sms">SMS only</option>
+              </select>
+            </label>
 
             <h2>Quote defaults</h2>
             <p className={styles.muted}>

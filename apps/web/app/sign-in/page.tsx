@@ -3,8 +3,8 @@ import { SignInForm } from "./SignInForm";
 import styles from "./signIn.module.css";
 
 export const metadata = {
-  title: "Staff sign in | BJH Logistics",
-  description: "Sign in to the local BJH Logistics staff workspace.",
+  title: "Sign in | BJH Logistics",
+  description: "Sign in to your BJH Logistics account.",
 };
 
 export default function SignInPage() {

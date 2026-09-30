@@ -39,7 +39,9 @@ import { JobCharges } from "./JobCharges";
 import { JobDeliveries } from "./JobDeliveries";
 import { JobCorrespondence } from "./JobCorrespondence";
 import { JobEta } from "./JobEta";
+import { JobExtractions } from "./JobExtractions";
 import { JobInvoices } from "./JobInvoices";
+import { JobMessages } from "./JobMessages";
 import { JobStock } from "./JobStock";
 import { JobTasks } from "./JobTasks";
 import styles from "./jobs.module.css";
@@ -568,6 +570,17 @@ export function JobDetail({ jobId }: { jobId: string }) {
         isStaff={isStaff}
         jobId={job.id}
       />
+
+      {isStaff && (
+        <JobExtractions
+          canEdit={!closedJob}
+          documents={data.documents}
+          jobId={job.id}
+          onApplied={() => void load()}
+        />
+      )}
+
+      {isStaff && <JobMessages jobId={job.id} />}
 
       {isStaff && (
         <JobCorrespondence documents={data.documents} jobId={job.id} />

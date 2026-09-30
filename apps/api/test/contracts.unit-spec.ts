@@ -32,8 +32,25 @@ test("customer contract trims text and rejects invalid bodies with API wording",
       companyName: "Northstar Synthetic Ltd",
       contactName: "Contact",
       email: "contact@example.test",
+      phone: null,
     },
   });
+  const withPhone = parseContract(customerInputSchema, {
+    companyName: "Northstar Synthetic Ltd",
+    contactName: "Contact",
+    email: "contact@example.test",
+    phone: " 024 405 8592 ",
+  });
+  assert.equal(withPhone.success && withPhone.data.phone, "024 405 8592");
+  assert.equal(
+    message(customerInputSchema, {
+      companyName: "x",
+      contactName: "y",
+      email: "contact@example.test",
+      phone: "call me",
+    }),
+    "phone must be a phone number such as 024 405 8592 or +233 24 405 8592",
+  );
   assert.equal(
     message(customerInputSchema, null),
     "A customer object is required",

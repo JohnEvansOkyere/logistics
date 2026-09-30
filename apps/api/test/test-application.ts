@@ -24,6 +24,11 @@ export const testDocumentStorage: DocumentStorage & {
   async put(key, bytes, contentType) {
     this.objects.set(key, { bytes, contentType });
   },
+  async get(key) {
+    const stored = this.objects.get(key);
+    if (!stored) throw new Error("Object not found");
+    return stored.bytes;
+  },
   async createSignedUrl(key, expiresInSeconds) {
     return `https://storage.test/signed/${key}?expires=${expiresInSeconds || SIGNED_URL_SECONDS}`;
   },

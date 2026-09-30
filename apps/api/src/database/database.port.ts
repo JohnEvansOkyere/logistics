@@ -427,6 +427,98 @@ export interface StockBalanceRecord {
   balance: number;
 }
 
+export interface NotificationDeliveryRecord {
+  id: string;
+  notificationId: string;
+  channel: "email" | "sms";
+  contactId: string | null;
+  contactName: string | null;
+  recipient: string | null;
+  status: "pending" | "sent" | "failed" | "skipped";
+  attempts: number;
+  lastError: string | null;
+  provider: string | null;
+  providerMessageId: string | null;
+  nextAttemptAt: string;
+  sentAt: string | null;
+  createdAt: string;
+}
+
+export interface NotificationRecord {
+  id: string;
+  companyId: string;
+  jobId: string | null;
+  event: string;
+  subject: string;
+  body: string;
+  smsText: string;
+  linkUrl: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  deliveries: NotificationDeliveryRecord[];
+}
+
+/** A delivery the dispatcher has claimed and must now send. */
+export interface DueDelivery {
+  id: string;
+  channel: "email" | "sms";
+  recipient: string;
+  /** Attempts including this one. */
+  attempts: number;
+  subject: string;
+  body: string;
+  smsText: string;
+  linkUrl: string | null;
+}
+
+export interface NotificationLogRow extends NotificationDeliveryRecord {
+  event: string;
+  subject: string;
+  companyName: string;
+  fileNumber: string | null;
+}
+
+export interface EtaReminderCandidate {
+  jobId: string;
+  fileNumber: string;
+  companyId: string;
+  etaId: string;
+  etaAt: string;
+}
+
+export interface ExtractionFieldRecord {
+  key: ReferenceKind;
+  label: string;
+  value: string;
+  sealNumber: string | null;
+  evidence: string;
+}
+
+export interface ExtractionApplyResult {
+  index: number;
+  key: ReferenceKind;
+  value: string;
+  /** "added", or why nothing was added. */
+  result: string;
+}
+
+export interface DocumentExtractionRecord {
+  id: string;
+  jobId: string;
+  documentId: string;
+  versionNumber: number;
+  filename: string | null;
+  /** False for a scanned PDF with no text to read. */
+  textFound: boolean;
+  fields: ExtractionFieldRecord[];
+  status: "draft" | "approved" | "rejected";
+  applied: ExtractionApplyResult[] | null;
+  createdBy: string;
+  createdAt: string;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+}
+
 export interface ActivityEntry {
   actorUserId: string;
   actorEmail: string | null;
@@ -462,6 +554,10 @@ export interface CustomerContactRecord {
   name: string;
   email: string;
   createdAt: string;
+  /** For SMS notifications; optional. */
+  phone?: string | null;
+  /** Whether this contact receives customer notifications (default true). */
+  notify?: boolean;
 }
 
 export interface CustomerCompanyRecord {
@@ -542,6 +638,15 @@ export abstract class DatabasePort {
   abstract createCustomer(
     customer: CustomerCompanyRecord,
   ): Promise<CustomerCompanyRecord>;
+  abstract addCustomerContact(
+    companyId: string,
+    contact: CustomerContactRecord,
+  ): Promise<CustomerContactRecord | null>;
+  abstract updateCustomerContact(
+    companyId: string,
+    contactId: string,
+    update: { phone: string | null; notify?: boolean },
+  ): Promise<CustomerContactRecord | null>;
   abstract listCustomers(
     search: string,
     companyIds?: string[],
@@ -909,6 +1014,68 @@ export abstract class DatabasePort {
     companyId: string | null;
     scope: JobScope;
   }): Promise<StockBalanceRecord[]>;
+  /** One notification and its deliveries; "duplicate" if this event was already queued. */
+  abstract queueNotification(notification: {
+    companyId: string;
+    jobId: string | null;
+    event: string;
+    dedupeKey: string;
+    subject: string;
+    body: string;
+    smsText: string;
+    linkUrl: string | null;
+    createdBy: string | null;
+    deliveries: Array<{
+      contactId: string | null;
+      channel: "email" | "sms";
+      recipient: string | null;
+      /** Set when the delivery cannot be attempted (no address, bad number). */
+      skipReason: string | null;
+    }>;
+  }): Promise<NotificationRecord | "duplicate">;
+  /** Claims pending deliveries that are due; a lease keeps two workers off the same one. */
+  abstract claimDueDeliveries(limit: number): Promise<DueDelivery[]>;
+  abstract markDeliverySent(
+    id: string,
+    provider: string,
+    providerMessageId: string | null,
+  ): Promise<void>;
+  abstract markDeliveryFailed(
+    id: string,
+    error: string,
+    retryInSeconds: number | null,
+  ): Promise<void>;
+  abstract listJobNotifications(jobId: string): Promise<NotificationRecord[]>;
+  abstract listNotificationLog(filter: {
+    status: NotificationDeliveryRecord["status"] | null;
+    limit: number;
+  }): Promise<NotificationLogRow[]>;
+  abstract retryNotificationDelivery(
+    id: string,
+  ): Promise<NotificationDeliveryRecord | "not_found" | "not_failed">;
+  abstract listEtaReminderCandidates(
+    withinHours: number,
+  ): Promise<EtaReminderCandidate[]>;
+  abstract createDocumentExtraction(extraction: {
+    jobId: string;
+    documentId: string;
+    versionNumber: number;
+    textFound: boolean;
+    fields: ExtractionFieldRecord[];
+    createdBy: string;
+  }): Promise<DocumentExtractionRecord>;
+  abstract listDocumentExtractions(
+    jobId: string,
+  ): Promise<DocumentExtractionRecord[]>;
+  abstract reviewDocumentExtraction(
+    jobId: string,
+    extractionId: string,
+    review: {
+      status: "approved" | "rejected";
+      applied: ExtractionApplyResult[] | null;
+      reviewedBy: string;
+    },
+  ): Promise<DocumentExtractionRecord | "not_found" | "not_draft">;
   abstract recordActivity(entry: ActivityEntry): Promise<void>;
   abstract listActivity(filter: ActivityFilter): Promise<ActivityRecord[]>;
   abstract getActiveCustomerCompanyIds(userId: string): Promise<string[]>;

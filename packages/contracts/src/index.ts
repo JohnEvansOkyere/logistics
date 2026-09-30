@@ -45,15 +45,47 @@ const emailField = requiredText("email", 254).refine(
 
 const objectError = (message: string) => ({ error: message });
 
+/** A phone number people can type: digits with an optional +, spaces, dashes and brackets. */
+const phoneField = z
+  .string({ error: "phone must be text" })
+  .transform((value) => value.trim())
+  .refine((value) => value === "" || /^\+?[0-9][0-9 ()-]{4,38}$/.test(value), {
+    error:
+      "phone must be a phone number such as 024 405 8592 or +233 24 405 8592",
+  })
+  .nullish()
+  .transform((value) => value || null);
+
 export const customerInputSchema = z.object(
   {
     companyName: requiredText("companyName", 160),
     contactName: requiredText("contactName", 160),
     email: emailField,
+    phone: phoneField,
   },
   objectError("A customer object is required"),
 );
 export type CustomerInput = z.infer<typeof customerInputSchema>;
+
+export const customerContactInputSchema = z.object(
+  {
+    name: requiredText("name", 160),
+    email: emailField,
+    phone: phoneField,
+  },
+  objectError("A contact object is required"),
+);
+export type CustomerContactInput = z.infer<typeof customerContactInputSchema>;
+
+/** Change a contact's phone number or switch its notifications on or off. */
+export const customerContactUpdateSchema = z.object(
+  {
+    phone: phoneField,
+    notify: z.boolean({ error: "notify must be true or false" }).optional(),
+  },
+  objectError("A contact update object is required"),
+);
+export type CustomerContactUpdate = z.infer<typeof customerContactUpdateSchema>;
 
 export const quoteRequestInputSchema = z.object(
   {
@@ -711,6 +743,9 @@ const optionalEmail = z
  * BJH's business settings. Tax rates are basis points (1500 = 15%); how levies
  * combine on an invoice is decided with the invoice work (F3), not here.
  */
+export const notificationChannelModes = ["email", "sms", "both"] as const;
+export type NotificationChannelMode = (typeof notificationChannelModes)[number];
+
 export const businessSettingsSchema = z
   .object(
     {
@@ -801,6 +836,18 @@ export const businessSettingsSchema = z
               terms: [],
             },
         ),
+      // Which channel every customer message uses: email, SMS or both.
+      notifications: z
+        .object(
+          {
+            channels: z.enum(notificationChannelModes, {
+              error: "notification channels must be email, sms or both",
+            }),
+          },
+          objectError("notifications must be an object"),
+        )
+        .nullish()
+        .transform((value) => value ?? { channels: "both" as const }),
     },
     objectError("A settings object is required"),
   )
@@ -1178,3 +1225,40 @@ export const stockMovementInputSchema = z.object(
   objectError("A stock movement object is required"),
 );
 export type StockMovementInput = z.infer<typeof stockMovementInputSchema>;
+
+/** A message staff send to a company's contacts by the configured channels. */
+export const jobMessageInputSchema = z.object(
+  {
+    subject: optionalText("subject", 200),
+    body: requiredText("body", 1500),
+  },
+  objectError("A message object is required"),
+);
+export type JobMessageInput = z.infer<typeof jobMessageInputSchema>;
+
+/** The fields a person chose to apply from an extraction draft, with any corrections. */
+export const extractionApproveInputSchema = z.object(
+  {
+    fields: z
+      .array(
+        z.object(
+          {
+            index: z
+              .number({ error: "index must be a whole number" })
+              .int({ error: "index must be a whole number" })
+              .min(0, { error: "index must be a whole number" }),
+            value: requiredText("value", 80),
+            sealNumber: optionalText("sealNumber", 80),
+          },
+          objectError("A field object is required"),
+        ),
+        { error: "fields must be a list" },
+      )
+      .min(1, { error: "Choose at least one field to apply" })
+      .max(50, { error: "At most 50 fields can be applied at once" }),
+  },
+  objectError("An approval object is required"),
+);
+export type ExtractionApproveInput = z.infer<
+  typeof extractionApproveInputSchema
+>;

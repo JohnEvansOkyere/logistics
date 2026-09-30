@@ -23,6 +23,11 @@ import {
 import { JobsService } from "../jobs/jobs.service";
 import { JobChargesService } from "./job-charges.service";
 import { computeInvoiceTotals } from "./invoice-totals";
+import {
+  invoiceIssuedMessage,
+  paymentReceivedMessage,
+} from "../notifications/notification-messages";
+import { NotificationsService } from "../notifications/notifications.service";
 import { renderInvoicePdf } from "./invoice-pdf";
 import { renderReceiptPdf } from "./receipt-pdf";
 
@@ -49,6 +54,8 @@ export class InvoicesService {
     @Inject(DatabasePort) private readonly database: DatabasePort,
     @Inject(JobsService) private readonly jobs: JobsService,
     @Inject(JobChargesService) private readonly charges: JobChargesService,
+    @Inject(NotificationsService)
+    private readonly notifications: NotificationsService,
   ) {}
 
   async list(id: string, scope: JobScope): Promise<InvoiceView[]> {
@@ -223,6 +230,25 @@ export class InvoicesService {
     if (result === "no_lines") {
       throw new BadRequestException("Add at least one line before issuing");
     }
+    const invoiceNumber = result.invoiceNumber;
+    if (invoiceNumber) {
+      await this.notifications.notify({
+        companyId: job.customerCompanyId,
+        jobId: job.id,
+        event: "invoice_issued",
+        dedupeKey: `invoice-issued:${result.id}`,
+        message: (sender) =>
+          invoiceIssuedMessage(
+            sender,
+            invoiceNumber,
+            result.totalMinor,
+            result.currency,
+            result.dueDate,
+          ),
+        linkPath: `/jobs/${job.id}`,
+        createdBy: issuedBy,
+      });
+    }
     return this.view(result, [], true);
   }
 
@@ -303,6 +329,29 @@ export class InvoicesService {
         "evidenceDocumentId must be a document on this job",
       );
     }
+    const invoice = await this.find(job.id, invoiceId);
+    const standing = (await this.database.listInvoicePayments(job.id)).filter(
+      (item) => item.invoiceId === invoice.id && item.reversal === null,
+    );
+    const paid = standing.reduce((sum, item) => sum + item.amountMinor, 0);
+    const invoiceNumber = invoice.invoiceNumber ?? "";
+    await this.notifications.notify({
+      companyId: job.customerCompanyId,
+      jobId: job.id,
+      event: "payment_received",
+      dedupeKey: `payment:${result.id}`,
+      message: (sender) =>
+        paymentReceivedMessage(
+          sender,
+          result.receiptNumber,
+          invoiceNumber,
+          result.amountMinor,
+          invoice.totalMinor - paid,
+          invoice.currency,
+        ),
+      linkPath: `/jobs/${job.id}`,
+      createdBy: recordedBy,
+    });
     return result;
   }
 

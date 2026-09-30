@@ -67,6 +67,19 @@ export default function SettingsPage() {
           </article>
           <article className="action-card">
             <span className="action-icon" aria-hidden="true">
+              ✉
+            </span>
+            <div className="action-copy">
+              <p className="action-kicker">MESSAGES</p>
+              <h3>Customer messages</h3>
+              <p>See what was sent by email and SMS, and retry failures.</p>
+            </div>
+            <Link className="action-link" href="/settings/notifications">
+              View messages <span aria-hidden="true">→</span>
+            </Link>
+          </article>
+          <article className="action-card">
+            <span className="action-icon" aria-hidden="true">
               ☰
             </span>
             <div className="action-copy">

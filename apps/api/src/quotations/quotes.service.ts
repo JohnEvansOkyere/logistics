@@ -14,6 +14,8 @@ import {
   quoteVersionInputSchema,
 } from "@bjh/contracts";
 import { serviceLinesForRoles } from "../auth/auth.guards";
+import { quoteIssuedMessage } from "../notifications/notification-messages";
+import { NotificationsService } from "../notifications/notifications.service";
 import { renderQuotePdf } from "./quote-pdf";
 import {
   DatabasePort,
@@ -32,7 +34,11 @@ import {
  */
 @Injectable()
 export class QuotesService {
-  constructor(@Inject(DatabasePort) private readonly database: DatabasePort) {}
+  constructor(
+    @Inject(DatabasePort) private readonly database: DatabasePort,
+    @Inject(NotificationsService)
+    private readonly notifications: NotificationsService,
+  ) {}
 
   async create(
     input: unknown,
@@ -140,7 +146,22 @@ export class QuotesService {
         "Add at least one charge line before issuing",
       );
     }
-    return this.get(quote.id, scope);
+    const issued = await this.get(quote.id, scope);
+    const version = issued.versions
+      .filter((item) => item.status === "issued")
+      .at(-1);
+    if (issued.quoteNumber && version) {
+      const quoteNumber = issued.quoteNumber;
+      await this.notifications.notify({
+        companyId: issued.customerCompanyId,
+        event: "quote_issued",
+        dedupeKey: `quote-issued:${version.id}`,
+        message: (sender) => quoteIssuedMessage(sender, quoteNumber),
+        linkPath: `/quotes/${issued.id}`,
+        createdBy: issuedBy,
+      });
+    }
+    return issued;
   }
 
   /**

@@ -19,6 +19,7 @@ import {
   DatabaseHealth,
   DatabasePort,
   CustomerCompanyRecord,
+  CustomerContactRecord,
   CustomerMembershipRecord,
   JobRecord,
   DocumentRecord,
@@ -35,7 +36,15 @@ import {
   ChargeActualRecord,
   DeliveryRecord,
   InvoiceLineRecord,
+  DocumentExtractionRecord,
+  DueDelivery,
+  ExtractionApplyResult,
+  ExtractionFieldRecord,
+  EtaReminderCandidate,
   JobCorrespondenceRecord,
+  NotificationDeliveryRecord,
+  NotificationLogRow,
+  NotificationRecord,
   StockBalanceRecord,
   StockMovementRecord,
   WarehouseLocationRecord,
@@ -149,6 +158,8 @@ const customerSelect = `
     contact.contact_id,
     contact.contact_name,
     contact.email AS contact_email,
+    contact.phone AS contact_phone,
+    contact.notify AS contact_notify,
     contact.created_at AS contact_created_at
   FROM app.customer_company AS company
   LEFT JOIN app.customer_contact AS contact ON contact.company_id = company.company_id`;
@@ -394,13 +405,15 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       for (const contact of customer.contacts) {
         await client.query(
           `INSERT INTO app.customer_contact
-            (contact_id, company_id, contact_name, email, created_at)
-           VALUES ($1::uuid, $2::uuid, $3, $4, $5)`,
+            (contact_id, company_id, contact_name, email, phone, notify, created_at)
+           VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7)`,
           [
             contact.id,
             customer.id,
             contact.name,
             contact.email,
+            contact.phone ?? null,
+            contact.notify ?? true,
             contact.createdAt,
           ],
         );
@@ -413,6 +426,59 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
     } finally {
       client.release();
     }
+  }
+
+  async addCustomerContact(
+    companyId: string,
+    contact: CustomerContactRecord,
+  ): Promise<CustomerContactRecord | null> {
+    const company = await this.pool.query(
+      `SELECT 1 FROM app.customer_company WHERE company_id = $1::uuid`,
+      [companyId],
+    );
+    if (company.rows.length === 0) return null;
+    const inserted = await this.pool.query(
+      `INSERT INTO app.customer_contact
+        (contact_id, company_id, contact_name, email, phone, notify, created_at)
+       VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [
+        contact.id,
+        companyId,
+        contact.name,
+        contact.email,
+        contact.phone ?? null,
+        contact.notify ?? true,
+        contact.createdAt,
+      ],
+    );
+    return this.mapContact(inserted.rows[0]);
+  }
+
+  async updateCustomerContact(
+    companyId: string,
+    contactId: string,
+    update: { phone: string | null; notify?: boolean },
+  ): Promise<CustomerContactRecord | null> {
+    const updated = await this.pool.query(
+      `UPDATE app.customer_contact
+       SET phone = $3, notify = COALESCE($4::boolean, notify)
+       WHERE contact_id = $2::uuid AND company_id = $1::uuid
+       RETURNING *`,
+      [companyId, contactId, update.phone, update.notify ?? null],
+    );
+    return updated.rows[0] ? this.mapContact(updated.rows[0]) : null;
+  }
+
+  private mapContact(row: Record<string, unknown>): CustomerContactRecord {
+    return {
+      id: String(row.contact_id),
+      name: String(row.contact_name),
+      email: String(row.email),
+      phone: row.phone ? String(row.phone) : null,
+      notify: row.notify !== false,
+      createdAt: this.toIsoString(row.created_at),
+    };
   }
 
   async listCustomers(
@@ -2814,6 +2880,396 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
     };
   }
 
+  async queueNotification(notification: {
+    companyId: string;
+    jobId: string | null;
+    event: string;
+    dedupeKey: string;
+    subject: string;
+    body: string;
+    smsText: string;
+    linkUrl: string | null;
+    createdBy: string | null;
+    deliveries: Array<{
+      contactId: string | null;
+      channel: "email" | "sms";
+      recipient: string | null;
+      skipReason: string | null;
+    }>;
+  }): Promise<NotificationRecord | "duplicate"> {
+    const client = await this.pool.connect();
+    let notificationId: string;
+    try {
+      await client.query("BEGIN");
+      const inserted = await client.query(
+        `INSERT INTO app.notification
+          (company_id, job_id, event, dedupe_key, subject, body, sms_text, link_url, created_by)
+         VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9::uuid)
+         ON CONFLICT (dedupe_key) DO NOTHING
+         RETURNING *`,
+        [
+          notification.companyId,
+          notification.jobId,
+          notification.event,
+          notification.dedupeKey,
+          notification.subject,
+          notification.body,
+          notification.smsText,
+          notification.linkUrl,
+          notification.createdBy,
+        ],
+      );
+      if (inserted.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return "duplicate";
+      }
+      notificationId = String(inserted.rows[0].notification_id);
+      for (const delivery of notification.deliveries) {
+        await client.query(
+          `INSERT INTO app.notification_delivery
+            (notification_id, contact_id, channel, recipient, status, last_error)
+           VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6)`,
+          [
+            notificationId,
+            delivery.contactId,
+            delivery.channel,
+            delivery.recipient,
+            delivery.skipReason ? "skipped" : "pending",
+            delivery.skipReason,
+          ],
+        );
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+    const [saved] = await this.selectNotifications(
+      "n.notification_id = $1::uuid",
+      [notificationId],
+    );
+    return saved;
+  }
+
+  async claimDueDeliveries(limit: number): Promise<DueDelivery[]> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const claimed = await client.query(
+        `WITH due AS (
+           SELECT d.delivery_id FROM app.notification_delivery d
+           WHERE d.status = 'pending' AND d.next_attempt_at <= clock_timestamp()
+           ORDER BY d.next_attempt_at
+           LIMIT $1
+           FOR UPDATE SKIP LOCKED
+         )
+         UPDATE app.notification_delivery d
+         SET attempts = d.attempts + 1,
+             -- A lease: if the worker dies, the delivery comes back after 5 minutes.
+             next_attempt_at = clock_timestamp() + interval '5 minutes'
+         FROM due
+         WHERE d.delivery_id = due.delivery_id
+         RETURNING d.delivery_id, d.channel, d.recipient, d.attempts, d.notification_id`,
+        [limit],
+      );
+      const ids = claimed.rows.map((row) => String(row.notification_id));
+      const notifications = ids.length
+        ? await client.query(
+            `SELECT notification_id, subject, body, sms_text, link_url
+             FROM app.notification WHERE notification_id = ANY($1::uuid[])`,
+            [ids],
+          )
+        : { rows: [] as Array<Record<string, unknown>> };
+      await client.query("COMMIT");
+      const byId = new Map(
+        notifications.rows.map((row) => [String(row.notification_id), row]),
+      );
+      return claimed.rows.map((row) => {
+        const notification = byId.get(String(row.notification_id))!;
+        return {
+          id: String(row.delivery_id),
+          channel: row.channel as "email" | "sms",
+          recipient: String(row.recipient),
+          attempts: Number(row.attempts),
+          subject: String(notification.subject),
+          body: String(notification.body),
+          smsText: String(notification.sms_text),
+          linkUrl: notification.link_url ? String(notification.link_url) : null,
+        };
+      });
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async markDeliverySent(
+    id: string,
+    provider: string,
+    providerMessageId: string | null,
+  ): Promise<void> {
+    await this.pool.query(
+      `UPDATE app.notification_delivery
+       SET status = 'sent', sent_at = clock_timestamp(), provider = $2,
+           provider_message_id = $3, last_error = NULL
+       WHERE delivery_id = $1::uuid AND status = 'pending'`,
+      [id, provider, providerMessageId],
+    );
+  }
+
+  async markDeliveryFailed(
+    id: string,
+    error: string,
+    retryInSeconds: number | null,
+  ): Promise<void> {
+    await this.pool.query(
+      `UPDATE app.notification_delivery
+       SET last_error = left($2, 1000),
+           status = CASE WHEN $3::integer IS NULL THEN 'failed' ELSE 'pending' END,
+           next_attempt_at = CASE WHEN $3::integer IS NULL THEN next_attempt_at
+                                  ELSE clock_timestamp() + ($3::integer * interval '1 second') END
+       WHERE delivery_id = $1::uuid AND status = 'pending'`,
+      [id, error, retryInSeconds],
+    );
+  }
+
+  async listJobNotifications(jobId: string): Promise<NotificationRecord[]> {
+    return this.selectNotifications("n.job_id = $1::uuid", [jobId]);
+  }
+
+  private async selectNotifications(
+    where: string,
+    values: unknown[],
+  ): Promise<NotificationRecord[]> {
+    const notifications = await this.pool.query(
+      `SELECT n.* FROM app.notification n WHERE ${where}
+       ORDER BY n.created_at DESC, n.notification_id`,
+      values,
+    );
+    if (notifications.rows.length === 0) return [];
+    const deliveries = await this.pool.query(
+      `SELECT d.*, c.contact_name
+       FROM app.notification_delivery d
+       LEFT JOIN app.customer_contact c ON c.contact_id = d.contact_id
+       WHERE d.notification_id = ANY($1::uuid[])
+       ORDER BY d.created_at, d.delivery_id`,
+      [notifications.rows.map((row) => String(row.notification_id))],
+    );
+    return notifications.rows.map((row) => ({
+      id: String(row.notification_id),
+      companyId: String(row.company_id),
+      jobId: row.job_id ? String(row.job_id) : null,
+      event: String(row.event),
+      subject: String(row.subject),
+      body: String(row.body),
+      smsText: String(row.sms_text),
+      linkUrl: row.link_url ? String(row.link_url) : null,
+      createdBy: row.created_by ? String(row.created_by) : null,
+      createdAt: this.toIsoString(row.created_at),
+      deliveries: deliveries.rows
+        .filter((delivery) => delivery.notification_id === row.notification_id)
+        .map((delivery) => this.mapDelivery2(delivery)),
+    }));
+  }
+
+  private mapDelivery2(
+    row: Record<string, unknown>,
+  ): NotificationDeliveryRecord {
+    const optional = (value: unknown) => (value ? String(value) : null);
+    return {
+      id: String(row.delivery_id),
+      notificationId: String(row.notification_id),
+      channel: row.channel as "email" | "sms",
+      contactId: optional(row.contact_id),
+      contactName: optional(row.contact_name),
+      recipient: optional(row.recipient),
+      status: row.status as NotificationDeliveryRecord["status"],
+      attempts: Number(row.attempts),
+      lastError: optional(row.last_error),
+      provider: optional(row.provider),
+      providerMessageId: optional(row.provider_message_id),
+      nextAttemptAt: this.toIsoString(row.next_attempt_at),
+      sentAt: row.sent_at ? this.toIsoString(row.sent_at) : null,
+      createdAt: this.toIsoString(row.created_at),
+    };
+  }
+
+  async listNotificationLog(filter: {
+    status: NotificationDeliveryRecord["status"] | null;
+    limit: number;
+  }): Promise<NotificationLogRow[]> {
+    const result = await this.pool.query(
+      `SELECT d.*, c.contact_name, n.event, n.subject, company.company_name,
+              job.file_number
+       FROM app.notification_delivery d
+       JOIN app.notification n ON n.notification_id = d.notification_id
+       JOIN app.customer_company company ON company.company_id = n.company_id
+       LEFT JOIN app.customer_contact c ON c.contact_id = d.contact_id
+       LEFT JOIN app.job job ON job.job_id = n.job_id
+       WHERE ($1::text IS NULL OR d.status = $1)
+       ORDER BY d.created_at DESC, d.delivery_id
+       LIMIT $2`,
+      [filter.status, filter.limit],
+    );
+    return result.rows.map((row) => ({
+      ...this.mapDelivery2(row),
+      event: String(row.event),
+      subject: String(row.subject),
+      companyName: String(row.company_name),
+      fileNumber: row.file_number ? String(row.file_number) : null,
+    }));
+  }
+
+  async retryNotificationDelivery(
+    id: string,
+  ): Promise<NotificationDeliveryRecord | "not_found" | "not_failed"> {
+    const current = await this.pool.query(
+      `SELECT status FROM app.notification_delivery WHERE delivery_id = $1::uuid`,
+      [id],
+    );
+    if (current.rows.length === 0) return "not_found";
+    if (current.rows[0].status !== "failed") return "not_failed";
+    const updated = await this.pool.query(
+      `UPDATE app.notification_delivery
+       SET status = 'pending', attempts = 0, next_attempt_at = clock_timestamp()
+       WHERE delivery_id = $1::uuid AND status = 'failed'
+       RETURNING *`,
+      [id],
+    );
+    return updated.rows[0] ? this.mapDelivery2(updated.rows[0]) : "not_failed";
+  }
+
+  async listEtaReminderCandidates(
+    withinHours: number,
+  ): Promise<EtaReminderCandidate[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM (
+         SELECT DISTINCT ON (e.job_id) e.eta_id, e.eta_at, job.job_id, job.file_number,
+                job.customer_company_id
+         FROM app.eta_event e
+         JOIN app.job job ON job.job_id = e.job_id
+         WHERE job.status NOT IN ('closed', 'cancelled')
+         ORDER BY e.job_id, e.recorded_at DESC, e.eta_id DESC
+       ) latest
+       WHERE latest.eta_at > clock_timestamp()
+         AND latest.eta_at <= clock_timestamp() + ($1::integer * interval '1 hour')`,
+      [withinHours],
+    );
+    return result.rows.map((row) => ({
+      jobId: String(row.job_id),
+      fileNumber: String(row.file_number),
+      companyId: String(row.customer_company_id),
+      etaId: String(row.eta_id),
+      etaAt: this.toIsoString(row.eta_at),
+    }));
+  }
+
+  private static readonly EXTRACTION_SELECT = `
+    SELECT x.*, (
+      SELECT v.original_filename FROM app.document_version v
+      WHERE v.document_id = x.document_id AND v.version_number = x.version_number
+    ) AS filename
+    FROM app.document_extraction x`;
+
+  async createDocumentExtraction(extraction: {
+    jobId: string;
+    documentId: string;
+    versionNumber: number;
+    textFound: boolean;
+    fields: ExtractionFieldRecord[];
+    createdBy: string;
+  }): Promise<DocumentExtractionRecord> {
+    const inserted = await this.pool.query(
+      `INSERT INTO app.document_extraction
+        (job_id, document_id, version_number, text_found, fields, created_by)
+       VALUES ($1::uuid, $2::uuid, $3, $4, $5::jsonb, $6::uuid)
+       RETURNING extraction_id`,
+      [
+        extraction.jobId,
+        extraction.documentId,
+        extraction.versionNumber,
+        extraction.textFound,
+        JSON.stringify(extraction.fields),
+        extraction.createdBy,
+      ],
+    );
+    const [saved] = await this.selectExtractions("x.extraction_id = $1::uuid", [
+      String(inserted.rows[0].extraction_id),
+    ]);
+    return saved;
+  }
+
+  listDocumentExtractions(jobId: string): Promise<DocumentExtractionRecord[]> {
+    return this.selectExtractions("x.job_id = $1::uuid", [jobId]);
+  }
+
+  async reviewDocumentExtraction(
+    jobId: string,
+    extractionId: string,
+    review: {
+      status: "approved" | "rejected";
+      applied: ExtractionApplyResult[] | null;
+      reviewedBy: string;
+    },
+  ): Promise<DocumentExtractionRecord | "not_found" | "not_draft"> {
+    const current = await this.pool.query(
+      `SELECT status FROM app.document_extraction
+       WHERE extraction_id = $2::uuid AND job_id = $1::uuid`,
+      [jobId, extractionId],
+    );
+    if (current.rows.length === 0) return "not_found";
+    if (current.rows[0].status !== "draft") return "not_draft";
+    const updated = await this.pool.query(
+      `UPDATE app.document_extraction
+       SET status = $3, applied = $4::jsonb, reviewed_by = $5::uuid,
+           reviewed_at = clock_timestamp()
+       WHERE extraction_id = $2::uuid AND job_id = $1::uuid AND status = 'draft'
+       RETURNING extraction_id`,
+      [
+        jobId,
+        extractionId,
+        review.status,
+        review.applied ? JSON.stringify(review.applied) : null,
+        review.reviewedBy,
+      ],
+    );
+    if (updated.rows.length === 0) return "not_draft";
+    const [saved] = await this.selectExtractions("x.extraction_id = $1::uuid", [
+      extractionId,
+    ]);
+    return saved;
+  }
+
+  private async selectExtractions(
+    where: string,
+    values: unknown[],
+  ): Promise<DocumentExtractionRecord[]> {
+    const result = await this.pool.query(
+      `${PostgresDatabaseService.EXTRACTION_SELECT}
+       WHERE ${where} ORDER BY x.created_at DESC, x.extraction_id`,
+      values,
+    );
+    return result.rows.map((row) => ({
+      id: String(row.extraction_id),
+      jobId: String(row.job_id),
+      documentId: String(row.document_id),
+      versionNumber: Number(row.version_number),
+      filename: row.filename ? String(row.filename) : null,
+      textFound: row.text_found === true,
+      fields: row.fields as ExtractionFieldRecord[],
+      status: row.status as DocumentExtractionRecord["status"],
+      applied: (row.applied as ExtractionApplyResult[] | null) ?? null,
+      createdBy: String(row.created_by),
+      createdAt: this.toIsoString(row.created_at),
+      reviewedBy: row.reviewed_by ? String(row.reviewed_by) : null,
+      reviewedAt: row.reviewed_at ? this.toIsoString(row.reviewed_at) : null,
+    }));
+  }
+
   private mapDriver(row: Record<string, unknown>): DriverRecord {
     return {
       id: String(row.driver_id),
@@ -3289,6 +3745,8 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
           id: String(row.contact_id),
           name: String(row.contact_name),
           email: String(row.contact_email),
+          phone: row.contact_phone ? String(row.contact_phone) : null,
+          notify: row.contact_notify !== false,
           createdAt: this.toIsoString(row.contact_created_at),
         });
       }

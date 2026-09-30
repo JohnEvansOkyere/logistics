@@ -10,6 +10,8 @@ export const SIGNED_URL_SECONDS = 60;
 export interface DocumentStorage {
   put(key: string, bytes: Buffer, contentType: string): Promise<void>;
   createSignedUrl(key: string, expiresInSeconds: number): Promise<string>;
+  /** The stored bytes, for reading the document's text on the server. */
+  get(key: string): Promise<Buffer>;
 }
 
 @Injectable()
@@ -42,6 +44,14 @@ export class SupabaseDocumentStorage implements DocumentStorage {
     if (error) {
       throw new ServiceUnavailableException("The document could not be stored");
     }
+  }
+
+  async get(key: string): Promise<Buffer> {
+    const { data, error } = await this.storage().download(key);
+    if (error || !data) {
+      throw new ServiceUnavailableException("The document could not be read");
+    }
+    return Buffer.from(await data.arrayBuffer());
   }
 
   async createSignedUrl(

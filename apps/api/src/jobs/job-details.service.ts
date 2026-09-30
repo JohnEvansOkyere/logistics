@@ -26,6 +26,8 @@ import {
   JobScope,
   ShipmentReferenceRecord,
 } from "../database/database.port";
+import { etaMessage } from "../notifications/notification-messages";
+import { NotificationsService } from "../notifications/notifications.service";
 import { JobsService } from "./jobs.service";
 
 /** Parties, shipment references, manual ETA and tasks on a job. */
@@ -34,6 +36,8 @@ export class JobDetailsService {
   constructor(
     @Inject(DatabasePort) private readonly database: DatabasePort,
     @Inject(JobsService) private readonly jobs: JobsService,
+    @Inject(NotificationsService)
+    private readonly notifications: NotificationsService,
   ) {}
 
   async listParties(id: string, scope: JobScope): Promise<JobPartyRecord[]> {
@@ -182,6 +186,15 @@ export class JobDetailsService {
         "The ETA being corrected was not found on this job",
       );
     }
+    await this.notifications.notify({
+      companyId: job.customerCompanyId,
+      jobId: job.id,
+      event: "eta",
+      dedupeKey: `eta:${event.id}`,
+      message: (sender) => etaMessage(sender, job.fileNumber, event.etaAt),
+      linkPath: `/jobs/${job.id}`,
+      createdBy: recordedBy,
+    });
     return event;
   }
 

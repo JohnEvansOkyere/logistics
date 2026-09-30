@@ -10,6 +10,8 @@ import { DatabaseModule } from "./database/database.module";
 import { HealthController } from "./health.controller";
 import { DocumentsController } from "./documents/documents.controller";
 import { DocumentsService } from "./documents/documents.service";
+import { ExtractionsController } from "./documents/extractions.controller";
+import { ExtractionsService } from "./documents/extractions.service";
 import {
   DOCUMENT_STORAGE,
   SupabaseDocumentStorage,
@@ -21,6 +23,18 @@ import {
 import { JobDetailsService } from "./jobs/job-details.service";
 import { JobCorrespondenceController } from "./jobs/job-correspondence.controller";
 import { JobCorrespondenceService } from "./jobs/job-correspondence.service";
+import {
+  AdminNotificationsController,
+  JobMessagesController,
+} from "./notifications/notifications.controller";
+import { NotificationDispatcher } from "./notifications/notification-dispatcher.service";
+import { NotificationsService } from "./notifications/notifications.service";
+import {
+  EMAIL_PROVIDER,
+  SMS_PROVIDER,
+  createEmailProvider,
+  createSmsProvider,
+} from "./notifications/providers";
 import { JobsController } from "./jobs/jobs.controller";
 import { JobsService } from "./jobs/jobs.service";
 import { CustomersController } from "./customers/customers.controller";
@@ -63,6 +77,8 @@ import { QuotesService } from "./quotations/quotes.service";
     JobsController,
     JobDetailsController,
     JobCorrespondenceController,
+    AdminNotificationsController,
+    JobMessagesController,
     JobChargesController,
     InvoicesController,
     DriversController,
@@ -73,6 +89,7 @@ import { QuotesService } from "./quotations/quotes.service";
     StockReportController,
     TasksController,
     DocumentsController,
+    ExtractionsController,
     ActivityController,
   ],
   providers: [
@@ -83,11 +100,19 @@ import { QuotesService } from "./quotations/quotes.service";
     JobsService,
     JobDetailsService,
     JobCorrespondenceService,
+    NotificationsService,
+    NotificationDispatcher,
+    {
+      provide: EMAIL_PROVIDER,
+      useFactory: () => createEmailProvider(process.env),
+    },
+    { provide: SMS_PROVIDER, useFactory: () => createSmsProvider(process.env) },
     JobChargesService,
     InvoicesService,
     TransportService,
     WarehouseService,
     DocumentsService,
+    ExtractionsService,
     { provide: DOCUMENT_STORAGE, useClass: SupabaseDocumentStorage },
     ActivityLogMiddleware,
     { provide: APP_FILTER, useClass: RequestErrorFilter },

@@ -5,7 +5,10 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import {
+  customerContactInputSchema,
+  customerContactUpdateSchema,
   customerInputSchema,
+  isUuid,
   parseContract,
   type CustomerInput,
 } from "@bjh/contracts";
@@ -29,6 +32,8 @@ export class CustomersService {
           id: randomUUID(),
           name: details.contactName,
           email: details.email,
+          phone: details.phone,
+          notify: true,
           createdAt,
         },
       ],
@@ -57,6 +62,38 @@ export class CustomersService {
       throw new NotFoundException("Customer was not found");
     }
     return customer;
+  }
+
+  async addContact(companyId: string, input: unknown) {
+    const parsed = parseContract(customerContactInputSchema, input);
+    if (!parsed.success) throw new BadRequestException(parsed.message);
+    const contact = isUuid(companyId)
+      ? await this.database.addCustomerContact(companyId, {
+          id: randomUUID(),
+          name: parsed.data.name,
+          email: parsed.data.email,
+          phone: parsed.data.phone,
+          notify: true,
+          createdAt: new Date().toISOString(),
+        })
+      : null;
+    if (!contact) throw new NotFoundException("Customer was not found");
+    return contact;
+  }
+
+  async updateContact(companyId: string, contactId: string, input: unknown) {
+    const parsed = parseContract(customerContactUpdateSchema, input);
+    if (!parsed.success) throw new BadRequestException(parsed.message);
+    const contact =
+      isUuid(companyId) && isUuid(contactId)
+        ? await this.database.updateCustomerContact(
+            companyId,
+            contactId,
+            parsed.data,
+          )
+        : null;
+    if (!contact) throw new NotFoundException("Contact was not found");
+    return contact;
   }
 
   private validate(input: unknown): CustomerInput {

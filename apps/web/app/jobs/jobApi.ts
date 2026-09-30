@@ -626,3 +626,82 @@ export const getStockReport = (asOf: string, companyId: string) => {
     "GET",
   );
 };
+
+export type NotificationDelivery = {
+  id: string;
+  channel: "email" | "sms";
+  contactName: string | null;
+  recipient: string | null;
+  status: "pending" | "sent" | "failed" | "skipped";
+  attempts: number;
+  lastError: string | null;
+  provider: string | null;
+  sentAt: string | null;
+};
+
+export type JobNotification = {
+  id: string;
+  event: string;
+  subject: string;
+  body: string;
+  smsText: string;
+  linkUrl: string | null;
+  createdAt: string;
+  deliveries: NotificationDelivery[];
+};
+
+export const listJobNotifications = (id: string) =>
+  send<JobNotification[]>(`/${encodeURIComponent(id)}/notifications`, "GET");
+export const sendJobMessage = (
+  id: string,
+  input: { subject?: string; body: string },
+) =>
+  send<JobNotification>(`/${encodeURIComponent(id)}/messages`, "POST", input);
+
+export type ExtractionField = {
+  key: string;
+  label: string;
+  value: string;
+  sealNumber: string | null;
+  evidence: string;
+};
+
+export type Extraction = {
+  id: string;
+  documentId: string;
+  versionNumber: number;
+  filename: string | null;
+  textFound: boolean;
+  fields: ExtractionField[];
+  status: "draft" | "approved" | "rejected";
+  applied: Array<{
+    index: number;
+    key: string;
+    value: string;
+    result: string;
+  }> | null;
+  createdAt: string;
+};
+
+export const listExtractions = (id: string) =>
+  send<Extraction[]>(`/${encodeURIComponent(id)}/extractions`, "GET");
+export const extractDocument = (id: string, documentId: string) =>
+  send<Extraction>(
+    `/${encodeURIComponent(id)}/documents/${encodeURIComponent(documentId)}/extract`,
+    "POST",
+  );
+export const approveExtraction = (
+  id: string,
+  extractionId: string,
+  fields: Array<{ index: number; value: string; sealNumber?: string }>,
+) =>
+  send<Extraction>(
+    `/${encodeURIComponent(id)}/extractions/${encodeURIComponent(extractionId)}/approve`,
+    "POST",
+    { fields },
+  );
+export const rejectExtraction = (id: string, extractionId: string) =>
+  send<Extraction>(
+    `/${encodeURIComponent(id)}/extractions/${encodeURIComponent(extractionId)}/reject`,
+    "POST",
+  );

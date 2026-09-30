@@ -4,6 +4,7 @@ import {
   Get,
   Inject,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -28,6 +29,22 @@ export class CustomersController {
   @UseGuards(SuperAdminGuard)
   create(@Body() body: unknown) {
     return this.customers.create(body);
+  }
+
+  @Post(":id/contacts")
+  @UseGuards(SuperAdminGuard)
+  addContact(@Param("id") id: string, @Body() body: unknown) {
+    return this.customers.addContact(id, body);
+  }
+
+  @Patch(":id/contacts/:contactId")
+  @UseGuards(SuperAdminGuard)
+  updateContact(
+    @Param("id") id: string,
+    @Param("contactId") contactId: string,
+    @Body() body: unknown,
+  ) {
+    return this.customers.updateContact(id, contactId, body);
   }
 
   @Get()

@@ -11,7 +11,15 @@ export async function authenticatedFetch(
 
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session) {
-    throw new Error("Sign in with an assigned staff account to continue");
+    // A link from an email or SMS lands here: sign in, then come back to it.
+    if (
+      typeof window !== "undefined" &&
+      !window.location.pathname.startsWith("/sign-in")
+    ) {
+      const back = `${window.location.pathname}${window.location.search}`;
+      window.location.assign(`/sign-in?next=${encodeURIComponent(back)}`);
+    }
+    throw new Error("Sign in to continue");
   }
 
   const headers = new Headers(init.headers);

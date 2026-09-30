@@ -118,7 +118,9 @@ export function SignInForm() {
         throw failure;
       }
 
-      router.replace("/");
+      // A link from an email or SMS says where to go next; only paths of this site are followed.
+      const next = new URLSearchParams(window.location.search).get("next");
+      router.replace(next && /^\/(?!\/)/.test(next) ? next : "/");
       router.refresh();
     } catch (cause) {
       setError(
@@ -139,12 +141,12 @@ export function SignInForm() {
 
   return (
     <section className={styles.signInCard}>
-      <p className={styles.eyebrow}>LOCAL STAFF ACCESS</p>
+      <p className={styles.eyebrow}>LOCAL ACCESS</p>
       <h1>{mode === "bootstrap" ? "Create super admin" : "Sign in"}</h1>
       <p className={styles.description}>
         {mode === "bootstrap"
           ? "The first local account becomes the super admin. Bootstrap closes after that account is assigned."
-          : "Sign in with your invited staff account to continue to the workspace."}
+          : "Sign in with the account BJH created for you."}
       </p>
 
       <form className={styles.form} onSubmit={submit}>

@@ -14,6 +14,7 @@ export function CustomerCreateForm() {
   const [companyName, setCompanyName] = useState("");
   const [contactName, setContactName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -48,6 +49,7 @@ export function CustomerCreateForm() {
         companyName,
         contactName,
         email,
+        phone: phone.trim() || undefined,
       });
       router.push(`/customers/${customer.id}`);
     } catch (cause) {
@@ -96,6 +98,18 @@ export function CustomerCreateForm() {
             required
             type="email"
             value={email}
+          />
+        </label>
+        <label className={styles.customerFormField} htmlFor="contact-phone">
+          Contact phone (for SMS messages)
+          <input
+            autoComplete="tel"
+            id="contact-phone"
+            maxLength={40}
+            onChange={(event) => setPhone(event.target.value)}
+            placeholder="024 405 8592"
+            type="tel"
+            value={phone}
           />
         </label>
       </div>

@@ -17,6 +17,8 @@ import {
   parseContract,
 } from "@bjh/contracts";
 import { serviceLinesForRoles } from "../auth/auth.guards";
+import { milestoneMessage } from "../notifications/notification-messages";
+import { NotificationsService } from "../notifications/notifications.service";
 import {
   DatabasePort,
   JobRecord,
@@ -27,7 +29,11 @@ import {
 
 @Injectable()
 export class JobsService {
-  constructor(@Inject(DatabasePort) private readonly database: DatabasePort) {}
+  constructor(
+    @Inject(DatabasePort) private readonly database: DatabasePort,
+    @Inject(NotificationsService)
+    private readonly notifications: NotificationsService,
+  ) {}
 
   /** Any active staff role may open a job; reps only for their own service line. */
   async create(
@@ -135,6 +141,21 @@ export class JobsService {
       throw new NotFoundException(
         "The event being corrected was not found on this job",
       );
+    }
+    // A correction restates an earlier event, so only a new event is announced.
+    if (!correctionOf) {
+      const label =
+        template.find((milestone) => milestone.key === milestoneKey)?.label ??
+        milestoneKey;
+      await this.notifications.notify({
+        companyId: job.customerCompanyId,
+        jobId: job.id,
+        event: "milestone",
+        dedupeKey: `milestone:${event.id}`,
+        message: (sender) => milestoneMessage(sender, job.fileNumber, label),
+        linkPath: `/jobs/${job.id}`,
+        createdBy: recordedBy,
+      });
     }
     return event;
   }

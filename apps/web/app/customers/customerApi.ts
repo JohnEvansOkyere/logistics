@@ -1,10 +1,13 @@
-import type { CustomerInput } from "@bjh/contracts";
 import { authenticatedFetch } from "../auth/authenticatedFetch";
 
 export type CustomerContact = {
   id: string;
   name: string;
   email: string;
+  /** For SMS messages. */
+  phone: string | null;
+  /** Whether this person receives customer messages. */
+  notify: boolean;
   createdAt: string;
 };
 
@@ -15,7 +18,12 @@ export type CustomerCompany = {
   contacts: CustomerContact[];
 };
 
-export type NewCustomer = CustomerInput;
+export type NewCustomer = {
+  companyName: string;
+  contactName: string;
+  email: string;
+  phone?: string;
+};
 
 const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:3001/api";
@@ -59,5 +67,38 @@ export async function createCustomer(
       headers: { "content-type": "application/json" },
       body: JSON.stringify(customer),
     }),
+  );
+}
+
+export async function addContact(
+  companyId: string,
+  contact: { name: string; email: string; phone?: string },
+): Promise<CustomerContact> {
+  return readResponse<CustomerContact>(
+    await authenticatedFetch(
+      `${customersUrl}/${encodeURIComponent(companyId)}/contacts`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(contact),
+      },
+    ),
+  );
+}
+
+export async function updateContact(
+  companyId: string,
+  contactId: string,
+  update: { phone: string; notify: boolean },
+): Promise<CustomerContact> {
+  return readResponse<CustomerContact>(
+    await authenticatedFetch(
+      `${customersUrl}/${encodeURIComponent(companyId)}/contacts/${encodeURIComponent(contactId)}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(update),
+      },
+    ),
   );
 }
