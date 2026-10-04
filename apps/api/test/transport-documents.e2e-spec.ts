@@ -173,7 +173,6 @@ test("a document starts from what the job already holds", async () => {
       email: "docs@synthetic.test",
     },
     currencies: ["GHS"],
-    defaultCurrency: "GHS",
     numbering: {
       quotePrefix: "SYN/Q",
       invoicePrefix: "SYN/INV",

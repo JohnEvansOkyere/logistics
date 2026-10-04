@@ -16,6 +16,8 @@ Design target for Supabase PostgreSQL. The first access-control foundations are 
 | Fulfilment    | `waybill`, `delivery_proof`, `container_return`, `eir`, `warehouse_location`, `stock_movement`             | Waybill and receipt retain issued versions; warehouse balance is sum of immutable stock movements, with atomic issue checks.                                                                                                      |
 | Governance    | `audit_event`, `number_sequence`                                                                           | Audit actor/time/action/target and relevant before/after; separate safe public IDs from internal numeric sequences; retain history for access and finance changes.                                                                |
 
+Customer company profiles hold legal/trading names, registration and tax identifiers, company contact details, country, business address and optional billing address. Named contacts hold their responsibility, phone/email, message setting and primary-contact marker. Shipment-specific shipper, consignee, notify and agent parties remain job records because they can change between shipments.
+
 ## Constraints and search
 
 - Enforce foreign keys, unique job/issued-document numbers, quote-to-job uniqueness, positive/nonnegative money as applicable, nonnegative authorised stock, and explicit foreign-currency amounts/tax components.

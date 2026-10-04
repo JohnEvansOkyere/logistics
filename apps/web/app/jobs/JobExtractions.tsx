@@ -90,12 +90,6 @@ export function JobExtractions({
   return (
     <section className={styles.card} aria-labelledby="extractions-title">
       <h2 id="extractions-title">Details read from documents</h2>
-      <p className={styles.muted}>
-        Read the text of an uploaded PDF to propose B/L, AWB, booking and
-        container numbers. The reading stays on this system. Nothing is added to
-        the job until you check the values and apply them; scanned PDFs have no
-        text to read.
-      </p>
       {error && (
         <p className={styles.error} role="alert">
           {error}

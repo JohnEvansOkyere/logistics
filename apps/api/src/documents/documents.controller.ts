@@ -79,3 +79,56 @@ export class DocumentsController {
     );
   }
 }
+
+/** The document library: every document the caller may see, across jobs and standalone. */
+@Controller("api/v1/documents")
+@UseGuards(SupabaseIdentityGuard)
+export class DocumentLibraryController {
+  constructor(
+    @Inject(DocumentsService) private readonly documents: DocumentsService,
+  ) {}
+
+  @Get()
+  @UseGuards(JobScopeGuard)
+  search(
+    @Query("search") search: string | undefined,
+    @Query("type") type: string | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.documents.search(search, type, scopeOf(request));
+  }
+
+  @Post()
+  @UseGuards(DepartmentStaffGuard, JobScopeGuard)
+  @UseInterceptors(
+    FileInterceptor("file", {
+      limits: { fileSize: MAX_DOCUMENT_BYTES + 1, files: 1 },
+    }),
+  )
+  upload(
+    @Body() fields: unknown,
+    @UploadedFile() file: UploadedFileData | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.documents.uploadToLibrary(
+      fields,
+      file,
+      request.authUser!.userId,
+      scopeOf(request),
+    );
+  }
+
+  @Get(":documentId/download")
+  @UseGuards(JobScopeGuard)
+  download(
+    @Param("documentId") documentId: string,
+    @Query("version") version: string | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.documents.createLibraryDownloadLink(
+      documentId,
+      version,
+      scopeOf(request),
+    );
+  }
+}

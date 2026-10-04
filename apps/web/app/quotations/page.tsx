@@ -16,26 +16,9 @@ export default function QuotationsPage() {
 
       <header className={styles.pageHeader}>
         <div>
-          <p className={styles.eyebrow}>STAFF WORKSPACE · LOCAL ENGINE</p>
           <h1>Quotation requests</h1>
-          <p className={styles.description}>
-            Review requests submitted to the local business API.
-          </p>
         </div>
-        <span className={styles.localBadge}>LOCAL DEVELOPMENT</span>
       </header>
-
-      <aside
-        className={styles.sampleNotice}
-        aria-label="Local development notice"
-      >
-        <span aria-hidden="true">i</span>
-        <p>
-          <strong>Local development only.</strong> Requests are saved in the
-          local database. Use synthetic details; pricing, issued quotations, and
-          job records are not part of this slice.
-        </p>
-      </aside>
 
       <RequestInbox />
     </main>

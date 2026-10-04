@@ -104,6 +104,12 @@ export class QuotesController {
     return this.quotes.issue(id, request.authUser!.userId, scopeOf(request));
   }
 
+  @Post(":id/send")
+  @UseGuards(DepartmentStaffGuard, JobScopeGuard)
+  send(@Param("id") id: string, @Req() request: AuthenticatedRequest) {
+    return this.quotes.send(id, request.authUser!.userId, scopeOf(request));
+  }
+
   @Post(":id/respond")
   @UseGuards(JobScopeGuard)
   respond(

@@ -20,11 +20,11 @@ const line = (
   position,
   section: "Charges",
   description: "Fee",
+  details: null,
   basis: "fixed",
   basisNote: null,
   amountMinor: 100,
-  amount20ftMinor: null,
-  amount40ftMinor: null,
+  sizeAmountsMinor: null,
   ...over,
 });
 
@@ -45,6 +45,7 @@ const version = (
   documentsNote: null,
   timeline: null,
   terms: ["Synthetic term."],
+  sizeLabels: [],
   createdBy: "user",
   createdAt: "2026-09-22T09:00:00.000Z",
   updatedAt: "2026-09-22T09:00:00.000Z",
@@ -85,7 +86,6 @@ const settings = {
     website: null,
   },
   currencies: ["USD"],
-  defaultCurrency: "USD",
   taxLines: [],
   paymentTermsDays: null,
   numbering: {
@@ -184,6 +184,36 @@ test("the PDF carries the quote content and the issuer from the settings", async
   assert.ok(!text.includes("DRAFT"));
 });
 
+test("the PDF prints quote-specific container sizes and single-amount lines", async () => {
+  const v = version({
+    sizeLabels: ["20ft", "50ft"],
+    lines: [
+      line(0, {
+        description: "Container handling",
+        amountMinor: null,
+        sizeAmountsMinor: [1000, 2500],
+      }),
+      line(1, { description: "Documentation", amountMinor: 5000 }),
+    ],
+  });
+  const file = await renderQuotePdf(
+    { quote: quote(v), version: v, settings },
+    { compress: false },
+  );
+  const text = pdfText(file);
+  for (const expected of [
+    "20ft",
+    "50ft",
+    "Container handling",
+    "$10",
+    "$25",
+    "Documentation",
+    "$50",
+  ]) {
+    assert.ok(text.includes(expected), `missing: ${expected}`);
+  }
+});
+
 test("a draft copy is marked on the page", async () => {
   const v = version();
   const file = await renderQuotePdf(
@@ -194,4 +224,22 @@ test("a draft copy is marked on the page", async () => {
   assert.ok(text.includes("DRAFT"));
   assert.ok(text.includes("DRAFT - BUSINESS SETTINGS NOT CONFIGURED"));
   assert.ok(text.includes("Issuer details not configured"));
+});
+
+test("a charge's description is printed under its name", async () => {
+  const v = version({
+    lines: [
+      line(0, {
+        description: "Port handling fee",
+        details: "Covers terminal handling and gate-in",
+      }),
+    ],
+  });
+  const file = await renderQuotePdf(
+    { quote: quote(v), version: v, settings },
+    { compress: false },
+  );
+  const text = pdfText(file);
+  assert.ok(text.includes("Port handling fee"));
+  assert.ok(text.includes("Covers terminal handling and gate-in"));
 });

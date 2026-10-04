@@ -6,15 +6,11 @@ import {
   Param,
   Patch,
   Post,
-  Put,
   Query,
   Req,
   UseGuards,
 } from "@nestjs/common";
 import {
-  QuoteDraftReadGuard,
-  QuoteDraftWriteGuard,
-  DepartmentStaffGuard,
   SupabaseIdentityGuard,
   StaffCompanyReadGuard,
   SuperAdminGuard,
@@ -61,46 +57,9 @@ export class QuoteRequestsController {
     return this.requests.get(id, request.allowedCompanyIds);
   }
 
-  @Get(":id/draft")
-  @UseGuards(QuoteDraftReadGuard)
-  async getDraft(
-    @Param("id") id: string,
-    @Req() request: AuthenticatedRequest,
-  ) {
-    return {
-      draft: await this.requests.getDraft(id, request.allowedCompanyIds),
-    };
-  }
-
-  @Put(":id/draft")
-  @UseGuards(QuoteDraftWriteGuard)
-  saveDraft(
-    @Param("id") id: string,
-    @Body() body: unknown,
-    @Req() request: AuthenticatedRequest,
-  ) {
-    return this.requests.saveDraft(id, body, request.authUser!.userId);
-  }
-
   @Patch(":id/customer")
   @UseGuards(SuperAdminGuard)
   associateCustomer(@Param("id") id: string, @Body() body: unknown) {
     return this.requests.associateCustomer(id, body);
-  }
-
-  @Get(":id/assignment")
-  @UseGuards(DepartmentStaffGuard)
-  async getAssignment(@Param("id") id: string) {
-    return { roleKey: await this.requests.getDepartmentAssignment(id) };
-  }
-
-  @Patch(":id/assignment")
-  @UseGuards(SuperAdminGuard)
-  assignDepartment(
-    @Param("id") id: string,
-    @Body() body: unknown,
-    @Req() request: AuthenticatedRequest,
-  ) {
-    return this.requests.assignDepartment(id, body, request.authUser!.userId);
   }
 }

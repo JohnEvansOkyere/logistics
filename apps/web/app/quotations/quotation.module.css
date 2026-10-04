@@ -31,7 +31,7 @@
 .sectionEyebrow {
   margin: 0 0 8px;
   color: var(--brand-primary);
-  font-size: 0.66rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.1em;
 }
@@ -59,7 +59,7 @@
   background: #f5f8fd;
   color: #5b7084;
   padding: 7px 10px;
-  font-size: 0.61rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.06em;
 }
@@ -86,7 +86,7 @@
   place-items: center;
   border-radius: 50%;
   background: #f4e8cd;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 
@@ -113,7 +113,7 @@
 .sectionEyebrow {
   margin-bottom: 5px;
   color: #738698;
-  font-size: 0.6rem;
+  font-size: 0.75rem;
 }
 
 .inboxHeader h2 {
@@ -143,7 +143,7 @@
   background: var(--brand-primary);
   color: #fff;
   padding: 8px 11px;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 700;
   text-decoration: none;
 }
@@ -156,7 +156,7 @@
   border: 0;
   background: #eef3f7;
   color: #657787;
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   letter-spacing: 0;
 }
 
@@ -203,25 +203,27 @@
 .searchRow button,
 .emptyState button {
   flex: 0 0 auto;
-  border: 0;
-  background: transparent;
+  min-height: 42px;
+  border: 1px solid var(--brand-primary);
+  border-radius: 999px;
+  background: #fff;
   color: var(--brand-primary);
-  padding: 6px;
+  padding: 0 20px;
   font: inherit;
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-size: 0.95rem;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .searchRow button:hover,
 .emptyState button:hover {
-  text-decoration: underline;
+  background: #eaf1fb;
 }
 
 .resultSummary {
   margin: 13px 0 9px;
   color: #6d7f8e;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
 }
 
 .requestList {
@@ -271,7 +273,7 @@
 
 .requestTag {
   color: #7b8c99;
-  font-size: 0.61rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -290,14 +292,14 @@
 .requestContact > span {
   overflow: hidden;
   color: #718393;
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .rowAction {
   color: var(--brand-primary);
-  font-size: 0.67rem;
+  font-size: 0.75rem;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -413,7 +415,7 @@
 .contactGrid dt {
   margin-bottom: 6px;
   color: #738595;
-  font-size: 0.67rem;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 
@@ -508,14 +510,15 @@
 }
 
 .customerLinkActions select {
-  min-width: 180px;
+  min-width: 200px;
+  min-height: 46px;
   border: 1px solid #bdccd9;
-  border-radius: 6px;
+  border-radius: 10px;
   background: #fff;
   color: #29445d;
-  padding: 8px 9px;
+  padding: 0 12px;
   font: inherit;
-  font-size: 0.72rem;
+  font-size: 1rem;
 }
 
 .customerLinkActions button:disabled {
@@ -642,13 +645,21 @@
 .primaryButton,
 .secondaryButton,
 .textButton {
-  min-height: 38px;
-  border-radius: 7px;
-  padding: 8px 12px;
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0 28px;
   font: inherit;
-  font-size: 0.73rem;
-  font-weight: 700;
+  font-size: 1rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
   cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .primaryButton {
@@ -659,6 +670,7 @@
 
 .primaryButton:hover {
   background: #082f86;
+  box-shadow: 0 2px 6px rgb(11 63 174 / 35%);
 }
 
 .primaryButton:disabled {
@@ -667,13 +679,13 @@
 }
 
 .secondaryButton {
-  border: 1px solid #bdccd9;
+  border: 1px solid var(--brand-primary);
   background: #fff;
-  color: #405a70;
+  color: var(--brand-primary);
 }
 
 .secondaryButton:hover {
-  background: #f5f8fb;
+  background: #eaf1fb;
 }
 
 .textButton {
@@ -736,7 +748,7 @@
 .previewDetails dt {
   margin-bottom: 6px;
   color: #738595;
-  font-size: 0.67rem;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 

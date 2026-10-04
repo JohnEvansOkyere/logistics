@@ -1,8 +1,6 @@
 import { authenticatedFetch } from "../auth/authenticatedFetch";
 
-import type { DepartmentRoleKey, QuoteRequestInput } from "@bjh/contracts";
-
-export type { DepartmentRoleKey };
+import type { QuoteRequestInput } from "@bjh/contracts";
 
 export type QuoteRequest = {
   id: string;
@@ -13,25 +11,10 @@ export type QuoteRequest = {
   createdAt: string;
   customerCompanyId: string | null;
   customerCompanyName: string | null;
-  quoteDraftRevisionCount: number;
-  quoteDraftUpdatedAt: string | null;
-};
-
-export type QuoteDraftRevision = {
-  id: string;
-  revisionNumber: number;
-  content: string;
-  createdAt: string;
-  savedBy: string | null;
-};
-
-export type QuoteDraft = {
-  id: string;
-  requestId: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-  revisions: QuoteDraftRevision[];
+  /** The quote prepared for this request (the newest one), if any. */
+  quoteId: string | null;
+  quoteNumber: string | null;
+  quoteStatus: "draft" | "issued" | null;
 };
 
 export type NewQuoteRequest = QuoteRequestInput;
@@ -111,60 +94,6 @@ export async function associateQuoteRequestCustomer(
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ customerCompanyId }),
-      },
-    ),
-  );
-}
-
-export async function getQuoteDraft(
-  requestId: string,
-): Promise<QuoteDraft | null> {
-  const response = await readResponse<{ draft: QuoteDraft | null }>(
-    await authenticatedFetch(
-      `${quoteRequestsUrl}/${encodeURIComponent(requestId)}/draft`,
-    ),
-  );
-  return response.draft;
-}
-
-export async function saveQuoteDraft(
-  requestId: string,
-  content: string,
-): Promise<QuoteDraft> {
-  return readResponse<QuoteDraft>(
-    await authenticatedFetch(
-      `${quoteRequestsUrl}/${encodeURIComponent(requestId)}/draft`,
-      {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ content }),
-      },
-    ),
-  );
-}
-
-export async function getQuoteRequestAssignment(
-  requestId: string,
-): Promise<DepartmentRoleKey | null> {
-  const response = await readResponse<{ roleKey: DepartmentRoleKey | null }>(
-    await authenticatedFetch(
-      `${quoteRequestsUrl}/${encodeURIComponent(requestId)}/assignment`,
-    ),
-  );
-  return response.roleKey;
-}
-
-export async function assignQuoteRequestDepartment(
-  requestId: string,
-  roleKey: DepartmentRoleKey | null,
-): Promise<void> {
-  await readResponse<{ roleKey: DepartmentRoleKey | null }>(
-    await authenticatedFetch(
-      `${quoteRequestsUrl}/${encodeURIComponent(requestId)}/assignment`,
-      {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ roleKey }),
       },
     ),
   );

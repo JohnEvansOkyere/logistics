@@ -96,6 +96,20 @@ export class AdminNotificationsController {
   }
 }
 
+const feedEvents = [
+  "message",
+  "broadcast",
+  "quote_issued",
+  "quote_sent",
+  "milestone",
+  "eta",
+  "eta_reminder",
+  "invoice_issued",
+  "payment_received",
+  "delivery_dispatched",
+  "delivery_delivered",
+] as const;
+
 function scopeOf(request: AuthenticatedRequest) {
   return {
     companyIds: request.allowedCompanyIds,
@@ -132,5 +146,54 @@ export class JobMessagesController {
       body,
       request.authUser!.userId,
     );
+  }
+}
+
+/** Client communication across every job: read what was sent, and write to clients. */
+@Controller("api/v1/messages")
+@UseGuards(SupabaseIdentityGuard, DepartmentStaffGuard, JobScopeGuard)
+export class ClientMessagesController {
+  constructor(
+    @Inject(DatabasePort) private readonly database: DatabasePort,
+    @Inject(NotificationsService)
+    private readonly notifications: NotificationsService,
+  ) {}
+
+  @Get()
+  async feed(
+    @Query("companyId") companyId: string | undefined,
+    @Query("event") event: string | undefined,
+    @Query("limit") limit: string | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    if (companyId !== undefined && !isUuid(companyId)) {
+      throw new BadRequestException("companyId must be a valid ID");
+    }
+    if (
+      event !== undefined &&
+      !(feedEvents as readonly string[]).includes(event)
+    ) {
+      throw new BadRequestException(
+        `event must be one of ${feedEvents.join(", ")}`,
+      );
+    }
+    const count = limit === undefined ? 100 : Number(limit);
+    if (!Number.isInteger(count) || count < 1 || count > 500) {
+      throw new BadRequestException("limit must be 1 to 500");
+    }
+    return {
+      channels: await this.notifications.channelMode(),
+      messages: await this.database.listNotificationFeed({
+        companyId: companyId ?? null,
+        event: event ?? null,
+        serviceLines: request.allowedServiceLines ?? null,
+        limit: count,
+      }),
+    };
+  }
+
+  @Post()
+  send(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
+    return this.notifications.sendClientMessage(body, request.authUser!.userId);
   }
 }

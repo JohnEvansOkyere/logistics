@@ -95,20 +95,20 @@ const version = (overrides: Record<string, unknown> = {}) => ({
   requiredDocuments: ["Commercial invoice", "Packing list"],
   timeline: "3 to 5 business days",
   terms: ["Duties are charged at cost."],
+  sizeLabels: ["20ft", "40ft", "50ft"],
   lines: [
     {
       section: "Clearance and delivery charges",
       description: "Port handling fee",
+      details: "Covers terminal handling and gate-in",
       basis: "at_cost",
-      amount20ftMinor: 25000,
-      amount40ftMinor: 50000,
+      sizeAmountsMinor: [25000, 50000, 62000],
     },
     {
       section: "Clearance and delivery charges",
       description: "Documentation",
       basis: "per_bl",
-      amount20ftMinor: 12000,
-      amount40ftMinor: 12000,
+      sizeAmountsMinor: [12000, 12000, 15000],
     },
     {
       section: "Clearance and delivery charges",
@@ -134,6 +134,7 @@ type QuoteBody = {
     versionNumber: number;
     status: string;
     currency: string;
+    sizeLabels: string[];
     intro: string | null;
     issuedBy: string | null;
     lines: Array<Record<string, unknown>>;
@@ -152,7 +153,7 @@ async function createQuote(token: string, overrides: Record<string, unknown>) {
   });
 }
 
-test("a rep prepares a structured quote that mirrors the sample layout", async () => {
+test("a rep prepares a quote with its own container sizes and prices", async () => {
   const response = await createQuote(TEST_MATCHING_TOKEN, {});
   assert.equal(response.status, 201);
   const quote = (await response.json()) as QuoteBody;
@@ -163,6 +164,7 @@ test("a rep prepares a structured quote that mirrors the sample layout", async (
   assert.equal(first.versionNumber, 1);
   assert.equal(first.status, "draft");
   assert.equal(first.currency, "USD");
+  assert.deepEqual(first.sizeLabels, ["20ft", "40ft", "50ft"]);
   assert.equal(first.intro, "Synthetic introduction.");
   assert.deepEqual(
     first.lines.map((line) => [
@@ -170,8 +172,7 @@ test("a rep prepares a structured quote that mirrors the sample layout", async (
       line.description,
       line.basis,
       line.amountMinor,
-      line.amount20ftMinor,
-      line.amount40ftMinor,
+      line.sizeAmountsMinor,
       line.basisNote,
     ]),
     [
@@ -180,8 +181,7 @@ test("a rep prepares a structured quote that mirrors the sample layout", async (
         "Port handling fee",
         "at_cost",
         null,
-        25000,
-        50000,
+        [25000, 50000, 62000],
         null,
       ],
       [
@@ -189,8 +189,7 @@ test("a rep prepares a structured quote that mirrors the sample layout", async (
         "Documentation",
         "per_bl",
         null,
-        12000,
-        12000,
+        [12000, 12000, 15000],
         null,
       ],
       [
@@ -199,19 +198,14 @@ test("a rep prepares a structured quote that mirrors the sample layout", async (
         "at_cost",
         null,
         null,
-        null,
         "Based on HS code and CIF value",
       ],
-      [
-        "Inland transportation",
-        "Tema to Accra",
-        "fixed",
-        380000,
-        null,
-        null,
-        null,
-      ],
+      ["Inland transportation", "Tema to Accra", "fixed", 380000, null, null],
     ],
+  );
+  assert.deepEqual(
+    first.lines.map((line) => line.details),
+    ["Covers terminal handling and gate-in", null, null, null],
   );
 });
 
@@ -255,12 +249,12 @@ test("a draft can be edited in place; invalid content is rejected", async () => 
     ],
     [{ lines: [line({ amountMinor: -1 })] }, "amountMinor cannot be negative"],
     [
-      { lines: [line({ amount20ftMinor: 5 })] },
-      "Give both the 20ft and the 40ft amount, or neither",
+      { lines: [line({ amountMinor: undefined, sizeAmountsMinor: [5] })] },
+      "Give one amount for each size column, or use one amount",
     ],
     [
-      { lines: [line({ amount20ftMinor: 5, amount40ftMinor: 6 })] },
-      "Use either one amount or 20ft and 40ft amounts, not both",
+      { lines: [line({ amountMinor: 100, sizeAmountsMinor: [5, 6, 7] })] },
+      "Use either one amount or an amount per size, not both",
     ],
     [
       { lines: [line({ description: "" })] },

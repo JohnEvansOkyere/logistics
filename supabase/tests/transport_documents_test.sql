@@ -25,12 +25,14 @@ VALUES ('00000000-0000-4000-8000-0000000007e0', '00000000-0000-4000-8000-0000000
 
 SELECT extensions.throws_ok(
   $$UPDATE app.transport_document SET status = 'issued', issued_at = now(),
-      issued_by = '00000000-0000-4000-8000-0000000007aa'$$,
+      issued_by = '00000000-0000-4000-8000-0000000007aa'
+    WHERE document_id = '00000000-0000-4000-8000-0000000007e0'$$,
   '23514', NULL, 'an issued document needs its number'
 );
 UPDATE app.transport_document
 SET status = 'issued', document_number = 'SYN-HBL-1', issued_at = now(),
-    issued_by = '00000000-0000-4000-8000-0000000007aa';
+    issued_by = '00000000-0000-4000-8000-0000000007aa'
+WHERE document_id = '00000000-0000-4000-8000-0000000007e0';
 
 SELECT extensions.throws_ok(
   $$INSERT INTO app.transport_document (job_id, kind, document_number, status, fields, created_by, issued_at, issued_by)

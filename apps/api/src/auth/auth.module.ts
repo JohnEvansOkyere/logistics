@@ -10,8 +10,6 @@ import { AdminStaffService } from "./admin-staff.service";
 import {
   CompanyScopeGuard,
   DepartmentStaffGuard,
-  QuoteDraftReadGuard,
-  QuoteDraftWriteGuard,
   SupabaseIdentityGuard,
   StaffCompanyReadGuard,
   SuperAdminGuard,
@@ -44,8 +42,6 @@ import {
     SuperAdminGuard,
     CompanyScopeGuard,
     DepartmentStaffGuard,
-    QuoteDraftReadGuard,
-    QuoteDraftWriteGuard,
   ],
   exports: [
     SupabaseAuthVerifier,
@@ -53,8 +49,6 @@ import {
     SuperAdminGuard,
     CompanyScopeGuard,
     DepartmentStaffGuard,
-    QuoteDraftReadGuard,
-    QuoteDraftWriteGuard,
     StaffCompanyReadGuard,
   ],
 })

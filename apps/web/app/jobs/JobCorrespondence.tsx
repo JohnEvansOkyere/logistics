@@ -49,6 +49,7 @@ export function JobCorrespondence({
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [documentId, setDocumentId] = useState("");
+  const [adding, setAdding] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -84,6 +85,7 @@ export function JobCorrespondence({
       setSubject("");
       setBody("");
       setDocumentId("");
+      setAdding(false);
       await load();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The entry failed");
@@ -96,12 +98,18 @@ export function JobCorrespondence({
 
   return (
     <section className={styles.card} aria-labelledby="correspondence-title">
-      <h2 id="correspondence-title">Correspondence log</h2>
-      <p className={styles.muted}>
-        Record what was said by email, WhatsApp, phone or letter. Entries are
-        internal and cannot be edited; add a new entry to correct one. Upload a
-        printout to Documents to attach it.
-      </p>
+      <div className={styles.stepsHeading}>
+        <h2 id="correspondence-title">Correspondence log</h2>
+        {!adding && (
+          <button
+            className={styles.secondaryButton}
+            onClick={() => setAdding(true)}
+            type="button"
+          >
+            Log a message or call
+          </button>
+        )}
+      </div>
       {error && (
         <p className={styles.error} role="alert">
           {error}
@@ -135,87 +143,100 @@ export function JobCorrespondence({
           ))}
         </ul>
       )}
-      <form className={styles.form} onSubmit={submit}>
-        <h3>Log a message or call</h3>
-        <label className={styles.field}>
-          Channel
-          <select
-            onChange={(event) =>
-              setChannel(event.target.value as CorrespondenceChannel)
-            }
-            value={channel}
-          >
-            {correspondenceChannelKeys.map((key) => (
-              <option key={key} value={key}>
-                {channelLabels[key]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className={styles.field}>
-          Direction
-          <select
-            onChange={(event) =>
-              setDirection(event.target.value as CorrespondenceDirection)
-            }
-            value={direction}
-          >
-            <option value="received">Received by BJH</option>
-            <option value="sent">Sent by BJH</option>
-          </select>
-        </label>
-        <label className={styles.field}>
-          When (leave empty for now)
-          <input
-            onChange={(event) => setOccurredAt(event.target.value)}
-            type="datetime-local"
-            value={occurredAt}
-          />
-        </label>
-        <label className={styles.field}>
-          With whom (optional)
-          <input
-            maxLength={200}
-            onChange={(event) => setCounterparty(event.target.value)}
-            value={counterparty}
-          />
-        </label>
-        <label className={styles.field}>
-          Subject (optional)
-          <input
-            maxLength={300}
-            onChange={(event) => setSubject(event.target.value)}
-            value={subject}
-          />
-        </label>
-        <label className={styles.field}>
-          What was said
-          <textarea
-            maxLength={20000}
-            onChange={(event) => setBody(event.target.value)}
-            required
-            rows={4}
-            value={body}
-          />
-        </label>
-        <label className={styles.field}>
-          Attachment from this job&apos;s documents (optional)
-          <select
-            onChange={(event) => setDocumentId(event.target.value)}
-            value={documentId}
-          >
-            <option value="">None</option>
-            {documents.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.versions.at(-1)?.filename ?? item.documentType}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button className={styles.button} type="submit">
-          Add to the log
-        </button>
-      </form>
+      {adding && (
+        <form
+          className={`${styles.form} ${styles.quickUpdateForm}`}
+          onSubmit={submit}
+        >
+          <label className={styles.field}>
+            Channel
+            <select
+              onChange={(event) =>
+                setChannel(event.target.value as CorrespondenceChannel)
+              }
+              value={channel}
+            >
+              {correspondenceChannelKeys.map((key) => (
+                <option key={key} value={key}>
+                  {channelLabels[key]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={styles.field}>
+            Direction
+            <select
+              onChange={(event) =>
+                setDirection(event.target.value as CorrespondenceDirection)
+              }
+              value={direction}
+            >
+              <option value="received">Received by BJH</option>
+              <option value="sent">Sent by BJH</option>
+            </select>
+          </label>
+          <label className={styles.field}>
+            When (leave empty for now)
+            <input
+              onChange={(event) => setOccurredAt(event.target.value)}
+              type="datetime-local"
+              value={occurredAt}
+            />
+          </label>
+          <label className={styles.field}>
+            With whom (optional)
+            <input
+              maxLength={200}
+              onChange={(event) => setCounterparty(event.target.value)}
+              value={counterparty}
+            />
+          </label>
+          <label className={styles.field}>
+            Subject (optional)
+            <input
+              maxLength={300}
+              onChange={(event) => setSubject(event.target.value)}
+              value={subject}
+            />
+          </label>
+          <label className={`${styles.field} ${styles.wide}`}>
+            What was said
+            <textarea
+              maxLength={20000}
+              onChange={(event) => setBody(event.target.value)}
+              required
+              rows={4}
+              value={body}
+            />
+          </label>
+          <label className={styles.field}>
+            Attachment from this job&apos;s documents (optional)
+            <select
+              onChange={(event) => setDocumentId(event.target.value)}
+              value={documentId}
+            >
+              <option value="">None</option>
+              {documents.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.versions.at(-1)?.filename ?? item.documentType}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className={styles.formActions}>
+            <button className={styles.button} type="submit">
+              Save
+            </button>
+            <button
+              className={styles.secondaryButton}
+              onClick={() => setAdding(false)}
+              type="button"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
     </section>
   );
 }

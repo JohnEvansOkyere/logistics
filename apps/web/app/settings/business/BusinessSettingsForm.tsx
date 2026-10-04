@@ -12,6 +12,18 @@ import {
 } from "./settingsApi";
 import type { SettingsRevision } from "./settingsApi";
 
+/** Offered as tick boxes in Settings; the API accepts only ticked ones. */
+export const popularCurrencies = [
+  "USD",
+  "GHS",
+  "EUR",
+  "GBP",
+  "CNY",
+  "AED",
+  "NGN",
+  "ZAR",
+];
+
 type TaxRow = { name: string; rate: string };
 
 const toLines = (text: string) =>
@@ -39,7 +51,6 @@ export function BusinessSettingsForm() {
   const [email, setEmail] = useState("");
   const [website, setWebsite] = useState("");
   const [currencies, setCurrencies] = useState("");
-  const [defaultCurrency, setDefaultCurrency] = useState("");
   const [taxes, setTaxes] = useState<TaxRow[]>([]);
   const [terms, setTerms] = useState("");
   const [quotePrefix, setQuotePrefix] = useState("BJH/Q");
@@ -55,6 +66,18 @@ export function BusinessSettingsForm() {
   const [quoteTerms, setQuoteTerms] = useState("");
   const [channels, setChannels] = useState<"email" | "sms" | "both">("both");
 
+  const selectedCurrencies = currencies.split(/[\s,]+/).filter(Boolean);
+  // The popular ones, plus any other code already saved in Settings.
+  const currencyOptions = [
+    ...new Set([...popularCurrencies, ...selectedCurrencies]),
+  ];
+  function toggleCurrency(code: string, on: boolean) {
+    const next = on
+      ? [...selectedCurrencies, code]
+      : selectedCurrencies.filter((item) => item !== code);
+    setCurrencies(next.join(", "));
+  }
+
   const fill = useCallback((current: SettingsRevision | null) => {
     setRevision(current);
     if (!current) return;
@@ -65,7 +88,6 @@ export function BusinessSettingsForm() {
     setEmail(settings.issuer.email ?? "");
     setWebsite(settings.issuer.website ?? "");
     setCurrencies(settings.currencies.join(", "));
-    setDefaultCurrency(settings.defaultCurrency);
     setTaxes(
       settings.taxLines.map((line) => ({
         name: line.name,
@@ -135,7 +157,6 @@ export function BusinessSettingsForm() {
           .split(/[\s,]+/)
           .map((code) => code.trim())
           .filter(Boolean),
-        defaultCurrency,
         taxLines: taxes.map((row, index) => ({
           name: row.name,
           rateBasisPoints: rates[index],
@@ -200,13 +221,12 @@ export function BusinessSettingsForm() {
     <main className={styles.page}>
       <header className={styles.header}>
         <div>
-          <p className={styles.eyebrow}>SETTINGS</p>
           <h1 className={styles.title}>Business settings</h1>
           <p className={styles.muted}>
             {revision
-              ? `Revision ${revision.revisionNumber}. Every save keeps the earlier revisions.`
-              : "Not configured yet."}{" "}
-            {!isSuperAdmin && "Only the super admin can change these."}
+              ? `Revision ${revision.revisionNumber}`
+              : "Not set up yet"}
+            {!isSuperAdmin && " · View only"}
           </p>
         </div>
         <Link className={styles.secondaryButton} href="/settings">
@@ -237,18 +257,26 @@ export function BusinessSettingsForm() {
             {text("Website", website, setWebsite)}
 
             <h2>Currencies</h2>
-            {text(
-              "Currencies (3-letter codes, separated by commas)",
-              currencies,
-              setCurrencies,
-              true,
-            )}
-            {text(
-              "Default currency",
-              defaultCurrency,
-              setDefaultCurrency,
-              true,
-            )}
+            <fieldset
+              className={styles.field}
+              style={{ border: 0, padding: 0 }}
+            >
+              Currencies quotes and invoices can use
+              <div className={styles.actions}>
+                {currencyOptions.map((code) => (
+                  <label key={code}>
+                    <input
+                      checked={selectedCurrencies.includes(code)}
+                      onChange={(event) =>
+                        toggleCurrency(code, event.target.checked)
+                      }
+                      type="checkbox"
+                    />{" "}
+                    {code}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
             {text("Payment terms in days (optional)", terms, setTerms)}
 
             <h2>Tax lines</h2>
@@ -303,12 +331,6 @@ export function BusinessSettingsForm() {
             {text("Waybill prefix", waybillPrefix, setWaybillPrefix, true)}
 
             <h2>Customer messages</h2>
-            <p className={styles.muted}>
-              Every message to a customer (milestones, expected arrival,
-              quotations, invoices, payments, deliveries and messages staff
-              send) goes out by the channel chosen here. SMS messages carry a
-              link to the customer&apos;s page.
-            </p>
             <label className={styles.field}>
               Send customer messages by
               <select
@@ -324,9 +346,6 @@ export function BusinessSettingsForm() {
             </label>
 
             <h2>Quote defaults</h2>
-            <p className={styles.muted}>
-              New quotes start with this text. Staff can change it per quote.
-            </p>
             {area("Introduction", intro, setIntro)}
             {area("Note on at-cost charges", atCostNote, setAtCostNote, 2)}
             {area(

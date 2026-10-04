@@ -10,6 +10,8 @@ import type {
   JobStatus,
   PartyRole,
   ReferenceKind,
+  CustomerCompanyUpdate,
+  CustomerContactUpdate,
 } from "@bjh/contracts";
 import {
   ActiveCustomerMembershipRecord,
@@ -24,6 +26,7 @@ import {
   JobRecord,
   DocumentRecord,
   DocumentVersionRecord,
+  LibraryDocumentRecord,
   JobPartyRecord,
   StoredDocumentVersion,
   JobScope,
@@ -45,6 +48,7 @@ import {
   EtaReminderCandidate,
   JobCorrespondenceRecord,
   NotificationDeliveryRecord,
+  NotificationFeedRow,
   NotificationLogRow,
   NotificationRecord,
   StockBalanceRecord,
@@ -62,9 +66,7 @@ import {
   QuoteSummaryRecord,
   QuoteVersionRecord,
   ServiceLine,
-  QuoteDraftRecord,
   QuoteRequestRecord,
-  DepartmentRoleKey,
   StaffRoleKey,
   StaffRoleAssignmentRecord,
 } from "./database.port";
@@ -94,6 +96,7 @@ const quoteVersionValues = (content: QuoteVersionInput) => [
   content.documentsNote,
   content.timeline,
   content.terms,
+  content.sizeLabels,
 ];
 
 export const POSTGRES_POOL = Symbol("POSTGRES_POOL");
@@ -124,16 +127,22 @@ const quoteRequestSelect = `
     request.created_at,
     request.customer_company_id,
     company.company_name AS customer_company_name,
-    (SELECT COUNT(*)
-     FROM app.quote_draft_revision AS revision
-     JOIN app.quote_draft AS draft ON draft.draft_id = revision.draft_id
-     WHERE draft.request_id = request.request_id) AS quote_draft_revision_count,
-    (SELECT draft.updated_at
-     FROM app.quote_draft AS draft
-     WHERE draft.request_id = request.request_id) AS quote_draft_updated_at
+    latest_quote.quote_id,
+    latest_quote.quote_number,
+    latest_quote.latest_status AS quote_status
   FROM app.quote_request AS request
   LEFT JOIN app.customer_company AS company
-    ON company.company_id = request.customer_company_id`;
+    ON company.company_id = request.customer_company_id
+  LEFT JOIN LATERAL (
+    SELECT quote.quote_id, quote.quote_number,
+           (SELECT version.status FROM app.quote_version AS version
+            WHERE version.quote_id = quote.quote_id
+            ORDER BY version.version_number DESC LIMIT 1) AS latest_status
+    FROM app.quote AS quote
+    WHERE quote.quote_request_id = request.request_id
+    ORDER BY quote.created_at DESC, quote.quote_id DESC
+    LIMIT 1
+  ) AS latest_quote ON true`;
 
 const jobSelect = `
   SELECT
@@ -156,9 +165,20 @@ const customerSelect = `
   SELECT
     company.company_id,
     company.company_name,
+    company.trading_name,
+    company.registration_number,
+    company.tax_number,
+    company.phone AS company_phone,
+    company.company_email,
+    company.website,
+    company.business_address,
+    company.billing_address,
+    company.country,
     company.created_at AS company_created_at,
     contact.contact_id,
     contact.contact_name,
+    contact.role AS contact_role,
+    contact.is_primary AS contact_is_primary,
     contact.email AS contact_email,
     contact.phone AS contact_phone,
     contact.notify AS contact_notify,
@@ -253,146 +273,6 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
     return this.findQuoteRequest(requestId);
   }
 
-  async getQuoteRequestDepartment(
-    requestId: string,
-  ): Promise<DepartmentRoleKey | null | undefined> {
-    const result = await this.pool.query(
-      `SELECT assigned_department_role FROM app.quote_request WHERE request_id::text = $1`,
-      [requestId],
-    );
-    if (!result.rows[0]) return undefined;
-    return result.rows[0].assigned_department_role as DepartmentRoleKey | null;
-  }
-
-  async assignQuoteRequestDepartment(
-    requestId: string,
-    roleKey: DepartmentRoleKey | null,
-    assignedBy: string,
-    assignedAt: string,
-  ): Promise<DepartmentRoleKey | null | undefined> {
-    const client = await this.pool.connect();
-    try {
-      await client.query("BEGIN");
-      const currentResult = await client.query(
-        `SELECT assigned_department_role FROM app.quote_request WHERE request_id::text = $1 FOR UPDATE`,
-        [requestId],
-      );
-      if (!currentResult.rows[0]) {
-        await client.query("COMMIT");
-        return undefined;
-      }
-      const previousRole = currentResult.rows[0]
-        .assigned_department_role as DepartmentRoleKey | null;
-      if (previousRole === roleKey) {
-        await client.query("COMMIT");
-        return roleKey;
-      }
-      await client.query(
-        `UPDATE app.quote_request SET assigned_department_role = $2 WHERE request_id::text = $1`,
-        [requestId, roleKey],
-      );
-      await client.query(
-        `INSERT INTO app.quote_request_assignment_history
-          (request_id, previous_role, assigned_role, assigned_by, assigned_at)
-         VALUES ($1::uuid, $2, $3, $4::uuid, $5)`,
-        [requestId, previousRole, roleKey, assignedBy, assignedAt],
-      );
-      await client.query("COMMIT");
-      return roleKey;
-    } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
-
-  async findQuoteDraft(requestId: string): Promise<QuoteDraftRecord | null> {
-    const draftResult = await this.pool.query(
-      `SELECT draft_id, request_id, content, created_at, updated_at
-       FROM app.quote_draft WHERE request_id::text = $1`,
-      [requestId],
-    );
-    const draft = draftResult.rows[0];
-    if (!draft) {
-      return null;
-    }
-
-    const revisionResult = await this.pool.query(
-      `SELECT revision_id, revision_number, content, created_at, saved_by
-       FROM app.quote_draft_revision
-       WHERE draft_id = $1::uuid
-       ORDER BY revision_number DESC`,
-      [draft.draft_id],
-    );
-    return {
-      id: String(draft.draft_id),
-      requestId: String(draft.request_id),
-      content: String(draft.content),
-      createdAt: this.toIsoString(draft.created_at),
-      updatedAt: this.toIsoString(draft.updated_at),
-      revisions: revisionResult.rows.map((revision) => ({
-        id: String(revision.revision_id),
-        revisionNumber: Number(revision.revision_number),
-        content: String(revision.content),
-        createdAt: this.toIsoString(revision.created_at),
-        savedBy: String(revision.saved_by),
-      })),
-    };
-  }
-
-  async saveQuoteDraft(
-    requestId: string,
-    content: string,
-    savedBy: string,
-    savedAt: string,
-  ): Promise<QuoteDraftRecord> {
-    const client = await this.pool.connect();
-    try {
-      await client.query("BEGIN");
-      const draftResult = await client.query(
-        `INSERT INTO app.quote_draft
-          (draft_id, request_id, content, created_at, updated_at)
-         VALUES (gen_random_uuid(), $1::uuid, $2, $3, $3)
-         ON CONFLICT (request_id) DO UPDATE SET
-           content = EXCLUDED.content,
-           updated_at = EXCLUDED.updated_at
-         RETURNING draft_id`,
-        [requestId, content, savedAt],
-      );
-      const draftId = String(draftResult.rows[0].draft_id);
-      const nextRevision = await client.query(
-        `SELECT COALESCE(MAX(revision_number), 0) + 1 AS revision_number
-         FROM app.quote_draft_revision WHERE draft_id = $1::uuid`,
-        [draftId],
-      );
-      await client.query(
-        `INSERT INTO app.quote_draft_revision
-          (revision_id, draft_id, revision_number, content, created_at, saved_by)
-         VALUES (gen_random_uuid(), $1::uuid, $2, $3, $4, $5::uuid)`,
-        [
-          draftId,
-          Number(nextRevision.rows[0].revision_number),
-          content,
-          savedAt,
-          savedBy,
-        ],
-      );
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      throw error;
-    } finally {
-      client.release();
-    }
-
-    const saved = await this.findQuoteDraft(requestId);
-    if (!saved) {
-      throw new Error("Saved quote draft could not be loaded");
-    }
-    return saved;
-  }
-
   async createCustomer(
     customer: CustomerCompanyRecord,
   ): Promise<CustomerCompanyRecord> {
@@ -400,22 +280,41 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
     try {
       await client.query("BEGIN");
       await client.query(
-        `INSERT INTO app.customer_company (company_id, company_name, created_at)
-         VALUES ($1::uuid, $2, $3)`,
-        [customer.id, customer.companyName, customer.createdAt],
+        `INSERT INTO app.customer_company
+          (company_id, company_name, trading_name, registration_number,
+           tax_number, phone, company_email, website, business_address,
+           billing_address, country, created_at)
+         VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        [
+          customer.id,
+          customer.companyName,
+          customer.tradingName,
+          customer.registrationNumber,
+          customer.taxNumber,
+          customer.phone,
+          customer.companyEmail,
+          customer.website,
+          customer.businessAddress,
+          customer.billingAddress,
+          customer.country,
+          customer.createdAt,
+        ],
       );
       for (const contact of customer.contacts) {
         await client.query(
           `INSERT INTO app.customer_contact
-            (contact_id, company_id, contact_name, email, phone, notify, created_at)
-           VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7)`,
+            (contact_id, company_id, contact_name, role, email, phone, notify,
+             is_primary, created_at)
+           VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9)`,
           [
             contact.id,
             customer.id,
             contact.name,
+            contact.role,
             contact.email,
             contact.phone ?? null,
             contact.notify ?? true,
+            contact.isPrimary ?? false,
             contact.createdAt,
           ],
         );
@@ -434,49 +333,148 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
     companyId: string,
     contact: CustomerContactRecord,
   ): Promise<CustomerContactRecord | null> {
-    const company = await this.pool.query(
-      `SELECT 1 FROM app.customer_company WHERE company_id = $1::uuid`,
-      [companyId],
-    );
-    if (company.rows.length === 0) return null;
-    const inserted = await this.pool.query(
-      `INSERT INTO app.customer_contact
-        (contact_id, company_id, contact_name, email, phone, notify, created_at)
-       VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7)
-       RETURNING *`,
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const company = await client.query(
+        `SELECT 1 FROM app.customer_company WHERE company_id = $1::uuid FOR UPDATE`,
+        [companyId],
+      );
+      if (company.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return null;
+      }
+      if (contact.isPrimary) {
+        await client.query(
+          `UPDATE app.customer_contact SET is_primary = false
+           WHERE company_id = $1::uuid AND is_primary`,
+          [companyId],
+        );
+      }
+      const inserted = await client.query(
+        `INSERT INTO app.customer_contact
+          (contact_id, company_id, contact_name, role, email, phone, notify,
+           is_primary, created_at)
+         VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING *`,
+        [
+          contact.id,
+          companyId,
+          contact.name,
+          contact.role,
+          contact.email,
+          contact.phone ?? null,
+          contact.notify ?? true,
+          contact.isPrimary,
+          contact.createdAt,
+        ],
+      );
+      await client.query("COMMIT");
+      return this.mapContact(inserted.rows[0]);
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async updateCustomer(
+    companyId: string,
+    update: CustomerCompanyUpdate,
+  ): Promise<CustomerCompanyRecord | null> {
+    const result = await this.pool.query(
+      `UPDATE app.customer_company
+       SET company_name = $2, trading_name = $3, registration_number = $4,
+           tax_number = $5, phone = $6, company_email = $7, website = $8,
+           business_address = $9, billing_address = $10, country = $11
+       WHERE company_id = $1::uuid`,
       [
-        contact.id,
         companyId,
-        contact.name,
-        contact.email,
-        contact.phone ?? null,
-        contact.notify ?? true,
-        contact.createdAt,
+        update.companyName,
+        update.tradingName,
+        update.registrationNumber,
+        update.taxNumber,
+        update.phone,
+        update.companyEmail,
+        update.website,
+        update.businessAddress,
+        update.billingAddress,
+        update.country,
       ],
     );
-    return this.mapContact(inserted.rows[0]);
+    if (result.rowCount === 0) return null;
+    return this.findCustomer(companyId);
   }
 
   async updateCustomerContact(
     companyId: string,
     contactId: string,
-    update: { phone: string | null; notify?: boolean },
+    update: CustomerContactUpdate,
   ): Promise<CustomerContactRecord | null> {
-    const updated = await this.pool.query(
-      `UPDATE app.customer_contact
-       SET phone = $3, notify = COALESCE($4::boolean, notify)
-       WHERE contact_id = $2::uuid AND company_id = $1::uuid
-       RETURNING *`,
-      [companyId, contactId, update.phone, update.notify ?? null],
-    );
-    return updated.rows[0] ? this.mapContact(updated.rows[0]) : null;
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const company = await client.query(
+        `SELECT 1 FROM app.customer_company WHERE company_id = $1::uuid FOR UPDATE`,
+        [companyId],
+      );
+      if (company.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return null;
+      }
+      if (update.isPrimary) {
+        await client.query(
+          `UPDATE app.customer_contact SET is_primary = false
+           WHERE company_id = $1::uuid AND is_primary`,
+          [companyId],
+        );
+      }
+      const updated = await client.query(
+        `UPDATE app.customer_contact
+         SET contact_name = COALESCE($3, contact_name),
+             role = CASE WHEN $4::boolean THEN $5 ELSE role END,
+             email = COALESCE($6, email),
+             phone = CASE WHEN $7::boolean THEN $8 ELSE phone END,
+             notify = COALESCE($9::boolean, notify),
+             is_primary = CASE WHEN $10::boolean THEN $11 ELSE is_primary END
+         WHERE contact_id = $2::uuid AND company_id = $1::uuid
+         RETURNING *`,
+        [
+          companyId,
+          contactId,
+          update.name,
+          Object.hasOwn(update, "role"),
+          update.role,
+          update.email,
+          Object.hasOwn(update, "phone"),
+          update.phone,
+          update.notify,
+          Object.hasOwn(update, "isPrimary"),
+          update.isPrimary,
+        ],
+      );
+      if (!updated.rows[0]) {
+        await client.query("ROLLBACK");
+        return null;
+      }
+      await client.query("COMMIT");
+      return this.mapContact(updated.rows[0]);
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   private mapContact(row: Record<string, unknown>): CustomerContactRecord {
     return {
       id: String(row.contact_id),
       name: String(row.contact_name),
+      role: row.role ? String(row.role) : null,
       email: String(row.email),
+      isPrimary: row.is_primary === true,
       phone: row.phone ? String(row.phone) : null,
       notify: row.notify !== false,
       createdAt: this.toIsoString(row.created_at),
@@ -492,8 +490,19 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       `${customerSelect}
        WHERE ($1 = ''
          OR strpos(lower(company.company_name), lower($1)) > 0
+         OR strpos(lower(COALESCE(company.trading_name, '')), lower($1)) > 0
+         OR strpos(lower(COALESCE(company.registration_number, '')), lower($1)) > 0
+         OR strpos(lower(COALESCE(company.tax_number, '')), lower($1)) > 0
+         OR strpos(lower(COALESCE(company.phone, '')), lower($1)) > 0
+         OR strpos(lower(COALESCE(company.company_email, '')), lower($1)) > 0
+         OR strpos(lower(COALESCE(company.website, '')), lower($1)) > 0
+         OR strpos(lower(COALESCE(company.business_address, '')), lower($1)) > 0
+         OR strpos(lower(COALESCE(company.billing_address, '')), lower($1)) > 0
+         OR strpos(lower(COALESCE(company.country, '')), lower($1)) > 0
+         OR strpos(lower(COALESCE(contact.role, '')), lower($1)) > 0
          OR strpos(lower(COALESCE(contact.contact_name, '')), lower($1)) > 0
-         OR strpos(lower(COALESCE(contact.email, '')), lower($1)) > 0)
+         OR strpos(lower(COALESCE(contact.email, '')), lower($1)) > 0
+         OR strpos(lower(COALESCE(contact.phone, '')), lower($1)) > 0)
          AND ($2::uuid[] IS NULL OR company.company_id = ANY($2::uuid[]))
        ORDER BY company.company_name, company.created_at, contact.contact_name`,
       [search, companyIds ?? null],
@@ -784,7 +793,9 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
   }
 
   private async insertDocumentVersion(upload: {
-    jobId: string;
+    jobId: string | null;
+    companyId?: string | null;
+    title?: string | null;
     documentId: string | null;
     documentType: DocumentType;
     filename: string;
@@ -810,9 +821,15 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
         }
       } else {
         const created = await client.query(
-          `INSERT INTO app.document (job_id, document_type, created_by)
-           VALUES ($1::uuid, $2, $3::uuid) RETURNING document_id`,
-          [upload.jobId, upload.documentType, upload.uploadedBy],
+          `INSERT INTO app.document (job_id, company_id, title, document_type, created_by)
+           VALUES ($1::uuid, $2::uuid, $3, $4, $5::uuid) RETURNING document_id`,
+          [
+            upload.jobId,
+            upload.companyId ?? null,
+            upload.title ?? null,
+            upload.documentType,
+            upload.uploadedBy,
+          ],
         );
         documentId = String(created.rows[0].document_id);
       }
@@ -842,6 +859,121 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
     } finally {
       client.release();
     }
+  }
+
+  async saveLibraryDocument(upload: {
+    jobId: string | null;
+    companyId: string | null;
+    title: string | null;
+    documentType: DocumentType;
+    filename: string;
+    contentType: string;
+    sizeBytes: number;
+    sha256: string;
+    objectKey: string;
+    uploadedBy: string;
+  }): Promise<string> {
+    return this.insertDocumentVersion({ ...upload, documentId: null });
+  }
+
+  async searchDocuments(
+    query: {
+      terms: string[];
+      documentType: DocumentType | null;
+      documentId: string | null;
+    },
+    scope: JobScope,
+  ): Promise<LibraryDocumentRecord[]> {
+    if (scope.companyIds?.length === 0 || scope.serviceLines?.length === 0) {
+      return [];
+    }
+    const result = await this.pool.query(
+      `SELECT document.document_id, document.job_id, job.file_number,
+              company.company_id, company.company_name, document.title,
+              document.document_type, document.created_at,
+              (SELECT count(*) FROM app.document_version AS counted
+               WHERE counted.document_id = document.document_id) AS version_count,
+              latest.*
+       FROM app.document AS document
+       LEFT JOIN app.job AS job ON job.job_id = document.job_id
+       LEFT JOIN app.customer_company AS company
+         ON company.company_id = COALESCE(job.customer_company_id, document.company_id)
+       CROSS JOIN LATERAL (
+         SELECT * FROM app.document_version AS newest
+         WHERE newest.document_id = document.document_id
+         ORDER BY newest.version_number DESC LIMIT 1
+       ) AS latest
+       CROSS JOIN LATERAL (
+         SELECT lower(concat_ws(' ',
+           document.title,
+           replace(document.document_type, '_', ' '),
+           job.file_number,
+           company.company_name,
+           to_char(latest.uploaded_at, 'YYYY-MM-DD'),
+           (SELECT string_agg(named.original_filename, ' ')
+            FROM app.document_version AS named
+            WHERE named.document_id = document.document_id),
+           (SELECT string_agg(reference.reference_value || ' ' || COALESCE(reference.seal_number, ''), ' ')
+            FROM app.shipment_reference AS reference
+            WHERE reference.job_id = document.job_id AND reference.removed_at IS NULL),
+           (SELECT string_agg(party.party_name, ' ')
+            FROM app.job_party AS party
+            WHERE party.job_id = document.job_id AND party.removed_at IS NULL)
+         )) AS text
+       ) AS searchable
+       WHERE NOT EXISTS (
+           SELECT 1 FROM unnest($1::text[]) AS term
+           WHERE strpos(searchable.text, term) = 0)
+         AND ($2::text IS NULL OR document.document_type = $2)
+         AND ($3::uuid IS NULL OR document.document_id = $3::uuid)
+         AND (($4::uuid[] IS NULL AND $5::text[] IS NULL)
+           OR ($4::uuid[] IS NOT NULL
+               AND COALESCE(job.customer_company_id, document.company_id) = ANY($4::uuid[]))
+           OR ($5::text[] IS NOT NULL
+               AND (document.job_id IS NULL OR job.service_line = ANY($5::text[]))))
+       ORDER BY latest.uploaded_at DESC, document.document_id
+       LIMIT 200`,
+      [
+        query.terms,
+        query.documentType,
+        query.documentId,
+        scope.companyIds ?? null,
+        scope.serviceLines ?? null,
+      ],
+    );
+    return result.rows.map((row) => ({
+      id: String(row.document_id),
+      jobId: row.job_id ? String(row.job_id) : null,
+      fileNumber: row.file_number ? String(row.file_number) : null,
+      companyId: row.company_id ? String(row.company_id) : null,
+      companyName: row.company_name ? String(row.company_name) : null,
+      title: row.title ? String(row.title) : null,
+      documentType: row.document_type as DocumentType,
+      createdAt: this.toIsoString(row.created_at),
+      versionCount: Number(row.version_count),
+      latest: this.mapDocumentVersion(row),
+    }));
+  }
+
+  async findDocumentVersionById(
+    documentId: string,
+    versionNumber?: number,
+  ): Promise<StoredDocumentVersion | null> {
+    const result = await this.pool.query(
+      `SELECT * FROM app.document_version
+       WHERE document_id = $1::uuid
+         AND ($2::int IS NULL OR version_number = $2::int)
+       ORDER BY version_number DESC LIMIT 1`,
+      [documentId, versionNumber ?? null],
+    );
+    const row = result.rows[0];
+    return row
+      ? {
+          ...this.mapDocumentVersion(row),
+          objectKey: String(row.object_key),
+          documentId: String(row.document_id),
+        }
+      : null;
   }
 
   async listDocuments(jobId: string): Promise<DocumentRecord[]> {
@@ -1207,9 +1339,9 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
         `INSERT INTO app.quote_version
           (quote_id, version_number, currency, title, subtitle, shipment_scope,
            intro, at_cost_note, procedure_steps, required_documents,
-           documents_note, timeline, terms, created_by)
+           documents_note, timeline, terms, size_labels, created_by)
          VALUES ($1::uuid, 1, $2, $3, $4, $5, $6, $7, $8::text[], $9::text[],
-           $10, $11, $12::text[], $13::uuid)
+           $10, $11, $12::text[], $13::text[], $14::uuid)
          RETURNING version_id`,
         [quoteId, ...quoteVersionValues(input.version), createdBy],
       );
@@ -1484,17 +1616,18 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       }
       const versionId = String(draft.rows[0].version_id);
       await client.query(
+        "DELETE FROM app.quote_line WHERE version_id = $1::uuid",
+        [versionId],
+      );
+      await client.query(
         `UPDATE app.quote_version
          SET currency = $2, title = $3, subtitle = $4, shipment_scope = $5,
              intro = $6, at_cost_note = $7, procedure_steps = $8::text[],
              required_documents = $9::text[], documents_note = $10,
-             timeline = $11, terms = $12::text[], updated_at = clock_timestamp()
+             timeline = $11, terms = $12::text[], size_labels = $13::text[],
+             updated_at = clock_timestamp()
          WHERE version_id = $1::uuid`,
         [versionId, ...quoteVersionValues(content)],
-      );
-      await client.query(
-        "DELETE FROM app.quote_line WHERE version_id = $1::uuid",
-        [versionId],
       );
       await this.insertQuoteLines(client, versionId, content);
       await client.query("COMMIT");
@@ -1530,10 +1663,11 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
         `INSERT INTO app.quote_version
           (quote_id, version_number, currency, title, subtitle, shipment_scope,
            intro, at_cost_note, procedure_steps, required_documents,
-           documents_note, timeline, terms, created_by)
+           documents_note, timeline, terms, size_labels, created_by)
          SELECT quote_id, version_number + 1, currency, title, subtitle,
            shipment_scope, intro, at_cost_note, procedure_steps,
-           required_documents, documents_note, timeline, terms, $2::uuid
+           required_documents, documents_note, timeline, terms, size_labels,
+           $2::uuid
          FROM app.quote_version WHERE quote_id = $1::uuid
          ORDER BY version_number DESC LIMIT 1
          RETURNING version_id, version_number`,
@@ -1541,10 +1675,10 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       );
       await client.query(
         `INSERT INTO app.quote_line
-          (version_id, position, section, description, basis, basis_note,
-           amount_minor, amount_20ft_minor, amount_40ft_minor)
-         SELECT $2::uuid, position, section, description, basis, basis_note,
-           amount_minor, amount_20ft_minor, amount_40ft_minor
+          (version_id, position, section, description, details, basis,
+           basis_note, amount_minor, size_amounts_minor)
+         SELECT $2::uuid, position, section, description, details, basis,
+           basis_note, amount_minor, size_amounts_minor
          FROM app.quote_line
          WHERE version_id = (
            SELECT version_id FROM app.quote_version
@@ -1632,19 +1766,19 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
     for (const [position, line] of content.lines.entries()) {
       await client.query(
         `INSERT INTO app.quote_line
-          (version_id, position, section, description, basis, basis_note,
-           amount_minor, amount_20ft_minor, amount_40ft_minor)
-         VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          (version_id, position, section, description, details, basis,
+           basis_note, amount_minor, size_amounts_minor)
+         VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9::bigint[])`,
         [
           versionId,
           position,
           line.section,
           line.description,
+          line.details,
           line.basis,
           line.basisNote,
           line.amountMinor,
-          line.amount20ftMinor,
-          line.amount40ftMinor,
+          line.sizeAmountsMinor,
         ],
       );
     }
@@ -1687,6 +1821,7 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       documentsNote: optional(row.documents_note),
       timeline: optional(row.timeline),
       terms: row.terms as string[],
+      sizeLabels: row.size_labels as string[],
       createdBy: String(row.created_by),
       createdAt: this.toIsoString(row.created_at),
       updatedAt: this.toIsoString(row.updated_at),
@@ -1705,11 +1840,13 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       position: Number(line.position),
       section: optional(line.section),
       description: String(line.description),
+      details: optional(line.details),
       basis: line.basis as QuoteBasis,
       basisNote: optional(line.basis_note),
       amountMinor: minor(line.amount_minor),
-      amount20ftMinor: minor(line.amount_20ft_minor),
-      amount40ftMinor: minor(line.amount_40ft_minor),
+      sizeAmountsMinor: line.size_amounts_minor
+        ? (line.size_amounts_minor as unknown[]).map(Number)
+        : null,
     };
   }
 
@@ -1781,16 +1918,15 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
     quantity: number;
     unitQuotedMinor: number | null;
     quoteLineId: string | null;
+    quoteContainerSize: string | null;
     createdBy: string;
   }): Promise<JobChargeRecord | null> {
     const result = await this.pool.query(
       `INSERT INTO app.job_charge
         (job_id, kind, description, currency, quantity, unit_quoted_minor,
-         quote_line_id, created_by)
-       VALUES ($1::uuid, $2, $3, $4, $5, $6, $7::uuid, $8::uuid)
-       ON CONFLICT (job_id, quote_line_id)
-         WHERE quote_line_id IS NOT NULL AND removed_at IS NULL
-       DO NOTHING
+         quote_line_id, quote_container_size, created_by)
+       VALUES ($1::uuid, $2, $3, $4, $5, $6, $7::uuid, $8, $9::uuid)
+       ON CONFLICT DO NOTHING
        RETURNING *`,
       [
         charge.jobId,
@@ -1800,6 +1936,7 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
         charge.quantity,
         charge.unitQuotedMinor,
         charge.quoteLineId,
+        charge.quoteContainerSize,
         charge.createdBy,
       ],
     );
@@ -1861,7 +1998,7 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
     amountMinor: number;
     currency: string;
     exchangeRate: string | null;
-    convertedMinor: number;
+    convertedMinor: number | null;
     rateNote: string | null;
     supplierDocumentId: string | null;
     note: string | null;
@@ -1918,11 +2055,13 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
     return this.mapChargeActual(result.rows[0]);
   }
 
-  async findAcceptedQuoteLines(
-    jobId: string,
-  ): Promise<{ currency: string; lines: QuoteLineRecord[] } | null> {
+  async findAcceptedQuoteLines(jobId: string): Promise<{
+    currency: string;
+    sizeLabels: string[];
+    lines: QuoteLineRecord[];
+  } | null> {
     const result = await this.pool.query(
-      `SELECT version.currency, line.*
+      `SELECT version.currency, version.size_labels, line.*
        FROM app.job AS job
        JOIN app.quote_decision AS decision
          ON decision.quote_id = job.quote_id AND decision.decision = 'accepted'
@@ -1935,6 +2074,7 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
     if (result.rows.length === 0) return null;
     return {
       currency: String(result.rows[0].currency),
+      sizeLabels: result.rows[0].size_labels as string[],
       lines: result.rows.map((row) => this.mapQuoteLine(row)),
     };
   }
@@ -1953,6 +2093,9 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       unitQuotedMinor:
         row.unit_quoted_minor === null ? null : Number(row.unit_quoted_minor),
       quoteLineId: row.quote_line_id ? String(row.quote_line_id) : null,
+      quoteContainerSize: row.quote_container_size
+        ? String(row.quote_container_size)
+        : null,
       createdBy: String(row.created_by),
       createdAt: this.toIsoString(row.created_at),
       actuals: actuals.map((actual) => this.mapChargeActual(actual)),
@@ -1970,7 +2113,8 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
           : String(row.exchange_rate)
               .replace(/(\.\d*?)0+$/, "$1")
               .replace(/\.$/, ""),
-      convertedMinor: Number(row.converted_minor),
+      convertedMinor:
+        row.converted_minor === null ? null : Number(row.converted_minor),
       rateNote: row.rate_note ? String(row.rate_note) : null,
       supplierDocumentId: row.supplier_document_id
         ? String(row.supplier_document_id)
@@ -3046,10 +3190,13 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
   private async selectNotifications(
     where: string,
     values: unknown[],
+    limit?: number,
   ): Promise<NotificationRecord[]> {
     const notifications = await this.pool.query(
       `SELECT n.* FROM app.notification n WHERE ${where}
-       ORDER BY n.created_at DESC, n.notification_id`,
+       ORDER BY n.created_at DESC, n.notification_id${
+         limit ? ` LIMIT ${Math.trunc(limit)}` : ""
+       }`,
       values,
     );
     if (notifications.rows.length === 0) return [];
@@ -3098,6 +3245,49 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
       sentAt: row.sent_at ? this.toIsoString(row.sent_at) : null,
       createdAt: this.toIsoString(row.created_at),
     };
+  }
+
+  async listNotificationFeed(filter: {
+    companyId: string | null;
+    event: string | null;
+    serviceLines: ServiceLine[] | null;
+    limit: number;
+  }): Promise<NotificationFeedRow[]> {
+    const notifications = await this.selectNotifications(
+      `($1::uuid IS NULL OR n.company_id = $1::uuid)
+       AND ($2::text IS NULL OR n.event = $2)
+       AND ($3::text[] IS NULL OR n.job_id IS NULL OR EXISTS (
+         SELECT 1 FROM app.job scoped
+         WHERE scoped.job_id = n.job_id AND scoped.service_line = ANY($3::text[])))`,
+      [filter.companyId, filter.event, filter.serviceLines],
+      filter.limit,
+    );
+    if (notifications.length === 0) return [];
+    const [companies, jobs] = await Promise.all([
+      this.pool.query(
+        `SELECT company_id, company_name FROM app.customer_company
+         WHERE company_id = ANY($1::uuid[])`,
+        [[...new Set(notifications.map((item) => item.companyId))]],
+      ),
+      this.pool.query(
+        `SELECT job_id, file_number FROM app.job WHERE job_id = ANY($1::uuid[])`,
+        [notifications.flatMap((item) => (item.jobId ? [item.jobId] : []))],
+      ),
+    ]);
+    const companyNames = new Map<string, string>(
+      companies.rows.map((row) => [
+        String(row.company_id),
+        String(row.company_name),
+      ]),
+    );
+    const fileNumbers = new Map<string, string>(
+      jobs.rows.map((row) => [String(row.job_id), String(row.file_number)]),
+    );
+    return notifications.map((item) => ({
+      ...item,
+      companyName: companyNames.get(item.companyId) ?? "",
+      fileNumber: item.jobId ? (fileNumbers.get(item.jobId) ?? null) : null,
+    }));
   }
 
   async listNotificationLog(filter: {
@@ -3905,11 +4095,12 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
         row.customer_company_name === null
           ? null
           : String(row.customer_company_name),
-      quoteDraftRevisionCount: Number(row.quote_draft_revision_count),
-      quoteDraftUpdatedAt:
-        row.quote_draft_updated_at === null
+      quoteId: row.quote_id === null ? null : String(row.quote_id),
+      quoteNumber: row.quote_number === null ? null : String(row.quote_number),
+      quoteStatus:
+        row.quote_status === null
           ? null
-          : this.toIsoString(row.quote_draft_updated_at),
+          : (row.quote_status as "draft" | "issued"),
     };
   }
 
@@ -3924,6 +4115,21 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
         customer = {
           id,
           companyName: String(row.company_name),
+          tradingName: row.trading_name ? String(row.trading_name) : null,
+          registrationNumber: row.registration_number
+            ? String(row.registration_number)
+            : null,
+          taxNumber: row.tax_number ? String(row.tax_number) : null,
+          phone: row.company_phone ? String(row.company_phone) : null,
+          companyEmail: row.company_email ? String(row.company_email) : null,
+          website: row.website ? String(row.website) : null,
+          businessAddress: row.business_address
+            ? String(row.business_address)
+            : null,
+          billingAddress: row.billing_address
+            ? String(row.billing_address)
+            : null,
+          country: row.country ? String(row.country) : null,
           createdAt: this.toIsoString(row.company_created_at),
           contacts: [],
         };
@@ -3933,7 +4139,9 @@ export class PostgresDatabaseService implements DatabasePort, OnModuleDestroy {
         customer.contacts.push({
           id: String(row.contact_id),
           name: String(row.contact_name),
+          role: row.contact_role ? String(row.contact_role) : null,
           email: String(row.contact_email),
+          isPrimary: row.contact_is_primary === true,
           phone: row.contact_phone ? String(row.contact_phone) : null,
           notify: row.contact_notify !== false,
           createdAt: this.toIsoString(row.contact_created_at),

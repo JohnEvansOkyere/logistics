@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { chargeKindLabels } from "@bjh/contracts";
 import type { ChargeKind } from "@bjh/contracts";
-import { formatMoney, toMinor } from "../quotes/quoteApi";
+import { formatMoney, getQuote, toMinor } from "../quotes/quoteApi";
+import { getSettings } from "../settings/business/settingsApi";
 import {
   addCharge,
   importCharges,
@@ -16,9 +17,16 @@ import type { ChargeTotals, JobCharge, JobDocument } from "./jobApi";
 import styles from "./jobs.module.css";
 
 const evidenceTypes = ["supplier_invoice", "disbursement_evidence"];
-
-const signed = (minor: number, currency: string) =>
-  `${minor > 0 ? "+" : ""}${formatMoney(minor, currency)}`;
+const popularCurrencies = [
+  "GHS",
+  "USD",
+  "EUR",
+  "GBP",
+  "CNY",
+  "AED",
+  "NGN",
+  "ZAR",
+];
 
 /** Job costing: what was quoted vs what it cost, with supplier evidence. */
 export function JobCharges({
@@ -39,16 +47,19 @@ export function JobCharges({
   const [kind, setKind] = useState<ChargeKind>("service");
   const [description, setDescription] = useState("");
   const [currency, setCurrency] = useState("");
+  const [configuredCurrencies, setConfiguredCurrencies] = useState<string[]>(
+    [],
+  );
   const [quantity, setQuantity] = useState("1");
   const [quoted, setQuoted] = useState("");
-  const [size, setSize] = useState<"" | "20ft" | "40ft">("");
+  const [size, setSize] = useState("");
+  const [containerCount, setContainerCount] = useState("1");
+  const [quoteSizes, setQuoteSizes] = useState<string[]>([]);
   const [recording, setRecording] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
-  const [actualCurrency, setActualCurrency] = useState("");
-  const [rate, setRate] = useState("");
-  const [rateNote, setRateNote] = useState("");
   const [evidence, setEvidence] = useState("");
   const [note, setNote] = useState("");
+  const [adding, setAdding] = useState<"" | "charge" | "copy">("");
 
   const load = useCallback(async () => {
     try {
@@ -65,6 +76,25 @@ export function JobCharges({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    getSettings()
+      .then(({ current }) => {
+        if (!current) return;
+        setConfiguredCurrencies(current.settings.currencies);
+      })
+      .catch(() => setError("Currencies could not be loaded"));
+  }, []);
+
+  useEffect(() => {
+    if (!quoteId) {
+      setQuoteSizes([]);
+      return;
+    }
+    getQuote(quoteId)
+      .then((quote) => setQuoteSizes(quote.versions.at(-1)?.sizeLabels ?? []))
+      .catch(() => setQuoteSizes([]));
+  }, [quoteId]);
 
   async function run(action: () => Promise<unknown>, after?: () => void) {
     setError("");
@@ -98,6 +128,7 @@ export function JobCharges({
         setDescription("");
         setQuoted("");
         setQuantity("1");
+        setAdding("");
       },
     );
   }
@@ -109,15 +140,11 @@ export function JobCharges({
       setError("Enter the amount as a number such as 250 or 250.50");
       return;
     }
-    const code = (actualCurrency || charge.currency).trim();
     void run(
       () =>
         recordActual(jobId, charge.id, {
           amountMinor: minor,
-          currency: code,
-          exchangeRate:
-            code.toUpperCase() === charge.currency ? undefined : rate.trim(),
-          rateNote: rateNote.trim() || undefined,
+          currency: "GHS",
           supplierDocumentId: evidence || undefined,
           note: note.trim() || undefined,
           correctionOf: charge.currentActual?.id,
@@ -125,9 +152,6 @@ export function JobCharges({
       () => {
         setRecording(null);
         setAmount("");
-        setActualCurrency("");
-        setRate("");
-        setRateNote("");
         setEvidence("");
         setNote("");
       },
@@ -142,14 +166,44 @@ export function JobCharges({
       ? (documents.find((item) => item.id === id)?.versions.at(-1)?.filename ??
         "document")
       : null;
+  const actualTotals = new Map<string, number>();
+  for (const charge of charges ?? []) {
+    const actual = charge.currentActual;
+    if (actual) {
+      actualTotals.set(
+        actual.currency,
+        (actualTotals.get(actual.currency) ?? 0) + actual.amountMinor,
+      );
+    }
+  }
 
   return (
     <section className={styles.card} aria-labelledby="charges-title">
-      <h2 id="charges-title">Charges and costs</h2>
-      <p className={styles.muted}>
-        Internal costing: what was quoted against what it cost. Customers do not
-        see this.
-      </p>
+      <div className={styles.stepsHeading}>
+        <h2 id="charges-title">Charges and costs</h2>
+        {canEdit && (
+          <div className={styles.actions}>
+            {quoteId && adding !== "copy" && (
+              <button
+                className={styles.secondaryButton}
+                onClick={() => setAdding("copy")}
+                type="button"
+              >
+                Copy from quote
+              </button>
+            )}
+            {adding !== "charge" && (
+              <button
+                className={styles.secondaryButton}
+                onClick={() => setAdding("charge")}
+                type="button"
+              >
+                Add charge
+              </button>
+            )}
+          </div>
+        )}
+      </div>
       {error && (
         <p className={styles.error} role="alert">
           {error}
@@ -159,14 +213,16 @@ export function JobCharges({
 
       {totals.map((item) => (
         <p key={item.currency}>
-          <strong>{item.currency}</strong> · quoted{" "}
-          {formatMoney(item.quotedMinor, item.currency)} · actual{" "}
-          {formatMoney(item.actualMinor, item.currency)} · difference{" "}
-          {signed(item.actualMinor - item.quotedMinor, item.currency)}
+          Quoted <strong>{formatMoney(item.quotedMinor, item.currency)}</strong>
           {item.chargesWithoutActual > 0 &&
             ` · ${item.chargesWithoutActual} without an actual amount`}
           {item.disbursementsWithoutEvidence > 0 &&
             ` · ${item.disbursementsWithoutEvidence} disbursement(s) without a supplier document`}
+        </p>
+      ))}
+      {[...actualTotals].map(([code, minor]) => (
+        <p key={code}>
+          Actual paid <strong>{formatMoney(minor, code)}</strong>
         </p>
       ))}
 
@@ -181,7 +237,6 @@ export function JobCharges({
                 <th scope="col">Charge</th>
                 <th scope="col">Quoted</th>
                 <th scope="col">Actual</th>
-                <th scope="col">Difference</th>
                 <th scope="col">Evidence</th>
                 {canEdit && <th scope="col">Actions</th>}
               </tr>
@@ -195,6 +250,9 @@ export function JobCharges({
                     <span className={styles.muted}>
                       {chargeKindLabels[charge.kind]}
                       {charge.quantity > 1 ? ` · × ${charge.quantity}` : ""}
+                      {charge.quoteContainerSize
+                        ? ` · ${charge.quoteContainerSize}`
+                        : ""}
                     </span>
                   </th>
                   <td>
@@ -206,20 +264,8 @@ export function JobCharges({
                     {charge.currentActual ? (
                       <>
                         {formatMoney(
-                          charge.currentActual.convertedMinor,
-                          charge.currency,
-                        )}
-                        {charge.currentActual.currency !== charge.currency && (
-                          <>
-                            <br />
-                            <span className={styles.muted}>
-                              {formatMoney(
-                                charge.currentActual.amountMinor,
-                                charge.currentActual.currency,
-                              )}{" "}
-                              at {charge.currentActual.exchangeRate}
-                            </span>
-                          </>
+                          charge.currentActual.amountMinor,
+                          charge.currentActual.currency,
                         )}
                         {charge.actuals.length > 1 && (
                           <>
@@ -233,11 +279,6 @@ export function JobCharges({
                     ) : (
                       "Not recorded"
                     )}
-                  </td>
-                  <td>
-                    {charge.varianceMinor === null
-                      ? "-"
-                      : signed(charge.varianceMinor, charge.currency)}
                   </td>
                   <td>
                     {charge.kind === "service"
@@ -288,16 +329,16 @@ export function JobCharges({
           ?.filter((charge) => charge.id === recording)
           .map((charge) => (
             <form
-              className={styles.form}
+              className={`${styles.form} ${styles.quickUpdateForm}`}
               key={charge.id}
               onSubmit={(event) => submitActual(event, charge)}
             >
-              <h2>
+              <h2 className={styles.wide}>
                 {charge.currentActual ? "Correct" : "Record"} the amount for{" "}
                 {charge.description}
               </h2>
               <label className={styles.field}>
-                Amount
+                Amount paid (GHS)
                 <input
                   inputMode="decimal"
                   onChange={(event) => setAmount(event.target.value)}
@@ -305,37 +346,6 @@ export function JobCharges({
                   value={amount}
                 />
               </label>
-              <label className={styles.field}>
-                Currency of the amount (charge is in {charge.currency})
-                <input
-                  maxLength={3}
-                  onChange={(event) => setActualCurrency(event.target.value)}
-                  placeholder={charge.currency}
-                  value={actualCurrency}
-                />
-              </label>
-              {actualCurrency.trim() !== "" &&
-                actualCurrency.trim().toUpperCase() !== charge.currency && (
-                  <>
-                    <label className={styles.field}>
-                      Exchange rate (1 {actualCurrency.trim().toUpperCase()} in{" "}
-                      {charge.currency})
-                      <input
-                        inputMode="decimal"
-                        onChange={(event) => setRate(event.target.value)}
-                        required
-                        value={rate}
-                      />
-                    </label>
-                    <label className={styles.field}>
-                      Where the rate came from (optional)
-                      <input
-                        onChange={(event) => setRateNote(event.target.value)}
-                        value={rateNote}
-                      />
-                    </label>
-                  </>
-                )}
               <label className={styles.field}>
                 Supplier document (optional)
                 <select
@@ -357,100 +367,161 @@ export function JobCharges({
                   value={note}
                 />
               </label>
-              <button className={styles.button} type="submit">
-                Save amount
-              </button>
+              <div className={styles.formActions}>
+                <button className={styles.button} type="submit">
+                  Save amount
+                </button>
+                <button
+                  className={styles.secondaryButton}
+                  onClick={() => setRecording(null)}
+                  type="button"
+                >
+                  Cancel
+                </button>
+              </div>
             </form>
           ))}
 
       {canEdit && (
         <>
-          <form className={styles.form} onSubmit={submitCharge}>
-            <h2>Add a charge</h2>
-            <label className={styles.field}>
-              Type
-              <select
-                onChange={(event) => setKind(event.target.value as ChargeKind)}
-                value={kind}
-              >
-                {(Object.keys(chargeKindLabels) as ChargeKind[]).map((item) => (
-                  <option key={item} value={item}>
-                    {chargeKindLabels[item]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={styles.field}>
-              Description
-              <input
-                onChange={(event) => setDescription(event.target.value)}
-                required
-                value={description}
-              />
-            </label>
-            <label className={styles.field}>
-              Currency (3-letter code)
-              <input
-                maxLength={3}
-                onChange={(event) => setCurrency(event.target.value)}
-                required
-                value={currency}
-              />
-            </label>
-            <label className={styles.field}>
-              Quantity
-              <input
-                inputMode="numeric"
-                onChange={(event) => setQuantity(event.target.value)}
-                value={quantity}
-              />
-            </label>
-            <label className={styles.field}>
-              Quoted amount each (leave empty for at cost)
-              <input
-                inputMode="decimal"
-                onChange={(event) => setQuoted(event.target.value)}
-                value={quoted}
-              />
-            </label>
-            <button className={styles.button} type="submit">
-              Add charge
-            </button>
-          </form>
+          {adding === "charge" && (
+            <form
+              className={`${styles.form} ${styles.quickUpdateForm}`}
+              onSubmit={submitCharge}
+            >
+              <label className={styles.field}>
+                Type
+                <select
+                  onChange={(event) =>
+                    setKind(event.target.value as ChargeKind)
+                  }
+                  value={kind}
+                >
+                  {(Object.keys(chargeKindLabels) as ChargeKind[]).map(
+                    (item) => (
+                      <option key={item} value={item}>
+                        {chargeKindLabels[item]}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+              <label className={styles.field}>
+                Description
+                <input
+                  autoFocus
+                  onChange={(event) => setDescription(event.target.value)}
+                  required
+                  value={description}
+                />
+              </label>
+              <label className={styles.field}>
+                Quoted currency
+                <select
+                  onChange={(event) => setCurrency(event.target.value)}
+                  required
+                  value={currency}
+                >
+                  <option value="">Choose currency</option>
+                  {[
+                    ...new Set(
+                      [
+                        ...(configuredCurrencies.length
+                          ? configuredCurrencies
+                          : popularCurrencies),
+                        currency,
+                      ].filter(Boolean),
+                    ),
+                  ].map((code) => (
+                    <option key={code} value={code}>
+                      {code}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={styles.field}>
+                Quantity
+                <input
+                  inputMode="numeric"
+                  onChange={(event) => setQuantity(event.target.value)}
+                  value={quantity}
+                />
+              </label>
+              <label className={styles.field}>
+                Quoted amount each (leave empty for at cost)
+                <input
+                  inputMode="decimal"
+                  onChange={(event) => setQuoted(event.target.value)}
+                  value={quoted}
+                />
+              </label>
+              <div className={styles.formActions}>
+                <button className={styles.button} type="submit">
+                  Save
+                </button>
+                <button
+                  className={styles.secondaryButton}
+                  onClick={() => setAdding("")}
+                  type="button"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
 
-          {quoteId && (
-            <div className={styles.form}>
-              <h2>Copy charges from the accepted quote</h2>
+          {quoteId && adding === "copy" && (
+            <div className={`${styles.form} ${styles.quickUpdateForm}`}>
               <label className={styles.field}>
                 Container size (needed when the quote prices by size)
                 <select
-                  onChange={(event) =>
-                    setSize(event.target.value as "" | "20ft" | "40ft")
-                  }
+                  onChange={(event) => setSize(event.target.value)}
                   value={size}
                 >
                   <option value="">Not applicable</option>
-                  <option value="20ft">20ft</option>
-                  <option value="40ft">40ft</option>
+                  {quoteSizes.map((label) => (
+                    <option key={label} value={label}>
+                      {label}
+                    </option>
+                  ))}
                 </select>
               </label>
-              <div className={styles.actions}>
+              <label className={styles.field}>
+                Number of containers of this size
+                <input
+                  inputMode="numeric"
+                  min="1"
+                  onChange={(event) => setContainerCount(event.target.value)}
+                  type="number"
+                  value={containerCount}
+                />
+              </label>
+              <div className={styles.formActions}>
                 <button
-                  className={styles.secondaryButton}
+                  className={styles.button}
                   onClick={() =>
                     void run(async () => {
                       const result = await importCharges(
                         jobId,
                         size || undefined,
+                        Number(containerCount) || 1,
                       );
                       setNotice(
                         `${result.created.length} charge(s) copied, ${result.skipped} already on the job.`,
                       );
+                      setAdding("");
                     })
                   }
                   type="button"
                 >
-                  Copy from quote
+                  Copy charges
+                </button>
+                <button
+                  className={styles.secondaryButton}
+                  onClick={() => setAdding("")}
+                  type="button"
+                >
+                  Cancel
                 </button>
               </div>
             </div>

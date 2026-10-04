@@ -1,0 +1,172 @@
+.section {
+  display: grid;
+  gap: 10px;
+}
+.section h2 {
+  margin: 8px 0 0;
+  font-size: 1rem;
+}
+.row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.rowWide {
+  grid-column: 1 / -1;
+}
+.charge {
+  --size-count: 2;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 10px;
+  padding: 12px 0;
+  border-top: 1px solid var(--brand-border);
+}
+.charge:first-of-type {
+  border-top: 0;
+}
+.chargeName {
+  grid-column: 1 / -1;
+}
+.small {
+  display: grid;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--brand-muted);
+}
+.small input,
+.small select {
+  width: 100%;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: inherit;
+  font-weight: 400;
+  background: #fff;
+  color: var(--brand-ink);
+}
+/* Every box in a charge row is the same height. */
+.small input,
+.small select {
+  box-sizing: border-box;
+  height: 44px;
+}
+.remove {
+  justify-self: start;
+  align-self: end;
+  background: none;
+  border: 0;
+  padding: 10px 4px;
+  color: var(--brand-primary);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.remove:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.9rem;
+}
+.sizes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+.sizes p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.sizeInput {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.sizeInput input {
+  min-width: 0;
+  flex: 1;
+}
+.more {
+  border: 1px solid var(--brand-border);
+  border-radius: 10px;
+  padding: 12px 16px;
+}
+.more summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--brand-primary);
+}
+.more .section {
+  margin-top: 12px;
+}
+@media (min-width: 760px) {
+  .charge {
+    grid-template-columns:
+      minmax(0, 3fr) repeat(var(--size-count), minmax(0, 1fr)) minmax(0, 1.4fr)
+      auto;
+    align-items: end;
+  }
+  .charge.single {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  }
+  .chargeName {
+    grid-column: auto;
+  }
+  .extra {
+    grid-column: 1 / -1;
+  }
+}
+.list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.list legend {
+  padding: 0;
+  margin-bottom: 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.listItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.listItem textarea {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 0.8rem;
+  background: #fff;
+  color: var(--brand-ink);
+  resize: vertical;
+}
+.number {
+  min-width: 1.6em;
+  padding-top: 10px;
+  font-weight: 700;
+  color: var(--brand-muted);
+}
+.add {
+  justify-self: start;
+  background: none;
+  border: 0;
+  padding: 6px 0;
+  color: var(--brand-primary);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}

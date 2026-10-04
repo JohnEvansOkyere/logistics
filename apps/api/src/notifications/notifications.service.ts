@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import {
+  clientMessageInputSchema,
   correspondenceInputSchema,
   jobMessageInputSchema,
   parseContract,
@@ -186,5 +187,76 @@ export class NotificationsService {
       });
     }
     return result;
+  }
+
+  /** How many of a company's contacts would receive a message (those not switched off). */
+  async notifiableContactCount(companyId: string): Promise<number> {
+    const customer = await this.database.findCustomer(companyId);
+    return (customer?.contacts ?? []).filter(
+      (contact) => contact.notify !== false,
+    ).length;
+  }
+
+  /**
+   * A message typed by staff to one company, several, or all of them, that is
+   * not about a particular job. Each company gets its own notification, and a
+   * company with no contact to notify is reported instead of silently dropped.
+   */
+  async sendClientMessage(input: unknown, sentBy: string) {
+    const parsed = parseContract(clientMessageInputSchema, input);
+    if (!parsed.success) throw new BadRequestException(parsed.message);
+    const { audience, subject, body } = parsed.data;
+
+    const everyone = await this.database.listCustomers("");
+    const chosen =
+      audience === "all"
+        ? everyone
+        : everyone.filter((company) => audience.includes(company.id));
+    if (audience !== "all" && chosen.length !== new Set(audience).size) {
+      throw new BadRequestException("One or more companies were not found");
+    }
+    if (chosen.length === 0) {
+      throw new BadRequestException("There are no companies to message");
+    }
+
+    const event =
+      audience === "all" || audience.length > 1 ? "broadcast" : "message";
+    const batch = randomUUID();
+    const sent: Array<{
+      companyId: string;
+      companyName: string;
+      notificationId: string;
+    }> = [];
+    const skipped: Array<{
+      companyId: string;
+      companyName: string;
+      reason: string;
+    }> = [];
+    for (const company of chosen) {
+      if (!company.contacts.some((contact) => contact.notify !== false)) {
+        skipped.push({
+          companyId: company.id,
+          companyName: company.companyName,
+          reason: "No contact to notify",
+        });
+        continue;
+      }
+      const result = await this.queue({
+        companyId: company.id,
+        event,
+        dedupeKey: `${event}:${batch}:${company.id}`,
+        message: (sender) => staffMessage(sender, subject, body),
+        linkPath: "/portal",
+        createdBy: sentBy,
+      });
+      if (result !== "duplicate") {
+        sent.push({
+          companyId: company.id,
+          companyName: company.companyName,
+          notificationId: result.id,
+        });
+      }
+    }
+    return { event, sent, skipped };
   }
 }

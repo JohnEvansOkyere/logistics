@@ -14,10 +14,6 @@ export default function SignInPage() {
         <span aria-hidden="true">←</span> Back to overview
       </Link>
       <SignInForm />
-      <p className={styles.localNote}>
-        Local testing only. The first local signup claims the super_admin role;
-        later role provisioning is performed by the admin workflow.
-      </p>
     </main>
   );
 }

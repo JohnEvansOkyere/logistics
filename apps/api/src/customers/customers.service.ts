@@ -7,6 +7,7 @@ import {
 import {
   customerContactInputSchema,
   customerContactUpdateSchema,
+  customerCompanyUpdateSchema,
   customerInputSchema,
   isUuid,
   parseContract,
@@ -26,14 +27,25 @@ export class CustomersService {
     return this.database.createCustomer({
       id: randomUUID(),
       companyName: details.companyName,
+      tradingName: details.tradingName,
+      registrationNumber: details.registrationNumber,
+      taxNumber: details.taxNumber,
+      phone: details.companyPhone,
+      companyEmail: details.companyEmail,
+      website: details.website,
+      businessAddress: details.businessAddress,
+      billingAddress: details.billingAddress,
+      country: details.country,
       createdAt,
       contacts: [
         {
           id: randomUUID(),
           name: details.contactName,
+          role: details.contactRole,
           email: details.email,
           phone: details.phone,
           notify: true,
+          isPrimary: true,
           createdAt,
         },
       ],
@@ -71,14 +83,26 @@ export class CustomersService {
       ? await this.database.addCustomerContact(companyId, {
           id: randomUUID(),
           name: parsed.data.name,
+          role: parsed.data.role,
           email: parsed.data.email,
           phone: parsed.data.phone,
           notify: true,
+          isPrimary: parsed.data.isPrimary,
           createdAt: new Date().toISOString(),
         })
       : null;
     if (!contact) throw new NotFoundException("Customer was not found");
     return contact;
+  }
+
+  async updateCustomer(companyId: string, input: unknown) {
+    const parsed = parseContract(customerCompanyUpdateSchema, input);
+    if (!parsed.success) throw new BadRequestException(parsed.message);
+    const customer = isUuid(companyId)
+      ? await this.database.updateCustomer(companyId, parsed.data)
+      : null;
+    if (!customer) throw new NotFoundException("Customer was not found");
+    return customer;
   }
 
   async updateContact(companyId: string, contactId: string, input: unknown) {

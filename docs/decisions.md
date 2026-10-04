@@ -65,3 +65,22 @@ The structural notes above do not authorize copying client-specific values or ge
 - **Structured quotes (D1; 2026-09-29, Evans):** The quotation samples in `EVIDENCES/` define the structure: a quote version has an ISO currency, charge lines (description, charging basis fixed / per B/L / per container / at cost, optional 20ft or 40ft container size, amount in minor units — optional for at-cost lines), and free-text notes for required documents, timeline and terms. Free-text drafts remain readable; new quotes use versions.
 - **Business settings (F1 / D03; 2026-09-29, Evans):** Issuer details, currencies, tax lines (VAT/levies), payment terms and quote/invoice number prefixes are configured in a Settings screen. Who configures them does not matter to the client; the system limits it to the super admin and keeps every change as a revision. Nothing is hard-coded.
 - **No GRA e-VAT (F6 / D15; 2026-09-29, Evans):** BJH invoices are issued by the system and do not go through GRA e-VAT. D15 is closed.
+
+## Quote container-size clarification (2026-10-01)
+
+- The 20ft/40ft columns in the supplied quotation are one example, not a fixed business rule. Each quote version may define its own container-size labels and corresponding charge amounts, including multiple different sizes in one quote. The editor, customer-facing quote, PDF and quote-to-job cost import must use those labels rather than assume 20ft and 40ft.
+- When copying a size-priced quote to a job, staff select one of that quote's size labels and the number of containers; `per_container` quote lines carry that count into job costing. Repeating the import for another size adds that size's lines while keeping other quote lines idempotent.
+- This supersedes the earlier 2026-09-29 interpretation of D1 as a fixed pair of 20ft/40ft price fields. Keep the single-amount option for charges that do not vary by container size.
+
+## Actual job costs in GHS (2026-10-03, Evans)
+
+- Staff calculate any exchange outside the app and record actual supplier/disbursement amounts in GHS. The actual-amount form does not ask for USD or an exchange rate. The quoted charge keeps its own selected currency, which may be USD.
+- GHS actuals and non-GHS quoted amounts remain separate. Do not calculate a cross-currency variance or treat the GHS amount as a USD invoice amount. Invoice drafts may use the quoted amount where no comparable actual exists; an at-cost line without a quoted amount needs a deliberate invoice amount.
+- Preserve earlier immutable charge-actual records that included exchange rates; this decision governs new recordings.
+
+## Multi-currency workflow (2026-10-04, Evans)
+
+- The client regularly uses USD, GHS and EUR. Staff choose the currency explicitly on each quote and invoice; there is no per-customer default and the invoice form has no preselected currency.
+- A document keeps one currency from quote through invoice and payments. A job that needs several currencies gets one invoice per currency. Amounts are never converted or totalled across currencies; balances and dashboards list each currency separately.
+- Settings no longer has a default currency; quote, invoice and charge forms all open unselected (Evans, 2026-10-04). Cedi tax/levy display on USD/EUR invoices is out of scope for now.
+- Unresolved (client): margin comparison of USD/EUR quotes against GHS actuals; payments received in a currency other than the invoice's. These block dependent behaviour, not current work.

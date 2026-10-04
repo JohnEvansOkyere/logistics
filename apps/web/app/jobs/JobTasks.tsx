@@ -28,6 +28,7 @@ export function JobTasks({
   const [details, setDetails] = useState("");
   const [role, setRole] = useState<StaffRoleKey>("super_admin");
   const [dueDate, setDueDate] = useState("");
+  const [adding, setAdding] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -66,12 +67,24 @@ export function JobTasks({
       setTitle("");
       setDetails("");
       setDueDate("");
+      setAdding(false);
     });
   }
 
   return (
     <section className={styles.card} aria-labelledby="tasks-title">
-      <h2 id="tasks-title">Tasks and exceptions</h2>
+      <div className={styles.stepsHeading}>
+        <h2 id="tasks-title">Tasks and exceptions</h2>
+        {canEdit && !adding && (
+          <button
+            className={styles.secondaryButton}
+            onClick={() => setAdding(true)}
+            type="button"
+          >
+            Add task
+          </button>
+        )}
+      </div>
       {error && (
         <p className={styles.error} role="alert">
           {error}
@@ -81,48 +94,58 @@ export function JobTasks({
         <p className={styles.muted}>No tasks on this job.</p>
       )}
       {tasks && tasks.length > 0 && (
-        <ul className={styles.list}>
+        <ul className={styles.itemList}>
           {tasks.map((task) => (
             <li key={task.id}>
-              <strong>{task.title}</strong> · {taskKindLabels[task.kind]} ·{" "}
-              {roleLabels[task.assignedRole]}
-              {task.dueDate ? ` · due ${task.dueDate}` : ""}
-              {task.details ? ` — ${task.details}` : ""}
-              {task.status === "done" ? (
-                <span className={styles.muted}>
-                  {" "}
-                  · done
-                  {task.completionNote ? `: ${task.completionNote}` : ""}
+              <div>
+                <span>
+                  {taskKindLabels[task.kind]}
+                  {task.status === "done" ? " · done" : ""}
                 </span>
-              ) : (
-                canEdit && (
-                  <>
-                    {" "}
-                    <button
-                      className={styles.secondaryButton}
-                      onClick={() =>
-                        void run(() =>
-                          completeJobTask(
-                            jobId,
-                            task.id,
-                            window.prompt("Completion note (optional)") ||
-                              undefined,
-                          ),
-                        )
-                      }
-                      type="button"
-                    >
-                      Mark done
-                    </button>
-                  </>
-                )
+                <strong>{task.title}</strong>
+                <small>
+                  {roleLabels[task.assignedRole]}
+                  {task.dueDate ? ` · due ${task.dueDate}` : ""}
+                  {task.details ? ` · ${task.details}` : ""}
+                  {task.completionNote ? ` · ${task.completionNote}` : ""}
+                </small>
+              </div>
+              {task.status !== "done" && canEdit && (
+                <button
+                  className={styles.textButton}
+                  onClick={() =>
+                    void run(() =>
+                      completeJobTask(
+                        jobId,
+                        task.id,
+                        window.prompt("Completion note (optional)") ||
+                          undefined,
+                      ),
+                    )
+                  }
+                  type="button"
+                >
+                  Mark done
+                </button>
               )}
             </li>
           ))}
         </ul>
       )}
-      {canEdit && (
-        <form className={styles.form} onSubmit={submit}>
+      {canEdit && adding && (
+        <form
+          className={`${styles.form} ${styles.quickUpdateForm}`}
+          onSubmit={submit}
+        >
+          <label className={styles.field}>
+            Title
+            <input
+              autoFocus
+              onChange={(event) => setTitle(event.target.value)}
+              required
+              value={title}
+            />
+          </label>
           <label className={styles.field}>
             Type
             <select
@@ -135,21 +158,6 @@ export function JobTasks({
                 </option>
               ))}
             </select>
-          </label>
-          <label className={styles.field}>
-            Title
-            <input
-              onChange={(event) => setTitle(event.target.value)}
-              required
-              value={title}
-            />
-          </label>
-          <label className={styles.field}>
-            Details (optional)
-            <input
-              onChange={(event) => setDetails(event.target.value)}
-              value={details}
-            />
           </label>
           <label className={styles.field}>
             Assigned to
@@ -172,9 +180,25 @@ export function JobTasks({
               value={dueDate}
             />
           </label>
-          <button className={styles.button} type="submit">
-            Add task
-          </button>
+          <label className={styles.field}>
+            Details (optional)
+            <input
+              onChange={(event) => setDetails(event.target.value)}
+              value={details}
+            />
+          </label>
+          <div className={styles.formActions}>
+            <button className={styles.button} type="submit">
+              Save
+            </button>
+            <button
+              className={styles.secondaryButton}
+              onClick={() => setAdding(false)}
+              type="button"
+            >
+              Cancel
+            </button>
+          </div>
         </form>
       )}
     </section>

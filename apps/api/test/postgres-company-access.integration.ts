@@ -120,7 +120,7 @@ test(
     );
 
     const otherRequest = await customerA(
-      "/api/v1/quote-requests/60000000-0000-4000-8000-000000000202/draft",
+      "/api/v1/quote-requests/60000000-0000-4000-8000-000000000202",
     );
     assert.equal(otherRequest.status, 404);
 
@@ -140,25 +140,6 @@ test(
     });
     assert.equal(departmentRequests.status, 200);
     assert.equal(((await departmentRequests.json()) as unknown[]).length, 2);
-
-    const departmentDraft = await fetch(
-      `${baseUrl}/api/v1/quote-requests/60000000-0000-4000-8000-000000000201/draft`,
-      { headers: { authorization: "Bearer pg-department" } },
-    );
-    assert.equal(departmentDraft.status, 403);
-
-    const departmentWrite = await fetch(
-      `${baseUrl}/api/v1/quote-requests/60000000-0000-4000-8000-000000000201/draft`,
-      {
-        method: "PUT",
-        headers: {
-          authorization: "Bearer pg-department",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ content: "Not permitted" }),
-      },
-    );
-    assert.equal(departmentWrite.status, 403);
 
     const departmentLink = await fetch(
       `${baseUrl}/api/v1/quote-requests/60000000-0000-4000-8000-000000000201/customer`,

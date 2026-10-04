@@ -107,16 +107,7 @@ export function NotificationLog() {
       <main className={styles.page}>
         <header className={styles.header}>
           <div>
-            <p className={styles.eyebrow}>SETTINGS</p>
             <h1 className={styles.title}>Customer messages</h1>
-            <p className={styles.muted}>
-              Everything sent to customers by email and SMS, and what happened
-              to it.{" "}
-              <Link className={styles.link} href="/settings/business">
-                Choose the channel in Business settings
-              </Link>
-              .
-            </p>
           </div>
         </header>
         {error && (
@@ -133,10 +124,8 @@ export function NotificationLog() {
               <strong>{overview.providers.sms}</strong>
             </p>
             {stubbed && (
-              <p className={styles.error}>
-                A sender shown as &quot;stub&quot; is not connected: nothing is
-                really sent by it. Set the email (SMTP) or Arkesel SMS
-                credentials in the API environment, as described in the README.
+              <p className={styles.error} role="status">
+                Not connected: nothing is really sent.
               </p>
             )}
             <div className={styles.actions}>

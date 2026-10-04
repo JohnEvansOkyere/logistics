@@ -92,13 +92,63 @@ export class JobsService {
     return job;
   }
 
-  /** The agreed milestone list for the job's service line, with recorded events. */
+  /** Manual updates plus current invoice and payment facts for the job. */
   async getTimeline(id: string, scope: JobScope) {
     const job = await this.get(id, scope);
+    const template = milestoneTemplates[job.serviceLine];
+    const events = await this.database.listMilestoneEvents(job.id);
+    if (template.some((item) => item.key === "customer_invoice_issued")) {
+      const [invoices, payments] = await Promise.all([
+        this.database.listInvoices(job.id),
+        this.database.listInvoicePayments(job.id),
+      ]);
+      const issued = invoices.filter(
+        (invoice) => invoice.status === "issued" && invoice.issuedAt,
+      );
+      const invoice = issued.sort((a, b) =>
+        (b.issuedAt ?? "").localeCompare(a.issuedAt ?? ""),
+      )[0];
+      if (invoice?.issuedAt) {
+        events.push({
+          id: `invoice:${invoice.id}`,
+          jobId: job.id,
+          milestoneKey: "customer_invoice_issued",
+          occurredAt: invoice.issuedAt,
+          recordedAt: invoice.issuedAt,
+          recordedBy: invoice.issuedBy ?? invoice.createdBy,
+          source: "system",
+          note: invoice.invoiceNumber,
+          correctionOf: null,
+        });
+      }
+      if (template.some((item) => item.key === "customer_payment_recorded")) {
+        const issuedIds = new Set(issued.map((item) => item.id));
+        const payment = payments
+          .filter((item) => issuedIds.has(item.invoiceId) && !item.reversal)
+          .sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))[0];
+        if (payment) {
+          events.push({
+            id: `payment:${payment.id}`,
+            jobId: job.id,
+            milestoneKey: "customer_payment_recorded",
+            occurredAt: payment.recordedAt,
+            recordedAt: payment.recordedAt,
+            recordedBy: payment.recordedBy,
+            source: "system",
+            note: null,
+            correctionOf: null,
+          });
+        }
+      }
+    }
     return {
       job,
-      template: milestoneTemplates[job.serviceLine],
-      events: await this.database.listMilestoneEvents(job.id),
+      template,
+      events: events.sort(
+        (a, b) =>
+          a.occurredAt.localeCompare(b.occurredAt) ||
+          a.recordedAt.localeCompare(b.recordedAt),
+      ),
     };
   }
 

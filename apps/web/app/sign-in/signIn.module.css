@@ -1,6 +1,6 @@
 .page {
   display: grid;
-  width: min(100% - 32px, 480px);
+  width: min(100% - 32px, 520px);
   min-height: 100vh;
   align-content: center;
   gap: 16px;
@@ -21,13 +21,13 @@
   border-radius: 12px;
   background: #fff;
   box-shadow: 0 5px 18px rgb(20 48 72 / 4%);
-  padding: 28px;
+  padding: 36px;
 }
 
 .eyebrow {
   margin: 0 0 8px;
   color: var(--brand-primary);
-  font-size: 0.66rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.1em;
 }
@@ -35,7 +35,8 @@
 .signInCard h1 {
   margin: 0;
   color: #152e47;
-  font-size: 1.65rem;
+  font-size: 1.9rem;
+  letter-spacing: -0.03em;
 }
 
 .description {
@@ -59,13 +60,13 @@
 }
 
 .form input {
-  min-height: 42px;
+  min-height: 52px;
   border: 1px solid #bdccd9;
-  border-radius: 7px;
-  padding: 9px 11px;
+  border-radius: 10px;
+  padding: 10px 14px;
   color: var(--brand-ink);
   font: inherit;
-  font-size: 0.82rem;
+  font-size: 1rem;
 }
 
 .form input:focus {
@@ -74,14 +75,14 @@
 }
 
 .form > button {
-  min-height: 42px;
+  min-height: 52px;
   border: 1px solid var(--brand-primary);
-  border-radius: 7px;
+  border-radius: 10px;
   background: var(--brand-primary);
   color: #fff;
   padding: 9px 12px;
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
 }

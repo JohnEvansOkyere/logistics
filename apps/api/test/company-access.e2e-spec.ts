@@ -9,7 +9,6 @@ import {
   TEST_CUSTOMER_B_TOKEN,
   TEST_SUPER_ADMIN_ID,
   TEST_SUPER_ADMIN_TOKEN,
-  TEST_MATCHING_TOKEN,
   TEST_MATCHING_USER_ID,
   TEST_UNASSIGNED_TOKEN,
   TEST_UNASSIGNED_USER_ID,
@@ -48,11 +47,28 @@ before(async () => {
 
   companyA = await createCompany("Northstar Synthetic Ltd");
   companyB = await createCompany("Southwind Synthetic Ltd");
+  const profile = await call(
+    `/api/v1/customers/${companyA}`,
+    TEST_SUPER_ADMIN_TOKEN,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        companyName: "Northstar Synthetic Ltd",
+        tradingName: "Northstar Cargo",
+        registrationNumber: "SYNTH-101",
+        taxNumber: "SYNTH-TIN-101",
+        phone: "+233 20 000 0101",
+        companyEmail: "office@northstar.example.test",
+        website: "https://northstar.example.test",
+        businessAddress: "Synthetic Road, Tema, Ghana",
+        billingAddress: "Synthetic Box 1, Tema, Ghana",
+        country: "Ghana",
+      }),
+    },
+  );
+  assert.equal(profile.status, 200);
   requestA = await createRequest("northstar@example.test", companyA);
   requestB = await createRequest("southwind@example.test", companyB);
-  await assignRequest(requestA, "air_import_rep");
-  await saveDraft(requestA, "Northstar internal draft");
-  await saveDraft(requestB, "Southwind internal draft");
   await grantMembership(TEST_CUSTOMER_A_ID, companyA);
   await grantMembership(TEST_CUSTOMER_B_ID, companyB);
 });
@@ -71,15 +87,6 @@ function call(
   headers.set("authorization", `Bearer ${token}`);
   if (init.body) headers.set("content-type", "application/json");
   return fetch(`${baseUrl}${path}`, { ...init, headers });
-}
-
-async function assignRequest(requestId: string, roleKey: string | null) {
-  const response = await call(
-    `/api/v1/quote-requests/${requestId}/assignment`,
-    TEST_SUPER_ADMIN_TOKEN,
-    { method: "PATCH", body: JSON.stringify({ roleKey }) },
-  );
-  assert.equal(response.status, 200);
 }
 
 async function createCompany(companyName: string): Promise<string> {
@@ -119,15 +126,6 @@ async function createRequest(
   return requestId;
 }
 
-async function saveDraft(requestId: string, content: string): Promise<void> {
-  const response = await call(
-    `/api/v1/quote-requests/${requestId}/draft`,
-    TEST_SUPER_ADMIN_TOKEN,
-    { method: "PUT", body: JSON.stringify({ content }) },
-  );
-  assert.equal(response.status, 200);
-}
-
 async function grantMembership(
   userId: string,
   companyId: string,
@@ -140,7 +138,7 @@ async function grantMembership(
   assert.equal(response.status, 201);
 }
 
-test("customer memberships scope customer searches, records, requests and drafts", async () => {
+test("customer memberships scope customer searches, records and requests", async () => {
   const customers = await call("/api/v1/customers", TEST_CUSTOMER_A_TOKEN);
   assert.equal(customers.status, 200);
   assert.deepEqual(
@@ -159,6 +157,23 @@ test("customer memberships scope customer searches, records, requests and drafts
     TEST_CUSTOMER_A_TOKEN,
   );
   assert.equal(ownCompany.status, 200);
+  const ownProfile = (await ownCompany.json()) as {
+    tradingName: string | null;
+    taxNumber: string | null;
+    businessAddress: string | null;
+  };
+  assert.equal(ownProfile.tradingName, "Northstar Cargo");
+  assert.equal(ownProfile.taxNumber, "SYNTH-TIN-101");
+  assert.equal(ownProfile.businessAddress, "Synthetic Road, Tema, Ghana");
+  assert.equal(
+    (
+      await call(`/api/v1/customers/${companyA}`, TEST_CUSTOMER_A_TOKEN, {
+        method: "PATCH",
+        body: JSON.stringify({ companyName: "Spoof" }),
+      })
+    ).status,
+    403,
+  );
   const knownOtherCompany = await call(
     `/api/v1/customers/${companyB}`,
     TEST_CUSTOMER_A_TOKEN,
@@ -184,15 +199,6 @@ test("customer memberships scope customer searches, records, requests and drafts
       .status,
     404,
   );
-  assert.equal(
-    (
-      await call(
-        `/api/v1/quote-requests/${requestB}/draft`,
-        TEST_CUSTOMER_A_TOKEN,
-      )
-    ).status,
-    404,
-  );
 
   const staffCanSearchBoth = await call(
     "/api/v1/customers",
@@ -202,54 +208,7 @@ test("customer memberships scope customer searches, records, requests and drafts
   assert.equal(((await staffCanSearchBoth.json()) as unknown[]).length, 2);
 });
 
-test("super admin can assign, reassign, and clear a department assignment", async () => {
-  const assigned = await call(
-    `/api/v1/quote-requests/${requestB}/assignment`,
-    TEST_SUPER_ADMIN_TOKEN,
-    { method: "PATCH", body: JSON.stringify({ roleKey: "sea_export_rep" }) },
-  );
-  assert.equal(assigned.status, 200);
-  assert.deepEqual(await assigned.json(), { roleKey: "sea_export_rep" });
-
-  const current = await call(
-    `/api/v1/quote-requests/${requestB}/assignment`,
-    TEST_SUPER_ADMIN_TOKEN,
-  );
-  assert.deepEqual(await current.json(), { roleKey: "sea_export_rep" });
-
-  const cleared = await call(
-    `/api/v1/quote-requests/${requestB}/assignment`,
-    TEST_SUPER_ADMIN_TOKEN,
-    { method: "PATCH", body: JSON.stringify({ roleKey: null }) },
-  );
-  assert.equal(cleared.status, 200);
-  assert.deepEqual(await cleared.json(), { roleKey: null });
-
-  const invalidRole = await call(
-    `/api/v1/quote-requests/${requestB}/assignment`,
-    TEST_SUPER_ADMIN_TOKEN,
-    {
-      method: "PATCH",
-      body: JSON.stringify({ roleKey: "operations_manager" }),
-    },
-  );
-  assert.equal(invalidRole.status, 400);
-  assert.equal(
-    (
-      await call(
-        `/api/v1/quote-requests/${requestB}/assignment`,
-        TEST_UNASSIGNED_TOKEN,
-        {
-          method: "PATCH",
-          body: JSON.stringify({ roleKey: "sea_export_rep" }),
-        },
-      )
-    ).status,
-    403,
-  );
-});
-
-test("department staff can read shared records but only the assigned role can read or edit a draft", async () => {
+test("department staff can read shared records but cannot create or change them", async () => {
   const customers = await call("/api/v1/customers", TEST_UNASSIGNED_TOKEN);
   assert.equal(customers.status, 200);
   assert.equal(((await customers.json()) as unknown[]).length, 2);
@@ -263,64 +222,6 @@ test("department staff can read shared records but only the assigned role can re
     200,
   );
 
-  assert.equal(
-    (
-      await call(
-        `/api/v1/quote-requests/${requestA}/draft`,
-        TEST_UNASSIGNED_TOKEN,
-      )
-    ).status,
-    403,
-  );
-  const matchingDraft = await call(
-    `/api/v1/quote-requests/${requestA}/draft`,
-    TEST_MATCHING_TOKEN,
-  );
-  assert.equal(matchingDraft.status, 200);
-  assert.equal(
-    (await matchingDraft.json()).draft.content,
-    "Northstar internal draft",
-  );
-  const savedByRep = await call(
-    `/api/v1/quote-requests/${requestA}/draft`,
-    TEST_MATCHING_TOKEN,
-    {
-      method: "PUT",
-      body: JSON.stringify({ content: "Revised by assigned rep" }),
-    },
-  );
-  assert.equal(savedByRep.status, 200);
-  assert.equal(
-    (
-      await call(
-        `/api/v1/quote-requests/${requestA}/draft`,
-        TEST_UNASSIGNED_TOKEN,
-      )
-    ).status,
-    403,
-  );
-  assert.equal(
-    (
-      await call(
-        `/api/v1/quote-requests/${requestA}/assignment`,
-        TEST_UNASSIGNED_TOKEN,
-      )
-    ).status,
-    200,
-  );
-  assert.equal(
-    (
-      await call(
-        `/api/v1/quote-requests/${requestA}/assignment`,
-        TEST_MATCHING_TOKEN,
-        {
-          method: "PATCH",
-          body: JSON.stringify({ roleKey: "sea_import_rep" }),
-        },
-      )
-    ).status,
-    403,
-  );
   assert.equal(
     (
       await call("/api/v1/customers", TEST_UNASSIGNED_TOKEN, {
@@ -357,16 +258,6 @@ test("department staff can read shared records but only the assigned role can re
           method: "PATCH",
           body: JSON.stringify({ customerCompanyId: companyA }),
         },
-      )
-    ).status,
-    403,
-  );
-  assert.equal(
-    (
-      await call(
-        `/api/v1/quote-requests/${requestA}/draft`,
-        TEST_UNASSIGNED_TOKEN,
-        { method: "PUT", body: JSON.stringify({ content: "Unauthorized" }) },
       )
     ).status,
     403,

@@ -11,10 +11,6 @@ import styles from "./customerDirectory.module.css";
 export function CustomerCreateForm() {
   const { status, isSuperAdmin } = useStaffAccess();
   const router = useRouter();
-  const [companyName, setCompanyName] = useState("");
-  const [contactName, setContactName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -45,11 +41,23 @@ export function CustomerCreateForm() {
     setSaving(true);
     setError("");
     try {
+      const form = new FormData(event.currentTarget);
+      const value = (name: string) => String(form.get(name) ?? "");
       const customer = await createCustomer({
-        companyName,
-        contactName,
-        email,
-        phone: phone.trim() || undefined,
+        companyName: value("companyName"),
+        tradingName: value("tradingName"),
+        registrationNumber: value("registrationNumber"),
+        taxNumber: value("taxNumber"),
+        companyPhone: value("companyPhone"),
+        companyEmail: value("companyEmail"),
+        website: value("website"),
+        businessAddress: value("businessAddress"),
+        billingAddress: value("billingAddress"),
+        country: value("country"),
+        contactName: value("contactName"),
+        contactRole: value("contactRole"),
+        email: value("email"),
+        phone: value("phone"),
       });
       router.push(`/customers/${customer.id}`);
     } catch (cause) {
@@ -65,54 +73,144 @@ export function CustomerCreateForm() {
 
   return (
     <form className={styles.customerForm} onSubmit={submit}>
-      <div className={styles.customerFormFields}>
-        <label className={styles.customerFormField} htmlFor="company-name">
-          Company name <span aria-hidden="true">*</span>
-          <input
-            autoComplete="organization"
-            id="company-name"
-            maxLength={160}
-            onChange={(event) => setCompanyName(event.target.value)}
-            required
-            value={companyName}
-          />
-        </label>
-        <label className={styles.customerFormField} htmlFor="contact-name">
-          Primary contact <span aria-hidden="true">*</span>
-          <input
-            autoComplete="name"
-            id="contact-name"
-            maxLength={160}
-            onChange={(event) => setContactName(event.target.value)}
-            required
-            value={contactName}
-          />
-        </label>
-        <label className={styles.customerFormField} htmlFor="contact-email">
-          Contact email <span aria-hidden="true">*</span>
-          <input
-            autoComplete="email"
-            id="contact-email"
-            maxLength={254}
-            onChange={(event) => setEmail(event.target.value)}
-            required
-            type="email"
-            value={email}
-          />
-        </label>
-        <label className={styles.customerFormField} htmlFor="contact-phone">
-          Contact phone (for SMS messages)
-          <input
-            autoComplete="tel"
-            id="contact-phone"
-            maxLength={40}
-            onChange={(event) => setPhone(event.target.value)}
-            placeholder="024 405 8592"
-            type="tel"
-            value={phone}
-          />
-        </label>
-      </div>
+      <section className={styles.customerFormSection}>
+        <h2>Company details</h2>
+        <div className={styles.customerFormFields}>
+          <label className={styles.customerFormField} htmlFor="company-name">
+            Registered / legal company name <span aria-hidden="true">*</span>
+            <input
+              autoComplete="organization"
+              id="company-name"
+              maxLength={160}
+              name="companyName"
+              required
+            />
+          </label>
+          <label className={styles.customerFormField} htmlFor="trading-name">
+            Trading name (if different)
+            <input id="trading-name" maxLength={160} name="tradingName" />
+          </label>
+          <label
+            className={styles.customerFormField}
+            htmlFor="registration-number"
+          >
+            Company registration number
+            <input
+              id="registration-number"
+              maxLength={120}
+              name="registrationNumber"
+            />
+          </label>
+          <label className={styles.customerFormField} htmlFor="tax-number">
+            Tax / TIN number
+            <input id="tax-number" maxLength={120} name="taxNumber" />
+          </label>
+          <label className={styles.customerFormField} htmlFor="company-phone">
+            Company phone
+            <input
+              autoComplete="tel"
+              id="company-phone"
+              maxLength={40}
+              name="companyPhone"
+              type="tel"
+            />
+          </label>
+          <label className={styles.customerFormField} htmlFor="company-email">
+            General company email
+            <input
+              autoComplete="email"
+              id="company-email"
+              maxLength={254}
+              name="companyEmail"
+              type="email"
+            />
+          </label>
+          <label className={styles.customerFormField} htmlFor="website">
+            Website
+            <input
+              autoComplete="url"
+              id="website"
+              maxLength={300}
+              name="website"
+              type="text"
+            />
+          </label>
+          <label className={styles.customerFormField} htmlFor="country">
+            Country
+            <input autoComplete="country-name" id="country" name="country" />
+          </label>
+        </div>
+      </section>
+
+      <section className={styles.customerFormSection}>
+        <h2>Addresses</h2>
+        <div className={styles.customerFormFields}>
+          <label
+            className={styles.customerFormField}
+            htmlFor="business-address"
+          >
+            Business / registered address
+            <textarea
+              autoComplete="street-address"
+              id="business-address"
+              maxLength={1000}
+              name="businessAddress"
+              rows={3}
+            />
+          </label>
+          <label className={styles.customerFormField} htmlFor="billing-address">
+            Billing address (if different)
+            <textarea
+              id="billing-address"
+              maxLength={1000}
+              name="billingAddress"
+              rows={3}
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className={styles.customerFormSection}>
+        <h2>Primary contact</h2>
+        <div className={styles.customerFormFields}>
+          <label className={styles.customerFormField} htmlFor="contact-name">
+            Full name <span aria-hidden="true">*</span>
+            <input
+              autoComplete="name"
+              id="contact-name"
+              maxLength={160}
+              name="contactName"
+              required
+            />
+          </label>
+          <label className={styles.customerFormField} htmlFor="contact-role">
+            Job title / responsibility
+            <input id="contact-role" maxLength={120} name="contactRole" />
+          </label>
+          <label className={styles.customerFormField} htmlFor="contact-email">
+            Contact email <span aria-hidden="true">*</span>
+            <input
+              autoComplete="email"
+              id="contact-email"
+              maxLength={254}
+              name="email"
+              required
+              type="email"
+            />
+          </label>
+          <label className={styles.customerFormField} htmlFor="contact-phone">
+            Contact phone (for SMS messages)
+            <input
+              autoComplete="tel"
+              id="contact-phone"
+              maxLength={40}
+              name="phone"
+              placeholder="024 405 8592"
+              type="tel"
+            />
+          </label>
+        </div>
+      </section>
 
       {error && (
         <p className={styles.formError} role="alert">

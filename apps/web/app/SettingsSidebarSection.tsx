@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { NavIcon } from "./NavIcon";
 
 export function SettingsSidebarSection({
   active = false,
@@ -15,11 +16,10 @@ export function SettingsSidebarSection({
           className={`nav-link${active ? " active" : ""}`}
           href="/settings"
           aria-current={active ? "page" : undefined}
+          title="Settings"
         >
-          <span className="nav-icon" aria-hidden="true">
-            ⚙
-          </span>
-          Settings
+          <NavIcon name="settings" />
+          <span className="nav-label">Settings</span>
         </Link>
       </nav>
     </section>

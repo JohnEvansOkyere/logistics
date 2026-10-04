@@ -4,8 +4,14 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useStaffAccess } from "../../auth/useStaffAccess";
-import { addContact, getCustomer, updateContact } from "../customerApi";
+import {
+  addContact,
+  getCustomer,
+  updateContact,
+  updateCustomer,
+} from "../customerApi";
 import type { CustomerCompany } from "../customerApi";
+import type { CustomerContactUpdate } from "@bjh/contracts";
 import { listQuoteRequests } from "../../quotations/quoteRequestApi";
 import type { QuoteRequest } from "../../quotations/quoteRequestApi";
 import styles from "./customerProfile.module.css";
@@ -25,10 +31,14 @@ export function CustomerProfileDetail() {
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newPhone, setNewPhone] = useState("");
+  const [newRole, setNewRole] = useState("");
+  const [newPrimary, setNewPrimary] = useState(false);
+  const [editingCompany, setEditingCompany] = useState(false);
+  const [profileError, setProfileError] = useState("");
 
   async function changeContact(
     contactId: string,
-    update: { phone: string; notify: boolean },
+    update: CustomerContactUpdate & { notify: boolean },
   ) {
     setContactError("");
     try {
@@ -43,19 +53,25 @@ export function CustomerProfileDetail() {
     }
   }
 
-  async function submitContact(event: React.FormEvent) {
+  async function submitContact(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const addContactDetails = event.currentTarget.closest("details");
     setContactError("");
     try {
       await addContact(customerId, {
         name: newName.trim(),
         email: newEmail.trim(),
-        phone: newPhone.trim() || undefined,
+        phone: newPhone.trim() || null,
+        role: newRole.trim() || null,
+        isPrimary: newPrimary,
       });
       setNewName("");
       setNewEmail("");
       setNewPhone("");
+      setNewRole("");
+      setNewPrimary(false);
       setCustomer(await getCustomer(customerId));
+      if (addContactDetails) addContactDetails.open = false;
     } catch (cause) {
       setContactError(
         cause instanceof Error
@@ -63,6 +79,53 @@ export function CustomerProfileDetail() {
           : "The contact could not be added",
       );
     }
+  }
+
+  async function saveCompany(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget);
+    const value = (name: string) => String(values.get(name) ?? "");
+    setProfileError("");
+    try {
+      setCustomer(
+        await updateCustomer(customerId, {
+          companyName: value("companyName"),
+          tradingName: value("tradingName"),
+          registrationNumber: value("registrationNumber"),
+          taxNumber: value("taxNumber"),
+          phone: value("phone"),
+          companyEmail: value("companyEmail"),
+          website: value("website"),
+          businessAddress: value("businessAddress"),
+          billingAddress: value("billingAddress"),
+          country: value("country"),
+        }),
+      );
+      setEditingCompany(false);
+    } catch (cause) {
+      setProfileError(
+        cause instanceof Error
+          ? cause.message
+          : "The company profile could not be saved",
+      );
+    }
+  }
+
+  async function submitContactUpdate(
+    event: React.FormEvent<HTMLFormElement>,
+    contactId: string,
+  ) {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget);
+    const value = (name: string) => String(values.get(name) ?? "");
+    await changeContact(contactId, {
+      name: value("name"),
+      role: value("role"),
+      email: value("email"),
+      phone: value("phone"),
+      notify: values.has("notify"),
+      isPrimary: values.has("isPrimary"),
+    });
   }
 
   useEffect(() => {
@@ -125,13 +188,8 @@ export function CustomerProfileDetail() {
 
       <header className={styles.pageHeader}>
         <div>
-          <p className={styles.eyebrow}>STAFF WORKSPACE · LOCAL ENGINE</p>
           <h1>{customer?.companyName ?? "Customer profile"}</h1>
-          <p className={styles.description}>
-            Saved company and contact details.
-          </p>
         </div>
-        <span className={styles.sampleBadge}>LOCAL RECORD</span>
       </header>
 
       {loadState === "loading" && (
@@ -151,6 +209,170 @@ export function CustomerProfileDetail() {
         <>
           <section
             className={styles.contactCard}
+            aria-labelledby="company-title"
+          >
+            <div className={styles.cardHeading}>
+              <div>
+                <p className={styles.sectionEyebrow}>CLIENT RECORD</p>
+                <h2 id="company-title">Company details</h2>
+              </div>
+              {isSuperAdmin && !editingCompany && (
+                <button onClick={() => setEditingCompany(true)} type="button">
+                  Edit company details
+                </button>
+              )}
+            </div>
+            {profileError && <p role="alert">{profileError}</p>}
+            {editingCompany ? (
+              <form className={styles.profileForm} onSubmit={saveCompany}>
+                <div className={styles.profileFields}>
+                  <label className={styles.profileField}>
+                    Registered / legal company name
+                    <input
+                      defaultValue={customer.companyName}
+                      maxLength={160}
+                      name="companyName"
+                      required
+                    />
+                  </label>
+                  <label className={styles.profileField}>
+                    Trading name
+                    <input
+                      defaultValue={customer.tradingName ?? ""}
+                      maxLength={160}
+                      name="tradingName"
+                    />
+                  </label>
+                  <label className={styles.profileField}>
+                    Company registration number
+                    <input
+                      defaultValue={customer.registrationNumber ?? ""}
+                      maxLength={120}
+                      name="registrationNumber"
+                    />
+                  </label>
+                  <label className={styles.profileField}>
+                    Tax / TIN number
+                    <input
+                      defaultValue={customer.taxNumber ?? ""}
+                      maxLength={120}
+                      name="taxNumber"
+                    />
+                  </label>
+                  <label className={styles.profileField}>
+                    Company phone
+                    <input
+                      defaultValue={customer.phone ?? ""}
+                      maxLength={40}
+                      name="phone"
+                      type="tel"
+                    />
+                  </label>
+                  <label className={styles.profileField}>
+                    General company email
+                    <input
+                      defaultValue={customer.companyEmail ?? ""}
+                      maxLength={254}
+                      name="companyEmail"
+                      type="email"
+                    />
+                  </label>
+                  <label className={styles.profileField}>
+                    Website
+                    <input
+                      defaultValue={customer.website ?? ""}
+                      maxLength={300}
+                      name="website"
+                      type="text"
+                    />
+                  </label>
+                  <label className={styles.profileField}>
+                    Country
+                    <input
+                      defaultValue={customer.country ?? ""}
+                      maxLength={100}
+                      name="country"
+                    />
+                  </label>
+                  <label className={styles.profileField}>
+                    Business / registered address
+                    <textarea
+                      defaultValue={customer.businessAddress ?? ""}
+                      maxLength={1000}
+                      name="businessAddress"
+                      rows={3}
+                    />
+                  </label>
+                  <label className={styles.profileField}>
+                    Billing address (if different)
+                    <textarea
+                      defaultValue={customer.billingAddress ?? ""}
+                      maxLength={1000}
+                      name="billingAddress"
+                      rows={3}
+                    />
+                  </label>
+                </div>
+                <div className={styles.profileActions}>
+                  <button
+                    onClick={() => setEditingCompany(false)}
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit">Save company details</button>
+                </div>
+              </form>
+            ) : (
+              <dl className={styles.companyGrid}>
+                <div>
+                  <dt>Registered / legal name</dt>
+                  <dd>{customer.companyName}</dd>
+                </div>
+                <div>
+                  <dt>Trading name</dt>
+                  <dd>{customer.tradingName ?? "Not recorded"}</dd>
+                </div>
+                <div>
+                  <dt>Company registration number</dt>
+                  <dd>{customer.registrationNumber ?? "Not recorded"}</dd>
+                </div>
+                <div>
+                  <dt>Tax / TIN number</dt>
+                  <dd>{customer.taxNumber ?? "Not recorded"}</dd>
+                </div>
+                <div>
+                  <dt>Company phone</dt>
+                  <dd>{customer.phone ?? "Not recorded"}</dd>
+                </div>
+                <div>
+                  <dt>General company email</dt>
+                  <dd>{customer.companyEmail ?? "Not recorded"}</dd>
+                </div>
+                <div>
+                  <dt>Website</dt>
+                  <dd>{customer.website ?? "Not recorded"}</dd>
+                </div>
+                <div>
+                  <dt>Country</dt>
+                  <dd>{customer.country ?? "Not recorded"}</dd>
+                </div>
+                <div>
+                  <dt>Business / registered address</dt>
+                  <dd>{customer.businessAddress ?? "Not recorded"}</dd>
+                </div>
+                <div>
+                  <dt>Billing address</dt>
+                  <dd>
+                    {customer.billingAddress ?? "Same as business address"}
+                  </dd>
+                </div>
+              </dl>
+            )}
+          </section>
+
+          <section
+            className={styles.contactCard}
             aria-labelledby="contact-title"
           >
             <div className={styles.cardHeading}>
@@ -163,7 +385,11 @@ export function CustomerProfileDetail() {
             <dl className={styles.contactGrid}>
               {customer.contacts.map((contact) => (
                 <div key={contact.id}>
-                  <dt>{contact.name}</dt>
+                  <dt>
+                    {contact.name}
+                    {contact.isPrimary ? " · Primary contact" : ""}
+                  </dt>
+                  {contact.role && <dd>{contact.role}</dd>}
                   <dd>{contact.email}</dd>
                   <dd>{contact.phone ?? "No phone number"}</dd>
                   <dd>
@@ -173,36 +399,69 @@ export function CustomerProfileDetail() {
                   </dd>
                   {isSuperAdmin && (
                     <dd>
-                      <button
-                        onClick={() =>
-                          void changeContact(contact.id, {
-                            phone: contact.phone ?? "",
-                            notify: !contact.notify,
-                          })
-                        }
-                        type="button"
-                      >
-                        {contact.notify
-                          ? "Switch messages off"
-                          : "Switch messages on"}
-                      </button>{" "}
-                      <button
-                        onClick={() => {
-                          const phone = window.prompt(
-                            "Phone number for SMS (leave empty to remove)",
-                            contact.phone ?? "",
-                          );
-                          if (phone !== null) {
-                            void changeContact(contact.id, {
-                              phone,
-                              notify: contact.notify,
-                            });
+                      <details>
+                        <summary>Edit contact</summary>
+                        <form
+                          className={styles.profileForm}
+                          onSubmit={(event) =>
+                            void submitContactUpdate(event, contact.id)
                           }
-                        }}
-                        type="button"
-                      >
-                        Change phone
-                      </button>
+                        >
+                          <label className={styles.profileField}>
+                            Full name
+                            <input
+                              defaultValue={contact.name}
+                              maxLength={160}
+                              name="name"
+                              required
+                            />
+                          </label>
+                          <label className={styles.profileField}>
+                            Job title / responsibility
+                            <input
+                              defaultValue={contact.role ?? ""}
+                              maxLength={120}
+                              name="role"
+                            />
+                          </label>
+                          <label className={styles.profileField}>
+                            Email
+                            <input
+                              defaultValue={contact.email}
+                              maxLength={254}
+                              name="email"
+                              required
+                              type="email"
+                            />
+                          </label>
+                          <label className={styles.profileField}>
+                            Phone
+                            <input
+                              defaultValue={contact.phone ?? ""}
+                              maxLength={40}
+                              name="phone"
+                              type="tel"
+                            />
+                          </label>
+                          <label>
+                            <input
+                              defaultChecked={contact.isPrimary}
+                              name="isPrimary"
+                              type="checkbox"
+                            />
+                            Primary contact
+                          </label>
+                          <label>
+                            <input
+                              defaultChecked={contact.notify}
+                              name="notify"
+                              type="checkbox"
+                            />
+                            Receives customer messages
+                          </label>
+                          <button type="submit">Save contact</button>
+                        </form>
+                      </details>
                     </dd>
                   )}
                 </div>
@@ -210,38 +469,58 @@ export function CustomerProfileDetail() {
             </dl>
             {contactError && <p role="alert">{contactError}</p>}
             {isSuperAdmin && (
-              <form onSubmit={submitContact}>
-                <h3>Add a contact</h3>
-                <label>
-                  Name{" "}
-                  <input
-                    maxLength={160}
-                    onChange={(event) => setNewName(event.target.value)}
-                    required
-                    value={newName}
-                  />
-                </label>{" "}
-                <label>
-                  Email{" "}
-                  <input
-                    maxLength={254}
-                    onChange={(event) => setNewEmail(event.target.value)}
-                    required
-                    type="email"
-                    value={newEmail}
-                  />
-                </label>{" "}
-                <label>
-                  Phone (optional){" "}
-                  <input
-                    maxLength={40}
-                    onChange={(event) => setNewPhone(event.target.value)}
-                    type="tel"
-                    value={newPhone}
-                  />
-                </label>{" "}
-                <button type="submit">Add contact</button>
-              </form>
+              <details className={styles.addContactDetails}>
+                <summary>Add another contact</summary>
+                <form className={styles.profileForm} onSubmit={submitContact}>
+                  <div className={styles.profileFields}>
+                    <label className={styles.profileField}>
+                      Full name
+                      <input
+                        maxLength={160}
+                        onChange={(event) => setNewName(event.target.value)}
+                        required
+                        value={newName}
+                      />
+                    </label>
+                    <label className={styles.profileField}>
+                      Job title / responsibility
+                      <input
+                        maxLength={120}
+                        onChange={(event) => setNewRole(event.target.value)}
+                        value={newRole}
+                      />
+                    </label>
+                    <label className={styles.profileField}>
+                      Email
+                      <input
+                        maxLength={254}
+                        onChange={(event) => setNewEmail(event.target.value)}
+                        required
+                        type="email"
+                        value={newEmail}
+                      />
+                    </label>
+                    <label className={styles.profileField}>
+                      Phone (optional)
+                      <input
+                        maxLength={40}
+                        onChange={(event) => setNewPhone(event.target.value)}
+                        type="tel"
+                        value={newPhone}
+                      />
+                    </label>
+                  </div>
+                  <label className={styles.profileCheck}>
+                    <input
+                      checked={newPrimary}
+                      onChange={(event) => setNewPrimary(event.target.checked)}
+                      type="checkbox"
+                    />
+                    Make primary contact
+                  </label>
+                  <button type="submit">Save contact</button>
+                </form>
+              </details>
             )}
           </section>
 
@@ -279,9 +558,9 @@ export function CustomerProfileDetail() {
                           {request.message}
                         </Link>
                         <p>
-                          {request.quoteDraftRevisionCount > 0
-                            ? `Quote draft · ${request.quoteDraftRevisionCount} ${request.quoteDraftRevisionCount === 1 ? "revision" : "revisions"}`
-                            : "No quote draft saved"}
+                          {request.quoteId
+                            ? `Quote ${request.quoteNumber ?? "in draft"} · ${request.quoteStatus === "issued" ? "issued" : "being prepared"}`
+                            : "No quote prepared yet"}
                         </p>
                       </li>
                     ))}

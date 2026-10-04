@@ -5,6 +5,7 @@ import type { FormEvent } from "react";
 import { paymentMethodKeys } from "@bjh/contracts";
 import type { PaymentMethod } from "@bjh/contracts";
 import { formatMoney, toMinor } from "../quotes/quoteApi";
+import { popularCurrencies } from "../settings/business/BusinessSettingsForm";
 import { getSettings } from "../settings/business/settingsApi";
 import {
   createInvoice,
@@ -69,7 +70,10 @@ export function JobInvoices({
   const [invoices, setInvoices] = useState<Invoice[] | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [currency, setCurrency] = useState("GHS");
+  const [currency, setCurrency] = useState("");
+  const [configuredCurrencies, setConfiguredCurrencies] = useState<string[]>(
+    [],
+  );
   const [dueDate, setDueDate] = useState("");
   const [invoiceNotes, setInvoiceNotes] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
@@ -81,7 +85,7 @@ export function JobInvoices({
   const [reference, setReference] = useState("");
   const [evidence, setEvidence] = useState("");
   const [paymentNote, setPaymentNote] = useState("");
-  const [reason, setReason] = useState("");
+  const [adding, setAdding] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -102,7 +106,7 @@ export function JobInvoices({
     getSettings()
       .then((result) => {
         if (result.current)
-          setCurrency(result.current.settings.defaultCurrency);
+          setConfiguredCurrencies(result.current.settings.currencies);
       })
       .catch(() => undefined);
   }, [isStaff]);
@@ -167,6 +171,7 @@ export function JobInvoices({
         });
         setEditing(created.id);
         setLines([{ description: "", amount: "", taxable: true }]);
+        setAdding(false);
       },
       () => {
         setDueDate("");
@@ -176,6 +181,10 @@ export function JobInvoices({
   }
 
   function startFromCharges() {
+    if (!currency) {
+      setError("Choose the invoice currency first");
+      return;
+    }
     void run(async () => {
       const result = await createInvoiceFromCharges(jobId, {
         currency: currency.trim(),
@@ -184,6 +193,7 @@ export function JobInvoices({
       });
       setEditing(result.invoice.id);
       setLines(toDraftLines(result.invoice.lines));
+      setAdding(false);
       setNotice(
         result.skipped > 0
           ? `${result.skipped} charge(s) without an amount were left out.`
@@ -235,15 +245,9 @@ export function JobInvoices({
   }
 
   function askReason(action: (why: string) => Promise<unknown>) {
-    const why = reason.trim();
-    if (!why) {
-      setError("Give a reason first");
-      return;
-    }
-    void run(
-      () => action(why),
-      () => setReason(""),
-    );
+    const why = window.prompt("Reason")?.trim();
+    if (!why) return;
+    void run(() => action(why));
   }
 
   const evidenceName = (id: string | null) =>
@@ -254,14 +258,18 @@ export function JobInvoices({
 
   return (
     <section className={styles.card} aria-labelledby="invoices-title">
-      <h2 id="invoices-title">Invoices and payments</h2>
-      {isStaff && (
-        <p className={styles.muted}>
-          An issued invoice never changes: to correct one, void it (after
-          reversing any payments) and issue a new one. Payments are received
-          outside this system; record them here.
-        </p>
-      )}
+      <div className={styles.stepsHeading}>
+        <h2 id="invoices-title">Invoices and payments</h2>
+        {isStaff && canEdit && !adding && (
+          <button
+            className={styles.secondaryButton}
+            onClick={() => setAdding(true)}
+            type="button"
+          >
+            New invoice
+          </button>
+        )}
+      </div>
       {error && (
         <p className={styles.error} role="alert">
           {error}
@@ -272,27 +280,28 @@ export function JobInvoices({
         <p className={styles.muted}>No invoices yet.</p>
       )}
       {invoices && invoices.length > 0 && (
-        <ul className={styles.list}>
+        <ul className={styles.invoiceList}>
           {invoices.map((invoice) => (
             <li key={invoice.id}>
-              <strong>{invoice.invoiceNumber ?? "Draft invoice"}</strong> ·{" "}
-              <span className={styles.badge}>
-                {statusLabels[invoice.paymentStatus]}
-              </span>{" "}
-              · {formatMoney(invoice.totalMinor, invoice.currency)}
-              {invoice.status === "issued" && (
-                <>
-                  {" "}
-                  · paid {formatMoney(invoice.paidMinor, invoice.currency)} ·
-                  owing{" "}
-                  {formatMoney(invoice.outstandingMinor, invoice.currency)}
-                </>
-              )}
-              {invoice.dueDate ? ` · due ${invoice.dueDate}` : ""}
-              {invoice.status === "void" && invoice.voidReason
-                ? ` · void: ${invoice.voidReason}`
-                : ""}
-              <br />
+              <div>
+                <strong>{invoice.invoiceNumber ?? "Draft invoice"}</strong>{" "}
+                <span className={styles.badge}>
+                  {statusLabels[invoice.paymentStatus]}
+                </span>{" "}
+                {formatMoney(invoice.totalMinor, invoice.currency)}
+                {invoice.status === "issued" && (
+                  <>
+                    {" "}
+                    · paid {formatMoney(invoice.paidMinor, invoice.currency)} ·
+                    owing{" "}
+                    {formatMoney(invoice.outstandingMinor, invoice.currency)}
+                  </>
+                )}
+                {invoice.dueDate ? ` · due ${invoice.dueDate}` : ""}
+                {invoice.status === "void" && invoice.voidReason
+                  ? ` · void: ${invoice.voidReason}`
+                  : ""}
+              </div>
               <span className={styles.muted}>
                 {invoice.lines
                   .map(
@@ -308,74 +317,81 @@ export function JobInvoices({
                       )
                       .join(" · ")}`
                   : ""}
-              </span>{" "}
-              <button
-                className={styles.secondaryButton}
-                onClick={() => void openPdf(invoice.id)}
-                type="button"
-              >
-                {invoice.status === "draft" ? "Preview PDF (draft)" : "PDF"}
-              </button>
+              </span>
               {isStaff && invoice.payments && invoice.payments.length > 0 && (
-                <ul className={styles.list}>
-                  {invoice.payments.map((payment) => (
-                    <li key={payment.id}>
-                      {payment.reversal ? (
-                        <s>
-                          {formatMoney(payment.amountMinor, invoice.currency)}
-                        </s>
-                      ) : (
-                        formatMoney(payment.amountMinor, invoice.currency)
-                      )}{" "}
-                      · {methodLabels[payment.method]} · {payment.receivedOn}
-                      {payment.reference ? ` · ${payment.reference}` : ""}
-                      {payment.evidenceDocumentId
-                        ? ` · ${evidenceName(payment.evidenceDocumentId)}`
-                        : ""}
-                      {payment.reversal
-                        ? ` · reversed: ${payment.reversal.reason}`
-                        : ""}
-                      {payment.receiptNumber && (
-                        <>
-                          {" "}
-                          <button
-                            className={styles.secondaryButton}
-                            onClick={() =>
-                              void openReceipt(invoice.id, payment.id)
-                            }
-                            type="button"
-                          >
-                            Receipt {payment.receiptNumber}
-                          </button>
-                        </>
-                      )}
-                      {!payment.reversal && (
-                        <>
-                          {" "}
-                          <button
-                            className={styles.secondaryButton}
-                            onClick={() =>
-                              askReason((why) =>
-                                reverseInvoicePayment(
-                                  jobId,
-                                  invoice.id,
-                                  payment.id,
-                                  why,
-                                ),
-                              )
-                            }
-                            type="button"
-                          >
-                            Reverse (uses the reason below)
-                          </button>
-                        </>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+                <details>
+                  <summary className={styles.disclosureSummary}>
+                    Payments ({invoice.payments.length})
+                  </summary>
+                  <ul className={styles.list}>
+                    {invoice.payments.map((payment) => (
+                      <li key={payment.id}>
+                        {payment.reversal ? (
+                          <s>
+                            {formatMoney(payment.amountMinor, invoice.currency)}
+                          </s>
+                        ) : (
+                          formatMoney(payment.amountMinor, invoice.currency)
+                        )}{" "}
+                        · {methodLabels[payment.method]} · {payment.receivedOn}
+                        {payment.reference ? ` · ${payment.reference}` : ""}
+                        {payment.evidenceDocumentId
+                          ? ` · ${evidenceName(payment.evidenceDocumentId)}`
+                          : ""}
+                        {payment.reversal
+                          ? ` · reversed: ${payment.reversal.reason}`
+                          : ""}
+                        {payment.receiptNumber && (
+                          <>
+                            {" "}
+                            <button
+                              className={styles.textButton}
+                              onClick={() =>
+                                void openReceipt(invoice.id, payment.id)
+                              }
+                              type="button"
+                            >
+                              Receipt {payment.receiptNumber}
+                            </button>
+                          </>
+                        )}
+                        {!payment.reversal && (
+                          <>
+                            {" "}
+                            <button
+                              className={styles.textButton}
+                              onClick={() =>
+                                askReason((why) =>
+                                  reverseInvoicePayment(
+                                    jobId,
+                                    invoice.id,
+                                    payment.id,
+                                    why,
+                                  ),
+                                )
+                              }
+                              type="button"
+                            >
+                              Reverse
+                            </button>
+                          </>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
               )}
               {isStaff && canEdit && invoice.status === "draft" && (
                 <div className={styles.actions}>
+                  <button
+                    className={styles.button}
+                    onClick={() =>
+                      saveDraft(invoice, () => issueInvoice(jobId, invoice.id))
+                    }
+                    type="button"
+                  >
+                    Issue invoice
+                  </button>
                   <button
                     className={styles.secondaryButton}
                     onClick={() => {
@@ -387,13 +403,20 @@ export function JobInvoices({
                     Edit lines
                   </button>
                   <button
-                    className={styles.button}
+                    className={styles.textButton}
+                    onClick={() => void openPdf(invoice.id)}
+                    type="button"
+                  >
+                    Preview PDF
+                  </button>
+                  <button
+                    className={styles.textButton}
                     onClick={() =>
-                      saveDraft(invoice, () => issueInvoice(jobId, invoice.id))
+                      askReason((why) => voidInvoice(jobId, invoice.id, why))
                     }
                     type="button"
                   >
-                    Issue invoice
+                    Discard draft
                   </button>
                 </div>
               )}
@@ -492,47 +515,45 @@ export function JobInvoices({
                     </div>
                   </form>
                 )}
-              {isStaff && invoice.status === "issued" && (
+              {(invoice.status !== "draft" || !(isStaff && canEdit)) && (
                 <div className={styles.actions}>
-                  {invoice.outstandingMinor > 0 && (
+                  {isStaff &&
+                    invoice.status === "issued" &&
+                    invoice.outstandingMinor > 0 && (
+                      <button
+                        className={styles.secondaryButton}
+                        onClick={() => {
+                          setPaying(paying === invoice.id ? null : invoice.id);
+                          setAmount(
+                            (invoice.outstandingMinor / 100).toFixed(2),
+                          );
+                        }}
+                        type="button"
+                      >
+                        Record payment
+                      </button>
+                    )}
+                  <button
+                    className={styles.textButton}
+                    onClick={() => void openPdf(invoice.id)}
+                    type="button"
+                  >
+                    {invoice.status === "draft" ? "Preview PDF" : "PDF"}
+                  </button>
+                  {isStaff && canEdit && invoice.status === "issued" && (
                     <button
-                      className={styles.secondaryButton}
-                      onClick={() => {
-                        setPaying(paying === invoice.id ? null : invoice.id);
-                        setAmount((invoice.outstandingMinor / 100).toFixed(2));
-                      }}
-                      type="button"
-                    >
-                      Record payment
-                    </button>
-                  )}
-                  {canEdit && (
-                    <button
-                      className={styles.secondaryButton}
+                      className={styles.textButton}
                       onClick={() =>
                         askReason((why) => voidInvoice(jobId, invoice.id, why))
                       }
                       type="button"
                     >
-                      Void invoice (uses the reason below)
+                      Void invoice
                     </button>
                   )}
                 </div>
               )}
-              {isStaff && canEdit && invoice.status === "draft" && (
-                <>
-                  {" "}
-                  <button
-                    className={styles.secondaryButton}
-                    onClick={() =>
-                      askReason((why) => voidInvoice(jobId, invoice.id, why))
-                    }
-                    type="button"
-                  >
-                    Discard draft (uses the reason below)
-                  </button>
-                </>
-              )}
+
               {isStaff && paying === invoice.id && (
                 <form
                   className={styles.form}
@@ -613,25 +634,28 @@ export function JobInvoices({
       )}
       {isStaff && (
         <>
-          <label className={styles.field}>
-            Reason for a void, discard or payment reversal
-            <input
-              maxLength={500}
-              onChange={(event) => setReason(event.target.value)}
-              value={reason}
-            />
-          </label>
-          {canEdit && (
-            <form className={styles.form} onSubmit={submitNew}>
-              <h3>New invoice</h3>
+          {canEdit && adding && (
+            <form
+              className={`${styles.form} ${styles.quickUpdateForm}`}
+              onSubmit={submitNew}
+            >
               <label className={styles.field}>
                 Currency
-                <input
-                  maxLength={3}
+                <select
                   onChange={(event) => setCurrency(event.target.value)}
                   required
                   value={currency}
-                />
+                >
+                  <option value="">Choose a currency</option>
+                  {(configuredCurrencies.length > 0
+                    ? configuredCurrencies
+                    : popularCurrencies
+                  ).map((code) => (
+                    <option key={code} value={code}>
+                      {code}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className={styles.field}>
                 Due date (optional; the settings&apos; payment terms apply
@@ -650,16 +674,23 @@ export function JobInvoices({
                   value={invoiceNotes}
                 />
               </label>
-              <div className={styles.actions}>
-                <button className={styles.button} type="submit">
-                  Start blank draft
-                </button>
+              <div className={styles.formActions}>
                 <button
-                  className={styles.secondaryButton}
+                  className={styles.button}
                   onClick={startFromCharges}
                   type="button"
                 >
                   Start from job charges
+                </button>
+                <button className={styles.secondaryButton} type="submit">
+                  Start blank draft
+                </button>
+                <button
+                  className={styles.secondaryButton}
+                  onClick={() => setAdding(false)}
+                  type="button"
+                >
+                  Cancel
                 </button>
               </div>
             </form>

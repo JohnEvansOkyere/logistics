@@ -25,9 +25,10 @@ VALUES ('00000000-0000-4000-8000-0000000000b4', 'Synthetic Quotes Ltd');
 INSERT INTO app.quote (quote_id, service_line, customer_company_id, created_by)
 VALUES ('00000000-0000-4000-8000-0000000000c4', 'sea_import',
         '00000000-0000-4000-8000-0000000000b4', '00000000-0000-4000-8000-0000000000a4');
-INSERT INTO app.quote_version (version_id, quote_id, version_number, currency, title, created_by)
+INSERT INTO app.quote_version (version_id, quote_id, version_number, currency, title, size_labels, created_by)
 VALUES ('00000000-0000-4000-8000-0000000000d4', '00000000-0000-4000-8000-0000000000c4',
-        1, 'USD', 'Synthetic quotation', '00000000-0000-4000-8000-0000000000a4');
+        1, 'USD', 'Synthetic quotation', ARRAY['20ft', '40ft', '50ft'],
+        '00000000-0000-4000-8000-0000000000a4');
 
 SELECT extensions.throws_ok(
   $$INSERT INTO app.quote_version (quote_id, version_number, currency, title, created_by)
@@ -46,10 +47,10 @@ SELECT extensions.throws_ok(
 );
 
 SELECT extensions.lives_ok(
-  $$INSERT INTO app.quote_line (line_id, version_id, position, description, basis, amount_20ft_minor, amount_40ft_minor)
+  $$INSERT INTO app.quote_line (line_id, version_id, position, description, basis, size_amounts_minor)
     VALUES ('00000000-0000-4000-8000-0000000000e4', '00000000-0000-4000-8000-0000000000d4',
-            0, 'Port handling fee', 'at_cost', 25000, 50000)$$,
-  'a line can carry 20ft and 40ft amounts'
+            0, 'Port handling fee', 'at_cost', ARRAY[25000, 50000, 62000]::bigint[])$$,
+  'a line can carry amounts for quote-specific sizes'
 );
 SELECT extensions.lives_ok(
   $$INSERT INTO app.quote_line (version_id, position, description, basis, basis_note)
@@ -64,18 +65,18 @@ SELECT extensions.throws_ok(
   'a fixed-price line needs an amount'
 );
 SELECT extensions.throws_ok(
-  $$INSERT INTO app.quote_line (version_id, position, description, basis, amount_minor, amount_20ft_minor, amount_40ft_minor)
-    VALUES ('00000000-0000-4000-8000-0000000000d4', 2, 'Both forms', 'fixed', 100, 100, 100)$$,
+  $$INSERT INTO app.quote_line (version_id, position, description, basis, amount_minor, size_amounts_minor)
+    VALUES ('00000000-0000-4000-8000-0000000000d4', 2, 'Both forms', 'fixed', 100, ARRAY[100, 100, 100]::bigint[])$$,
   '23514',
   NULL,
   'a line cannot mix one amount with size amounts'
 );
 SELECT extensions.throws_ok(
-  $$INSERT INTO app.quote_line (version_id, position, description, basis, amount_20ft_minor)
-    VALUES ('00000000-0000-4000-8000-0000000000d4', 2, 'Half sized', 'fixed', 100)$$,
+  $$INSERT INTO app.quote_line (version_id, position, description, basis, size_amounts_minor)
+    VALUES ('00000000-0000-4000-8000-0000000000d4', 2, 'Wrong size count', 'fixed', ARRAY[100]::bigint[])$$,
   '23514',
   NULL,
-  'size amounts come as a 20ft and 40ft pair'
+  'size amounts match the quote version labels'
 );
 SELECT extensions.throws_ok(
   $$INSERT INTO app.quote_line (version_id, position, description, basis, amount_minor)
@@ -114,7 +115,7 @@ SELECT extensions.throws_ok(
   'an issued version cannot be deleted'
 );
 SELECT extensions.throws_ok(
-  $$UPDATE app.quote_line SET amount_20ft_minor = 1, amount_40ft_minor = 1
+  $$UPDATE app.quote_line SET size_amounts_minor = ARRAY[1, 1, 1]::bigint[]
     WHERE line_id = '00000000-0000-4000-8000-0000000000e4'$$,
   'lines of an issued quote version are immutable',
   'lines of an issued version cannot be changed'

@@ -36,6 +36,7 @@ export function JobStock({
   const [conditionNotes, setConditionNotes] = useState("");
   const [reference, setReference] = useState("");
   const [occurredAt, setOccurredAt] = useState("");
+  const [adding, setAdding] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -79,6 +80,7 @@ export function JobStock({
       setConditionNotes("");
       setReference("");
       setOccurredAt("");
+      setAdding(false);
       await load();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The movement failed");
@@ -87,7 +89,18 @@ export function JobStock({
 
   return (
     <section className={styles.card} aria-labelledby="stock-title">
-      <h2 id="stock-title">Stock held</h2>
+      <div className={styles.stepsHeading}>
+        <h2 id="stock-title">Stock held</h2>
+        {canEdit && !adding && (
+          <button
+            className={styles.secondaryButton}
+            onClick={() => setAdding(true)}
+            type="button"
+          >
+            Record goods in or out
+          </button>
+        )}
+      </div>
       {error && (
         <p className={styles.error} role="alert">
           {error}
@@ -96,20 +109,24 @@ export function JobStock({
       {balances.length === 0 ? (
         <p className={styles.muted}>Nothing in stock.</p>
       ) : (
-        <ul className={styles.list}>
+        <ul className={styles.itemList}>
           {balances.map((row) => (
             <li key={`${row.locationId}-${row.item}-${row.unit}`}>
-              <strong>
-                {row.balance} {row.unit}
-              </strong>{" "}
-              · {row.item} · {row.locationName}
+              <div>
+                <span>{row.locationName}</span>
+                <strong>
+                  {row.balance} {row.unit} · {row.item}
+                </strong>
+              </div>
             </li>
           ))}
         </ul>
       )}
       {movements && movements.length > 0 && (
-        <>
-          <h3>Goods in and out</h3>
+        <details>
+          <summary className={styles.disclosureSummary}>
+            Goods in and out ({movements.length})
+          </summary>
           <ul className={styles.list}>
             {movements.map((movement) => (
               <li key={movement.id}>
@@ -128,11 +145,13 @@ export function JobStock({
               </li>
             ))}
           </ul>
-        </>
+        </details>
       )}
-      {canEdit && (
-        <form className={styles.form} onSubmit={submit}>
-          <h3>Record goods in or out</h3>
+      {canEdit && adding && (
+        <form
+          className={`${styles.form} ${styles.quickUpdateForm}`}
+          onSubmit={submit}
+        >
           {locations.length === 0 && (
             <p className={styles.muted}>
               Add a location on the Warehouse page first.
@@ -216,9 +235,18 @@ export function JobStock({
               value={occurredAt}
             />
           </label>
-          <button className={styles.button} type="submit">
-            Save movement
-          </button>
+          <div className={styles.formActions}>
+            <button className={styles.button} type="submit">
+              Save
+            </button>
+            <button
+              className={styles.secondaryButton}
+              onClick={() => setAdding(false)}
+              type="button"
+            >
+              Cancel
+            </button>
+          </div>
         </form>
       )}
     </section>

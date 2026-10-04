@@ -26,6 +26,7 @@ export function WarehouseHome() {
   const [asOf, setAsOf] = useState("");
   const [companyId, setCompanyId] = useState("");
   const [name, setName] = useState("");
+  const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
 
   const loadReport = useCallback(async () => {
@@ -71,6 +72,7 @@ export function WarehouseHome() {
     try {
       await addLocation(name.trim());
       setName("");
+      setAdding(false);
       await loadLocations();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The location failed");
@@ -100,12 +102,7 @@ export function WarehouseHome() {
       <main className={styles.page}>
         <header className={styles.header}>
           <div>
-            <p className={styles.eyebrow}>WAREHOUSING</p>
             <h1 className={styles.title}>Warehouse stock</h1>
-            <p className={styles.muted}>
-              Goods held, by customer and location. Record goods in and out on a
-              warehousing job.
-            </p>
           </div>
         </header>
         {error && (
@@ -186,17 +183,30 @@ export function WarehouseHome() {
 
         {isStaff && (
           <section className={styles.card} aria-labelledby="locations-title">
-            <h2 id="locations-title">Locations</h2>
+            <div className={styles.stepsHeading}>
+              <h2 id="locations-title">Locations</h2>
+              {!adding && (
+                <button
+                  className={styles.secondaryButton}
+                  onClick={() => setAdding(true)}
+                  type="button"
+                >
+                  Add location
+                </button>
+              )}
+            </div>
             {locations.length === 0 ? (
               <p className={styles.muted}>No locations yet.</p>
             ) : (
-              <ul className={styles.list}>
+              <ul className={styles.itemList}>
                 {locations.map((location) => (
                   <li key={location.id}>
-                    {location.name}
-                    {location.deactivatedAt ? " (not in use)" : ""}{" "}
+                    <div>
+                      <strong>{location.name}</strong>
+                      {location.deactivatedAt && <small>Not in use</small>}
+                    </div>
                     <button
-                      className={styles.secondaryButton}
+                      className={styles.textButton}
                       onClick={() => void toggle(location)}
                       type="button"
                     >
@@ -208,20 +218,32 @@ export function WarehouseHome() {
                 ))}
               </ul>
             )}
-            <form className={styles.form} onSubmit={submitLocation}>
-              <label className={styles.field}>
-                New location (for example Bay A1)
-                <input
-                  maxLength={120}
-                  onChange={(event) => setName(event.target.value)}
-                  required
-                  value={name}
-                />
-              </label>
-              <button className={styles.button} type="submit">
-                Add location
-              </button>
-            </form>
+            {adding && (
+              <form className={styles.form} onSubmit={submitLocation}>
+                <label className={styles.field}>
+                  New location (for example Bay A1)
+                  <input
+                    autoFocus
+                    maxLength={120}
+                    onChange={(event) => setName(event.target.value)}
+                    required
+                    value={name}
+                  />
+                </label>
+                <div className={styles.formActions}>
+                  <button className={styles.button} type="submit">
+                    Save
+                  </button>
+                  <button
+                    className={styles.secondaryButton}
+                    onClick={() => setAdding(false)}
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
           </section>
         )}
       </main>

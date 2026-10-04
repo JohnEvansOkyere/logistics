@@ -6,7 +6,7 @@
     "node": ">=22.22.0 <23"
   },
   "scripts": {
-    "dev": "corepack pnpm supabase:dev",
+    "dev": "corepack pnpm contracts:build && corepack pnpm supabase:dev",
     "lint": "eslint .",
     "format": "prettier --write \"apps/**/*.{ts,tsx,css,json}\" \"packages/*/src/**/*.ts\" \"packages/*/*.json\" \"docs/architecture.md\" \"docs/delivery-plan.md\" \"docs/decisions.md\" \"docs/document-templates.md\" \"README.md\" \"AGENTS.md\" \"CHECKLIST.md\" \"*.json\" \"pnpm-workspace.yaml\" \"eslint.config.mjs\"",
     "format:check": "prettier --check \"apps/**/*.{ts,tsx,css,json}\" \"packages/*/src/**/*.ts\" \"packages/*/*.json\" \"docs/architecture.md\" \"docs/delivery-plan.md\" \"docs/decisions.md\" \"docs/document-templates.md\" \"README.md\" \"AGENTS.md\" \"CHECKLIST.md\" \"*.json\" \"pnpm-workspace.yaml\" \"eslint.config.mjs\"",

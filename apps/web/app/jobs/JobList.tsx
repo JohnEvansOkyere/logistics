@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { listJobs, serviceLineLabels, statusLabels } from "./jobApi";
 import type { Job } from "./jobApi";
+import { JobBoard } from "./JobBoard";
 import { useStaffAccess } from "../auth/useStaffAccess";
 import styles from "./jobs.module.css";
 
@@ -11,6 +12,7 @@ export function JobList() {
   const { roles } = useStaffAccess();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [search, setSearch] = useState("");
+  const [view, setView] = useState<"board" | "list">("list");
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
 
@@ -38,15 +40,12 @@ export function JobList() {
   }, [search]);
 
   return (
-    <main className={styles.page}>
+    <main
+      className={`${styles.page}${view === "board" ? ` ${styles.pageWide}` : ""}`}
+    >
       <header className={styles.header}>
         <div>
-          <p className={styles.eyebrow}>STAFF WORKSPACE</p>
           <h1 className={styles.title}>Jobs</h1>
-          <p className={styles.muted}>
-            Search by file number, customer, B/L, AWB, booking, container, seal
-            or party name.
-          </p>
         </div>
         {roles.length > 0 && (
           <Link className={styles.primaryLink} href="/jobs/new">
@@ -55,15 +54,30 @@ export function JobList() {
         )}
       </header>
 
-      <input
-        aria-label="Search jobs"
-        autoComplete="off"
-        className={styles.searchInput}
-        onChange={(event) => setSearch(event.target.value)}
-        placeholder="Search jobs"
-        type="search"
-        value={search}
-      />
+      <div className={styles.toolbar}>
+        <input
+          aria-label="Search jobs"
+          autoComplete="off"
+          className={styles.searchInput}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search jobs"
+          type="search"
+          value={search}
+        />
+        <div className={styles.segmented} role="group" aria-label="View">
+          {(["list", "board"] as const).map((option) => (
+            <button
+              aria-pressed={view === option}
+              className={view === option ? styles.segmentActive : ""}
+              key={option}
+              onClick={() => setView(option)}
+              type="button"
+            >
+              {option === "board" ? "Status board" : "List"}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {state === "loading" && <p role="status">Loading jobs…</p>}
       {state === "error" && (
@@ -71,7 +85,11 @@ export function JobList() {
           {error}
         </p>
       )}
+      {state === "ready" && view === "board" && (
+        <JobBoard canMove={roles.length > 0} jobs={jobs} setJobs={setJobs} />
+      )}
       {state === "ready" &&
+        view === "list" &&
         (jobs.length === 0 ? (
           <p className={styles.muted}>
             {search.trim() ? "No jobs match." : "No jobs yet."}

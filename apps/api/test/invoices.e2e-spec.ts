@@ -119,7 +119,6 @@ const invoicesOf = async (jobId: string, token = TEST_MATCHING_TOKEN) =>
 const settings = (over: Record<string, unknown> = {}) => ({
   issuer: { name: "Synthetic Forwarding Ltd", address: "1 Test Road" },
   currencies: ["GHS", "USD"],
-  defaultCurrency: "GHS",
   taxLines: [
     { name: "NHIL", rateBasisPoints: 250 },
     { name: "GETFL", rateBasisPoints: 250 },

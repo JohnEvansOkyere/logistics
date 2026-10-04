@@ -39,6 +39,7 @@ function formatDate(value: string): string {
 export function JobMessages({ jobId }: { jobId: string }) {
   const [items, setItems] = useState<JobNotification[] | null>(null);
   const [error, setError] = useState("");
+  const [adding, setAdding] = useState(false);
   const [notice, setNotice] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
@@ -76,6 +77,7 @@ export function JobMessages({ jobId }: { jobId: string }) {
       );
       setSubject("");
       setBody("");
+      setAdding(false);
       await load();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The message failed");
@@ -84,12 +86,18 @@ export function JobMessages({ jobId }: { jobId: string }) {
 
   return (
     <section className={styles.card} aria-labelledby="messages-title">
-      <h2 id="messages-title">Messages to the customer</h2>
-      <p className={styles.muted}>
-        Every update on this job (milestones, expected arrival, quotations,
-        invoices, payments, deliveries) is sent to the company&apos;s contacts
-        automatically. The channel (email, SMS or both) is set in Settings.
-      </p>
+      <div className={styles.stepsHeading}>
+        <h2 id="messages-title">Messages to the customer</h2>
+        {!adding && (
+          <button
+            className={styles.secondaryButton}
+            onClick={() => setAdding(true)}
+            type="button"
+          >
+            Send a message
+          </button>
+        )}
+      </div>
       {error && (
         <p className={styles.error} role="alert">
           {error}
@@ -120,30 +128,40 @@ export function JobMessages({ jobId }: { jobId: string }) {
           ))}
         </ul>
       )}
-      <form className={styles.form} onSubmit={submit}>
-        <h3>Send a message</h3>
-        <label className={styles.field}>
-          Subject (optional)
-          <input
-            maxLength={200}
-            onChange={(event) => setSubject(event.target.value)}
-            value={subject}
-          />
-        </label>
-        <label className={styles.field}>
-          Message
-          <textarea
-            maxLength={1500}
-            onChange={(event) => setBody(event.target.value)}
-            required
-            rows={4}
-            value={body}
-          />
-        </label>
-        <button className={styles.button} type="submit">
-          Send to the customer
-        </button>
-      </form>
+      {adding && (
+        <form className={styles.form} onSubmit={submit}>
+          <label className={styles.field}>
+            Subject (optional)
+            <input
+              maxLength={200}
+              onChange={(event) => setSubject(event.target.value)}
+              value={subject}
+            />
+          </label>
+          <label className={styles.field}>
+            Message
+            <textarea
+              maxLength={1500}
+              onChange={(event) => setBody(event.target.value)}
+              required
+              rows={4}
+              value={body}
+            />
+          </label>
+          <div className={styles.formActions}>
+            <button className={styles.button} type="submit">
+              Send to the customer
+            </button>
+            <button
+              className={styles.secondaryButton}
+              onClick={() => setAdding(false)}
+              type="button"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
     </section>
   );
 }

@@ -130,6 +130,7 @@ type Charge = {
   currency: string;
   quantity: number;
   unitQuotedMinor: number | null;
+  quoteContainerSize: string | null;
   quotedTotalMinor: number | null;
   varianceMinor: number | null;
   evidenceMissing: boolean;
@@ -433,12 +434,12 @@ test("charges import from the accepted quote and repeating the import adds nothi
         procedureSteps: [],
         requiredDocuments: [],
         terms: [],
+        sizeLabels: ["20ft", "40ft", "50ft"],
         lines: [
           {
             description: "Terminal fees",
             basis: "at_cost",
-            amount20ftMinor: 240000,
-            amount40ftMinor: 480000,
+            sizeAmountsMinor: [240000, 480000, 620000],
           },
           {
             description: "BJH service fee",
@@ -468,7 +469,7 @@ test("charges import from the accepted quote and repeating the import adds nothi
   assert.equal(noSize.status, 400);
   assert.equal(
     ((await noSize.json()) as { message: string }).message,
-    "containerSize (20ft or 40ft) is required: this quote prices by container size",
+    "containerSize (20ft or 40ft or 50ft) is required: this quote prices by container size",
   );
 
   const imported = (await (
@@ -476,7 +477,8 @@ test("charges import from the accepted quote and repeating the import adds nothi
       `/api/v1/jobs/${jobId}/charges/import-from-quote`,
       TEST_MATCHING_TOKEN,
       {
-        containerSize: "20ft",
+        containerSize: "50ft",
+        quantity: 2,
       },
     )
   ).json()) as { created: Charge[]; skipped: number };
@@ -488,28 +490,44 @@ test("charges import from the accepted quote and repeating the import adds nothi
       item.kind,
       item.currency,
       item.unitQuotedMinor,
+      item.quoteContainerSize,
     ]),
     [
-      ["Terminal fees", "disbursement", "GHS", 240000],
-      ["BJH service fee", "service", "GHS", 150000],
-      ["Customs duty", "disbursement", "GHS", null],
+      ["Terminal fees", "disbursement", "GHS", 620000, "50ft"],
+      ["BJH service fee", "service", "GHS", 150000, null],
+      ["Customs duty", "disbursement", "GHS", null, null],
     ],
   );
+  assert.equal(imported.created[0].quantity, 2);
+  assert.equal(imported.created[0].quotedTotalMinor, 1240000);
 
-  const again = (await (
+  const otherSize = (await (
     await post(
       `/api/v1/jobs/${jobId}/charges/import-from-quote`,
       TEST_MATCHING_TOKEN,
       {
-        containerSize: "40ft",
+        containerSize: "20ft",
       },
     )
   ).json()) as { created: Charge[]; skipped: number };
-  assert.equal(again.created.length, 0);
-  assert.equal(again.skipped, 3);
+  assert.equal(otherSize.created.length, 1);
+  assert.equal(otherSize.skipped, 2);
+  assert.equal(otherSize.created[0].unitQuotedMinor, 240000);
+  assert.equal(otherSize.created[0].quoteContainerSize, "20ft");
+  assert.equal(otherSize.created[0].quantity, 1);
+
+  const repeatedSize = (await (
+    await post(
+      `/api/v1/jobs/${jobId}/charges/import-from-quote`,
+      TEST_MATCHING_TOKEN,
+      { containerSize: "20ft" },
+    )
+  ).json()) as { created: Charge[]; skipped: number };
+  assert.equal(repeatedSize.created.length, 0);
+  assert.equal(repeatedSize.skipped, 3);
   const listing = (await (await charges(jobId)).json()) as Listing;
-  assert.equal(listing.charges.length, 3);
-  assert.equal(listing.totals[0].quotedMinor, 390000);
+  assert.equal(listing.charges.length, 4);
+  assert.equal(listing.totals[0].quotedMinor, 1010000);
 
   const notFromQuote = await post(
     `/api/v1/jobs/${jobA}/charges/import-from-quote`,
@@ -580,7 +598,6 @@ test("once settings exist, charges use the configured currencies", async () => {
     body: JSON.stringify({
       issuer: { name: "Synthetic Ltd" },
       currencies: ["GHS", "USD"],
-      defaultCurrency: "GHS",
       numbering: {
         quotePrefix: "S/Q",
         invoicePrefix: "S/I",

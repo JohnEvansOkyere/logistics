@@ -151,7 +151,6 @@ before(async () => {
     body: JSON.stringify({
       issuer: { name: "Synthetic Forwarding Ltd" },
       currencies: ["GHS"],
-      defaultCurrency: "GHS",
       numbering: {
         quotePrefix: "SYN/Q",
         invoicePrefix: "SYN/INV",

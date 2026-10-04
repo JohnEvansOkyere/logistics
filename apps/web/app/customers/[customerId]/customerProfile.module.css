@@ -30,7 +30,7 @@
 .sectionEyebrow {
   margin: 0 0 8px;
   color: var(--brand-primary);
-  font-size: 0.66rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.1em;
 }
@@ -59,7 +59,7 @@
   background: #f5f8fd;
   color: #5b7084;
   padding: 7px 10px;
-  font-size: 0.61rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.06em;
 }
@@ -87,7 +87,7 @@
   border-radius: 50%;
   background: #dcecf8;
   color: #35658b;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 
@@ -103,6 +103,139 @@
   padding: 20px;
 }
 
+.companyGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 20px;
+  margin: 18px 0 0;
+}
+
+.companyGrid > div {
+  min-width: 0;
+  border-top: 1px solid #e6ebf0;
+  padding: 12px 2px 0;
+}
+
+.companyGrid dt {
+  margin-bottom: 5px;
+  color: #738595;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.companyGrid dd {
+  overflow-wrap: anywhere;
+  margin: 0;
+  color: #29445d;
+  font-size: 0.82rem;
+  white-space: pre-line;
+}
+
+.profileForm {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.profileFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.profileField {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  color: #354e63;
+  font-size: 0.73rem;
+  font-weight: 700;
+}
+
+.profileField input,
+.profileField textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #bdccd9;
+  border-radius: 7px;
+  background: #fff;
+  color: var(--brand-ink);
+  padding: 9px 10px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 400;
+}
+
+.profileField textarea {
+  resize: vertical;
+}
+
+.profileActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.profileForm button,
+.profileActions button,
+.cardHeading button {
+  min-height: 42px;
+  border: 1px solid var(--brand-primary);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--brand-primary);
+  padding: 0 22px;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.profileForm button:hover,
+.profileActions button:hover,
+.cardHeading button:hover {
+  background: #eaf1fb;
+}
+
+.profileForm details,
+.contactGrid details {
+  margin-top: 8px;
+}
+
+.contactGrid summary {
+  color: var(--brand-primary);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.addContactDetails {
+  margin-top: 18px;
+  border-top: 1px solid #e6ebf0;
+  padding-top: 14px;
+}
+
+.addContactDetails > summary {
+  width: fit-content;
+  border: 1px solid #cbd7e3;
+  border-radius: 6px;
+  color: var(--brand-primary);
+  padding: 8px 11px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 700;
+  list-style-position: inside;
+}
+
+.profileCheck {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #354e63;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
 .cardHeading,
 .historyHeading {
   display: flex;
@@ -114,7 +247,7 @@
 .sectionEyebrow {
   margin-bottom: 5px;
   color: #738698;
-  font-size: 0.6rem;
+  font-size: 0.75rem;
 }
 
 .cardHeading h2,
@@ -130,7 +263,7 @@
   background: #f1f4f7;
   color: #6c7d8a;
   padding: 5px 8px;
-  font-size: 0.61rem;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 
@@ -150,7 +283,7 @@
 .contactGrid dt {
   margin-bottom: 6px;
   color: #738595;
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 
@@ -246,6 +379,8 @@ a:focus-visible {
   }
 
   .contactGrid,
+  .companyGrid,
+  .profileFields,
   .historyGrid {
     grid-template-columns: 1fr;
   }

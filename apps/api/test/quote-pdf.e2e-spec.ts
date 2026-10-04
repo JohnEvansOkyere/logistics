@@ -87,12 +87,12 @@ const content = (currency = "GHS") => ({
   procedureSteps: [],
   requiredDocuments: [],
   terms: [],
+  sizeLabels: ["20ft", "50ft"],
   lines: [
     {
       description: "BJH service fee",
       basis: "per_container",
-      amount20ftMinor: 150000,
-      amount40ftMinor: 180000,
+      sizeAmountsMinor: [150000, 240000],
     },
   ],
 });

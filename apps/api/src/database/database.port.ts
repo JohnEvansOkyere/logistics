@@ -9,6 +9,8 @@ import type {
   JobStatus,
   PartyRole,
   ReferenceKind,
+  CustomerContactUpdate,
+  CustomerCompanyUpdate,
 } from "@bjh/contracts";
 
 export interface DatabaseHealth {
@@ -26,25 +28,10 @@ export interface QuoteRequestRecord {
   createdAt: string;
   customerCompanyId: string | null;
   customerCompanyName: string | null;
-  quoteDraftRevisionCount: number;
-  quoteDraftUpdatedAt: string | null;
-}
-
-export interface QuoteDraftRevisionRecord {
-  id: string;
-  revisionNumber: number;
-  content: string;
-  createdAt: string;
-  savedBy: string | null;
-}
-
-export interface QuoteDraftRecord {
-  id: string;
-  requestId: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-  revisions: QuoteDraftRevisionRecord[];
+  /** The quote prepared for this request (the newest one), if any. */
+  quoteId: string | null;
+  quoteNumber: string | null;
+  quoteStatus: "draft" | "issued" | null;
 }
 
 export type ServiceLine =
@@ -104,6 +91,20 @@ export interface DocumentRecord {
   createdBy: string;
   createdAt: string;
   versions: DocumentVersionRecord[];
+}
+
+/** One row of the document library: a job's document or a standalone one, with its newest version. */
+export interface LibraryDocumentRecord {
+  id: string;
+  jobId: string | null;
+  fileNumber: string | null;
+  companyId: string | null;
+  companyName: string | null;
+  title: string | null;
+  documentType: DocumentType;
+  createdAt: string;
+  versionCount: number;
+  latest: DocumentVersionRecord;
 }
 
 /** Internal only: the storage key is never returned to API clients. */
@@ -173,11 +174,12 @@ export interface QuoteLineRecord {
   position: number;
   section: string | null;
   description: string;
+  details: string | null;
   basis: QuoteBasis;
   basisNote: string | null;
   amountMinor: number | null;
-  amount20ftMinor: number | null;
-  amount40ftMinor: number | null;
+  /** One amount per size column of the version, or null for a single amount. */
+  sizeAmountsMinor: number[] | null;
 }
 
 export interface QuoteVersionRecord {
@@ -195,6 +197,7 @@ export interface QuoteVersionRecord {
   documentsNote: string | null;
   timeline: string | null;
   terms: string[];
+  sizeLabels: string[];
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -252,8 +255,8 @@ export interface ChargeActualRecord {
   amountMinor: number;
   currency: string;
   exchangeRate: string | null;
-  /** The amount in the charge's currency, fixed when it was recorded. */
-  convertedMinor: number;
+  /** Null when the recorded currency differs and no conversion was supplied. */
+  convertedMinor: number | null;
   rateNote: string | null;
   supplierDocumentId: string | null;
   note: string | null;
@@ -271,6 +274,7 @@ export interface JobChargeRecord {
   quantity: number;
   unitQuotedMinor: number | null;
   quoteLineId: string | null;
+  quoteContainerSize: string | null;
   createdBy: string;
   createdAt: string;
   /** Oldest first; the last entry is the current actual amount. */
@@ -478,6 +482,12 @@ export interface NotificationLogRow extends NotificationDeliveryRecord {
   fileNumber: string | null;
 }
 
+/** A client message as shown in the Messages feed, across every company and job. */
+export interface NotificationFeedRow extends NotificationRecord {
+  companyName: string;
+  fileNumber: string | null;
+}
+
 export interface EtaReminderCandidate {
   jobId: string;
   fileNumber: string;
@@ -584,8 +594,10 @@ export interface JobScope {
 export interface CustomerContactRecord {
   id: string;
   name: string;
+  role?: string | null;
   email: string;
   createdAt: string;
+  isPrimary?: boolean;
   /** For SMS notifications; optional. */
   phone?: string | null;
   /** Whether this contact receives customer notifications (default true). */
@@ -595,6 +607,15 @@ export interface CustomerContactRecord {
 export interface CustomerCompanyRecord {
   id: string;
   companyName: string;
+  tradingName?: string | null;
+  registrationNumber?: string | null;
+  taxNumber?: string | null;
+  phone?: string | null;
+  companyEmail?: string | null;
+  website?: string | null;
+  businessAddress?: string | null;
+  billingAddress?: string | null;
+  country?: string | null;
   createdAt: string;
   contacts: CustomerContactRecord[];
 }
@@ -623,8 +644,6 @@ export type StaffRoleKey =
   | "sea_import_rep"
   | "sea_export_rep";
 
-export type DepartmentRoleKey = Exclude<StaffRoleKey, "super_admin">;
-
 export interface StaffRoleAssignmentRecord {
   id: string;
   userId: string;
@@ -651,22 +670,6 @@ export abstract class DatabasePort {
     requestId: string,
     customerCompanyId: string,
   ): Promise<QuoteRequestRecord | null>;
-  abstract getQuoteRequestDepartment(
-    requestId: string,
-  ): Promise<DepartmentRoleKey | null | undefined>;
-  abstract assignQuoteRequestDepartment(
-    requestId: string,
-    roleKey: DepartmentRoleKey | null,
-    assignedBy: string,
-    assignedAt: string,
-  ): Promise<DepartmentRoleKey | null | undefined>;
-  abstract findQuoteDraft(requestId: string): Promise<QuoteDraftRecord | null>;
-  abstract saveQuoteDraft(
-    requestId: string,
-    content: string,
-    savedBy: string,
-    savedAt: string,
-  ): Promise<QuoteDraftRecord>;
   abstract createCustomer(
     customer: CustomerCompanyRecord,
   ): Promise<CustomerCompanyRecord>;
@@ -674,10 +677,14 @@ export abstract class DatabasePort {
     companyId: string,
     contact: CustomerContactRecord,
   ): Promise<CustomerContactRecord | null>;
+  abstract updateCustomer(
+    companyId: string,
+    update: CustomerCompanyUpdate,
+  ): Promise<CustomerCompanyRecord | null>;
   abstract updateCustomerContact(
     companyId: string,
     contactId: string,
-    update: { phone: string | null; notify?: boolean },
+    update: CustomerContactUpdate,
   ): Promise<CustomerContactRecord | null>;
   abstract listCustomers(
     search: string,
@@ -741,6 +748,33 @@ export abstract class DatabasePort {
     uploadedBy: string;
   }): Promise<DocumentRecord | "document_not_found">;
   abstract listDocuments(jobId: string): Promise<DocumentRecord[]>;
+  /** Creates a new document (job or company optional) with its first version and returns its ID. */
+  abstract saveLibraryDocument(upload: {
+    jobId: string | null;
+    companyId: string | null;
+    title: string | null;
+    documentType: DocumentType;
+    filename: string;
+    contentType: string;
+    sizeBytes: number;
+    sha256: string;
+    objectKey: string;
+    uploadedBy: string;
+  }): Promise<string>;
+  /** Every term must appear somewhere in the document's searchable text; newest first, at most 200. */
+  abstract searchDocuments(
+    query: {
+      terms: string[];
+      documentType: DocumentType | null;
+      documentId: string | null;
+    },
+    scope: JobScope,
+  ): Promise<LibraryDocumentRecord[]>;
+  /** No access check: callers authorise the document first with `searchDocuments`. */
+  abstract findDocumentVersionById(
+    documentId: string,
+    versionNumber?: number,
+  ): Promise<StoredDocumentVersion | null>;
   abstract findDocumentVersion(
     jobId: string,
     documentId: string,
@@ -847,7 +881,7 @@ export abstract class DatabasePort {
     settings: BusinessSettings,
     changedBy: string,
   ): Promise<BusinessSettingsRevisionRecord>;
-  /** Null when a charge for the same quote line is already on the job. */
+  /** Null when this quote line and container-size combination is already on the job. */
   abstract createJobCharge(charge: {
     jobId: string;
     kind: ChargeKind;
@@ -856,6 +890,7 @@ export abstract class DatabasePort {
     quantity: number;
     unitQuotedMinor: number | null;
     quoteLineId: string | null;
+    quoteContainerSize: string | null;
     createdBy: string;
   }): Promise<JobChargeRecord | null>;
   abstract listJobCharges(jobId: string): Promise<JobChargeRecord[]>;
@@ -870,7 +905,7 @@ export abstract class DatabasePort {
     amountMinor: number;
     currency: string;
     exchangeRate: string | null;
-    convertedMinor: number;
+    convertedMinor: number | null;
     rateNote: string | null;
     supplierDocumentId: string | null;
     note: string | null;
@@ -883,9 +918,11 @@ export abstract class DatabasePort {
     | "correction_not_found"
   >;
   /** The accepted version's lines for the quote this job was opened from. */
-  abstract findAcceptedQuoteLines(
-    jobId: string,
-  ): Promise<{ currency: string; lines: QuoteLineRecord[] } | null>;
+  abstract findAcceptedQuoteLines(jobId: string): Promise<{
+    currency: string;
+    sizeLabels: string[];
+    lines: QuoteLineRecord[];
+  } | null>;
   abstract createDriver(
     driver: { name: string; phone: string },
     createdBy: string,
@@ -1082,6 +1119,17 @@ export abstract class DatabasePort {
     status: NotificationDeliveryRecord["status"] | null;
     limit: number;
   }): Promise<NotificationLogRow[]>;
+  /**
+   * Client messages across all companies and jobs, newest first. A scope with
+   * service lines keeps the messages about jobs on those lines, plus messages
+   * that are not about a job.
+   */
+  abstract listNotificationFeed(filter: {
+    companyId: string | null;
+    event: string | null;
+    serviceLines: ServiceLine[] | null;
+    limit: number;
+  }): Promise<NotificationFeedRow[]>;
   abstract retryNotificationDelivery(
     id: string,
   ): Promise<NotificationDeliveryRecord | "not_found" | "not_failed">;

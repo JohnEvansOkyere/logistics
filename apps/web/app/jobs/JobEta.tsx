@@ -25,6 +25,7 @@ export function JobEta({
   const [etaAt, setEtaAt] = useState("");
   const [source, setSource] = useState("");
   const [note, setNote] = useState("");
+  const [editing, setEditing] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -53,6 +54,7 @@ export function JobEta({
       setEtaAt("");
       setSource("");
       setNote("");
+      setEditing(false);
       await load();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The action failed");
@@ -61,42 +63,35 @@ export function JobEta({
 
   return (
     <section className={styles.card} aria-labelledby="eta-title">
-      <h2 id="eta-title">ETA</h2>
+      <div className={styles.stepsHeading}>
+        <h2 id="eta-title">ETA</h2>
+        {canEdit && !editing && (
+          <button
+            className={styles.secondaryButton}
+            onClick={() => setEditing(true)}
+            type="button"
+          >
+            {eta?.current ? "Change ETA" : "Set ETA"}
+          </button>
+        )}
+      </div>
       {error && (
         <p className={styles.error} role="alert">
           {error}
         </p>
       )}
       {eta?.current ? (
-        <p>
-          <strong>{formatDate(eta.current.etaAt)}</strong>
-          <span className={styles.muted}>
-            {" "}
-            · {eta.current.source}, recorded{" "}
-            {formatDate(eta.current.recordedAt)}
-          </span>
+        <p className={styles.etaValue}>
+          {formatDate(eta.current.etaAt)}
+          <span className={styles.muted}> · {eta.current.source}</span>
         </p>
       ) : (
-        <p className={styles.muted}>No ETA recorded.</p>
+        <p className={styles.muted}>Not set.</p>
       )}
-      {eta && eta.history.length > 1 && (
-        <>
-          <h2 style={{ marginTop: 16 }}>ETA history</h2>
-          <ul className={styles.list}>
-            {[...eta.history].reverse().map((item) => (
-              <li key={item.id}>
-                {formatDate(item.etaAt)} · {item.source}
-                {item.note ? ` — ${item.note}` : ""} (recorded{" "}
-                {formatDate(item.recordedAt)})
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-      {canEdit && (
+      {canEdit && editing && (
         <form className={styles.form} onSubmit={(event) => void submit(event)}>
           <label className={styles.field}>
-            {eta?.current ? "New ETA (replaces the current one)" : "ETA"}
+            New ETA
             <input
               onChange={(event) => setEtaAt(event.target.value)}
               required
@@ -105,9 +100,10 @@ export function JobEta({
             />
           </label>
           <label className={styles.field}>
-            Source (for example carrier notice, agent email)
+            Source
             <input
               onChange={(event) => setSource(event.target.value)}
+              placeholder="Carrier notice, agent email…"
               required
               value={source}
             />
@@ -119,10 +115,32 @@ export function JobEta({
               value={note}
             />
           </label>
-          <button className={styles.button} type="submit">
-            Record ETA
-          </button>
+          <div className={styles.actions}>
+            <button className={styles.button} type="submit">
+              Save ETA
+            </button>
+            <button
+              className={styles.secondaryButton}
+              onClick={() => setEditing(false)}
+              type="button"
+            >
+              Cancel
+            </button>
+          </div>
         </form>
+      )}
+      {eta && eta.history.length > 1 && (
+        <details className={styles.etaHistory}>
+          <summary>History</summary>
+          <ul className={styles.list}>
+            {[...eta.history].reverse().map((item) => (
+              <li key={item.id}>
+                {formatDate(item.etaAt)} · {item.source}
+                {item.note ? ` — ${item.note}` : ""}
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </section>
   );

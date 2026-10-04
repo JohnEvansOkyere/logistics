@@ -40,12 +40,7 @@ export function QuoteList() {
     <main className={styles.page}>
       <header className={styles.header}>
         <div>
-          <p className={styles.eyebrow}>QUOTATIONS</p>
           <h1 className={styles.title}>Quotes</h1>
-          <p className={styles.muted}>
-            Structured quotations. Issuing a quote sends it to the customer;
-            changes after that are new versions.
-          </p>
         </div>
         {roles.length > 0 && (
           <Link className={styles.primaryLink} href="/quotes/new">

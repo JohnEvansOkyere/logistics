@@ -41,6 +41,11 @@ function VersionView({ version }: { version: QuoteVersion }) {
     if (current && current.heading === heading) current.lines.push(line);
     else sections.push({ heading, lines: [line] });
   }
+  const hasWording =
+    version.procedureSteps.length > 0 ||
+    version.requiredDocuments.length > 0 ||
+    Boolean(version.timeline) ||
+    version.terms.length > 0;
   return (
     <div>
       <h3>{version.title}</h3>
@@ -49,7 +54,10 @@ function VersionView({ version }: { version: QuoteVersion }) {
       {version.intro && <p>{version.intro}</p>}
       {sections.map((section) => {
         const sized = section.lines.some(
-          (line) => line.amount20ftMinor !== null,
+          (line) => line.sizeAmountsMinor !== null,
+        );
+        const hasSingleAmount = section.lines.some(
+          (line) => line.sizeAmountsMinor === null && line.amountMinor !== null,
         );
         return (
           <div className={styles.tableScroll} key={section.heading}>
@@ -59,36 +67,52 @@ function VersionView({ version }: { version: QuoteVersion }) {
                 <tr>
                   <th scope="col">Charge</th>
                   {sized ? (
-                    <>
-                      <th scope="col">20ft</th>
-                      <th scope="col">40ft</th>
-                    </>
+                    version.sizeLabels.map((label) => (
+                      <th key={label} scope="col">
+                        {label}
+                      </th>
+                    ))
                   ) : (
                     <th scope="col">Amount</th>
                   )}
+                  {sized && hasSingleAmount && <th scope="col">Amount</th>}
                   <th scope="col">Basis</th>
                 </tr>
               </thead>
               <tbody>
                 {section.lines.map((line) => (
                   <tr key={line.id}>
-                    <th scope="row">{line.description}</th>
+                    <th scope="row">
+                      {line.description}
+                      {line.details && (
+                        <>
+                          <br />
+                          <span className={styles.muted}>{line.details}</span>
+                        </>
+                      )}
+                    </th>
                     {sized ? (
                       <>
-                        <td>
-                          {amountText(
-                            line,
-                            line.amount20ftMinor,
-                            version.currency,
-                          )}
-                        </td>
-                        <td>
-                          {amountText(
-                            line,
-                            line.amount40ftMinor,
-                            version.currency,
-                          )}
-                        </td>
+                        {version.sizeLabels.map((_, index) => (
+                          <td key={`${line.id}-${index}`}>
+                            {amountText(
+                              line,
+                              line.sizeAmountsMinor?.[index] ?? null,
+                              version.currency,
+                            )}
+                          </td>
+                        ))}
+                        {hasSingleAmount && (
+                          <td>
+                            {line.sizeAmountsMinor === null
+                              ? amountText(
+                                  line,
+                                  line.amountMinor,
+                                  version.currency,
+                                )
+                              : "—"}
+                          </td>
+                        )}
                       </>
                     ) : (
                       <td>
@@ -113,42 +137,51 @@ function VersionView({ version }: { version: QuoteVersion }) {
         All amounts are in {version.currency} unless otherwise stated.
       </p>
       {version.atCostNote && <p>{version.atCostNote}</p>}
-      {version.procedureSteps.length > 0 && (
-        <>
-          <h4>Procedure</h4>
-          <ol className={styles.list}>
-            {version.procedureSteps.map((step, index) => (
-              <li key={index}>{step}</li>
-            ))}
-          </ol>
-        </>
-      )}
-      {version.requiredDocuments.length > 0 && (
-        <>
-          <h4>Documents required</h4>
-          <ul className={styles.list}>
-            {version.requiredDocuments.map((item, index) => (
-              <li key={index}>{item}</li>
-            ))}
-          </ul>
-          {version.documentsNote && <p>{version.documentsNote}</p>}
-        </>
-      )}
-      {version.timeline && (
-        <>
-          <h4>Timeline</h4>
-          <p>{version.timeline}</p>
-        </>
-      )}
-      {version.terms.length > 0 && (
-        <>
-          <h4>Important terms</h4>
-          <ul className={styles.list}>
-            {version.terms.map((item, index) => (
-              <li key={index}>{item}</li>
-            ))}
-          </ul>
-        </>
+      {hasWording && (
+        <details>
+          <summary className={styles.disclosureSummary}>
+            Standard wording
+          </summary>
+          <div className={styles.disclosureContent}>
+            {version.procedureSteps.length > 0 && (
+              <>
+                <h4>Procedure</h4>
+                <ol className={styles.list}>
+                  {version.procedureSteps.map((step, index) => (
+                    <li key={index}>{step}</li>
+                  ))}
+                </ol>
+              </>
+            )}
+            {version.requiredDocuments.length > 0 && (
+              <>
+                <h4>Documents required</h4>
+                <ul className={styles.list}>
+                  {version.requiredDocuments.map((item, index) => (
+                    <li key={index}>{item}</li>
+                  ))}
+                </ul>
+                {version.documentsNote && <p>{version.documentsNote}</p>}
+              </>
+            )}
+            {version.timeline && (
+              <>
+                <h4>Timeline</h4>
+                <p>{version.timeline}</p>
+              </>
+            )}
+            {version.terms.length > 0 && (
+              <>
+                <h4>Important terms</h4>
+                <ul className={styles.list}>
+                  {version.terms.map((item, index) => (
+                    <li key={index}>{item}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        </details>
       )}
     </div>
   );
@@ -161,6 +194,7 @@ export function QuoteDetail({ quoteId }: { quoteId: string }) {
   const [loadError, setLoadError] = useState("");
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(false);
+  const [deciding, setDeciding] = useState(false);
   const [decision, setDecision] = useState<"accepted" | "rejected">("accepted");
   const [signatory, setSignatory] = useState("");
   const [decidedAt, setDecidedAt] = useState("");
@@ -238,6 +272,7 @@ export function QuoteDetail({ quoteId }: { quoteId: string }) {
             note: decisionNote.trim() || undefined,
           });
       setOpenedJob(result.job);
+      setDeciding(false);
       setSignatory("");
       setDecidedAt("");
       setDecisionNote("");
@@ -273,11 +308,22 @@ export function QuoteDetail({ quoteId }: { quoteId: string }) {
   );
   const accepted = quote.decisions.some((item) => item.decision === "accepted");
   const latestIssued = issued.at(-1);
-  const latestDecided =
-    latestIssued !== undefined &&
-    quote.decisions.some(
-      (item) => item.versionNumber === latestIssued.versionNumber,
-    );
+  const latestDecision = latestIssued
+    ? quote.decisions.find(
+        (item) => item.versionNumber === latestIssued.versionNumber,
+      )
+    : undefined;
+  const current = draft ?? latestIssued;
+  const earlier = issued.filter((version) => version !== current).reverse();
+
+  let statusText = "Draft";
+  if (!draft && latestIssued) {
+    statusText = latestDecision
+      ? `${latestDecision.decision === "accepted" ? "Accepted" : "Rejected"} by ${
+          latestDecision.clientSignatory
+        } · ${formatDate(latestDecision.decidedAt)}`
+      : "Issued · waiting for the client's answer";
+  }
 
   return (
     <main className={styles.page}>
@@ -286,15 +332,69 @@ export function QuoteDetail({ quoteId }: { quoteId: string }) {
       </Link>
       <header className={styles.header}>
         <div>
-          <p className={styles.eyebrow}>
-            {serviceLineLabels[quote.serviceLine].toUpperCase()}
-          </p>
           <h1 className={styles.title}>
             {quote.quoteNumber ?? "Draft (not numbered)"}
           </h1>
           <p className={styles.muted}>
-            {quote.customerCompanyName} · prepared {formatDate(quote.createdAt)}
+            {quote.customerCompanyName} · {serviceLineLabels[quote.serviceLine]}
           </p>
+          <span className={styles.badge}>{statusText}</span>
+        </div>
+        <div className={styles.actions}>
+          {current && !editing && (
+            <button
+              className={styles.secondaryButton}
+              onClick={() => void openPdf(current.versionNumber)}
+              type="button"
+            >
+              {current.status === "draft" ? "PDF (draft)" : "PDF"}
+            </button>
+          )}
+          {isStaff && draft && (
+            <>
+              <button
+                className={styles.secondaryButton}
+                onClick={() => setEditing((value) => !value)}
+                type="button"
+              >
+                {editing ? "Cancel editing" : "Edit"}
+              </button>
+              {!editing && (
+                <button
+                  className={styles.button}
+                  onClick={() => void run(() => issueQuote(quote.id))}
+                  type="button"
+                >
+                  Issue to customer
+                </button>
+              )}
+            </>
+          )}
+          {isStaff && !draft && !accepted && (
+            <button
+              className={
+                latestDecision ? styles.button : styles.secondaryButton
+              }
+              onClick={() => void run(() => startQuoteVersion(quote.id))}
+              type="button"
+            >
+              New version
+            </button>
+          )}
+          {isStaff && !draft && latestIssued && !latestDecision && (
+            <button
+              className={styles.button}
+              onClick={() => setDeciding((value) => !value)}
+              type="button"
+            >
+              Record decision
+            </button>
+          )}
+          {quote.jobId && (
+            <Link className={styles.primaryLink} href={`/jobs/${quote.jobId}`}>
+              Open job{openedJob ? ` ${openedJob.fileNumber}` : ""}
+            </Link>
+          )}
         </div>
       </header>
 
@@ -304,63 +404,13 @@ export function QuoteDetail({ quoteId }: { quoteId: string }) {
         </p>
       )}
 
-      {quote.jobId && (
-        <p className={styles.notice}>
-          This quote was accepted.{" "}
-          <Link className={styles.link} href={`/jobs/${quote.jobId}`}>
-            Open the job
-            {openedJob ? ` ${openedJob.fileNumber}` : ""}
-          </Link>
-        </p>
-      )}
-
-      {isStaff && !accepted && (
-        <section className={styles.card} aria-labelledby="quote-actions">
-          <h2 id="quote-actions">Actions</h2>
-          <div className={styles.actions}>
-            {draft && (
-              <>
-                <button
-                  className={styles.secondaryButton}
-                  onClick={() => setEditing((value) => !value)}
-                  type="button"
-                >
-                  {editing ? "Cancel editing" : "Edit draft"}
-                </button>
-                <button
-                  className={styles.button}
-                  onClick={() => void run(() => issueQuote(quote.id))}
-                  type="button"
-                >
-                  Issue to customer
-                </button>
-              </>
-            )}
-            {!draft && !accepted && (
-              <button
-                className={styles.secondaryButton}
-                onClick={() => void run(() => startQuoteVersion(quote.id))}
-                type="button"
-              >
-                Start a new version
-              </button>
-            )}
-          </div>
-          <p className={styles.muted}>
-            Issuing makes the version visible to the customer and locks it. A
-            later change is a new version.
-          </p>
-        </section>
-      )}
-
-      {isStaff && latestIssued && !latestDecided && (
+      {isStaff && deciding && latestIssued && !latestDecision && (
         <section className={styles.card} aria-labelledby="decision-title">
           <h2 id="decision-title">
-            Record the client&apos;s decision on version{" "}
-            {latestIssued.versionNumber}
+            Client&apos;s decision on version {latestIssued.versionNumber}
           </h2>
           <form
-            className={styles.form}
+            className={`${styles.form} ${styles.quickUpdateForm}`}
             onSubmit={(event) => void submitDecision(event)}
           >
             <label className={styles.field}>
@@ -376,7 +426,7 @@ export function QuoteDetail({ quoteId }: { quoteId: string }) {
               </select>
             </label>
             <label className={styles.field}>
-              Client signatory (name of the person who decided)
+              Signed by
               <input
                 onChange={(event) => setSignatory(event.target.value)}
                 required
@@ -384,7 +434,7 @@ export function QuoteDetail({ quoteId }: { quoteId: string }) {
               />
             </label>
             <label className={styles.field}>
-              When they decided (optional, defaults to now)
+              Date (optional)
               <input
                 onChange={(event) => setDecidedAt(event.target.value)}
                 type="datetime-local"
@@ -398,14 +448,23 @@ export function QuoteDetail({ quoteId }: { quoteId: string }) {
                 value={decisionNote}
               />
             </label>
-            <button className={styles.button} type="submit">
-              Record decision
-            </button>
+            <div className={styles.actions} style={{ gridColumn: "1 / -1" }}>
+              <button className={styles.button} type="submit">
+                Save decision
+              </button>
+              <button
+                className={styles.secondaryButton}
+                onClick={() => setDeciding(false)}
+                type="button"
+              >
+                Cancel
+              </button>
+            </div>
           </form>
         </section>
       )}
 
-      {!isStaff && latestIssued && !latestDecided && (
+      {!isStaff && latestIssued && !latestDecision && (
         <section className={styles.card} aria-labelledby="respond-title">
           <h2 id="respond-title">
             Your answer on quotation version {latestIssued.versionNumber}
@@ -453,23 +512,7 @@ export function QuoteDetail({ quoteId }: { quoteId: string }) {
         </section>
       )}
 
-      {quote.decisions.length > 0 && (
-        <section className={styles.card} aria-labelledby="decisions-title">
-          <h2 id="decisions-title">Decisions</h2>
-          <ul className={styles.list}>
-            {quote.decisions.map((item) => (
-              <li key={item.id}>
-                Version {item.versionNumber} ·{" "}
-                {item.decision === "accepted" ? "Accepted" : "Rejected"} by{" "}
-                {item.clientSignatory} · {formatDate(item.decidedAt)}
-                {item.note ? ` — ${item.note}` : ""}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {editing && draft && (
+      {editing && draft ? (
         <QuoteEditor
           draft={draft}
           onSaved={(saved) => {
@@ -478,46 +521,63 @@ export function QuoteDetail({ quoteId }: { quoteId: string }) {
           }}
           quote={quote}
         />
+      ) : (
+        current &&
+        (current.status === "issued" || isStaff) && (
+          <section className={styles.card} aria-labelledby="current-title">
+            <h2 id="current-title">
+              Version {current.versionNumber}
+              {current.issuedAt
+                ? ` · issued ${formatDate(current.issuedAt)}`
+                : ""}
+            </h2>
+            <VersionView version={current} />
+          </section>
+        )
       )}
 
-      {draft && !editing && isStaff && (
-        <section className={styles.card} aria-labelledby="draft-title">
-          <h2 id="draft-title">Draft · version {draft.versionNumber}</h2>
-          <div className={styles.actions}>
-            <button
-              className={styles.secondaryButton}
-              onClick={() => void openPdf(draft.versionNumber)}
-              type="button"
-            >
-              Download PDF (marked draft)
-            </button>
+      {(quote.decisions.length > 0 || earlier.length > 0) && (
+        <details className={styles.card}>
+          <summary className={styles.disclosureSummary}>History</summary>
+          <div className={styles.disclosureContent}>
+            {quote.decisions.length > 0 && (
+              <>
+                <h2>Decisions</h2>
+                <ul className={styles.list}>
+                  {quote.decisions.map((item) => (
+                    <li key={item.id}>
+                      Version {item.versionNumber} ·{" "}
+                      {item.decision === "accepted" ? "Accepted" : "Rejected"}{" "}
+                      by {item.clientSignatory} · {formatDate(item.decidedAt)}
+                      {item.note ? ` — ${item.note}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {earlier.map((version) => (
+              <details key={version.id}>
+                <summary className={styles.disclosureSummary}>
+                  Version {version.versionNumber} · issued{" "}
+                  {version.issuedAt ? formatDate(version.issuedAt) : ""}
+                </summary>
+                <div className={styles.disclosureContent}>
+                  <div className={styles.actions}>
+                    <button
+                      className={styles.secondaryButton}
+                      onClick={() => void openPdf(version.versionNumber)}
+                      type="button"
+                    >
+                      PDF
+                    </button>
+                  </div>
+                  <VersionView version={version} />
+                </div>
+              </details>
+            ))}
           </div>
-          <VersionView version={draft} />
-        </section>
+        </details>
       )}
-
-      {[...issued].reverse().map((version) => (
-        <section
-          aria-labelledby={`version-${version.versionNumber}`}
-          className={styles.card}
-          key={version.id}
-        >
-          <h2 id={`version-${version.versionNumber}`}>
-            Version {version.versionNumber} · issued{" "}
-            {version.issuedAt ? formatDate(version.issuedAt) : ""}
-          </h2>
-          <div className={styles.actions}>
-            <button
-              className={styles.secondaryButton}
-              onClick={() => void openPdf(version.versionNumber)}
-              type="button"
-            >
-              Download PDF
-            </button>
-          </div>
-          <VersionView version={version} />
-        </section>
-      ))}
     </main>
   );
 }

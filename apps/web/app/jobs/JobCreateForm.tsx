@@ -54,11 +54,7 @@ export function JobCreateForm() {
     <main className={styles.page}>
       <header className={styles.header}>
         <div>
-          <p className={styles.eyebrow}>JOBS</p>
           <h1 className={styles.title}>Open a job</h1>
-          <p className={styles.muted}>
-            The file number is issued automatically when you save.
-          </p>
         </div>
         <Link className={styles.secondaryButton} href="/jobs">
           Back to jobs

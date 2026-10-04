@@ -41,11 +41,7 @@ export function TaskList() {
     <main className={styles.page}>
       <header className={styles.header}>
         <div>
-          <p className={styles.eyebrow}>STAFF WORKSPACE</p>
           <h1 className={styles.title}>Tasks</h1>
-          <p className={styles.muted}>
-            Open tasks and exceptions on the jobs you can see.
-          </p>
         </div>
       </header>
 

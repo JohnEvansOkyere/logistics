@@ -47,9 +47,7 @@ export default function SystemStatusPage() {
       <main className="dashboard">
         <section className="welcome-row" aria-labelledby="status-title">
           <div>
-            <p className="eyebrow">SETTINGS</p>
             <h1 id="status-title">System status</h1>
-            <p className="welcome-copy">Current API and database health.</p>
           </div>
         </section>
         <section className="work-panel" aria-live="polite">

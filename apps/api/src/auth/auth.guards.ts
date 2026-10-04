@@ -4,7 +4,6 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
-  NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
 import { DatabasePort } from "../database/database.port";
@@ -138,67 +137,6 @@ export class StaffCompanyReadGuard implements CanActivate {
     }
     request.allowedCompanyIds = companyIds;
     return true;
-  }
-}
-
-@Injectable()
-export class QuoteDraftReadGuard implements CanActivate {
-  constructor(@Inject(DatabasePort) private readonly database: DatabasePort) {}
-
-  async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context
-      .switchToHttp()
-      .getRequest<AuthenticatedRequest & { params: { id: string } }>();
-    if (!request.authUser) throw new UnauthorizedException();
-    const roles = await loadStaffRoles(this.database, request);
-    if (roles.includes("super_admin")) return true;
-    if (roles.length > 0) {
-      const assignedRole = await this.database.getQuoteRequestDepartment(
-        request.params.id,
-      );
-      if (assignedRole === undefined)
-        throw new NotFoundException("Quote request was not found");
-      if (assignedRole !== null && roles.includes(assignedRole)) return true;
-      throw new ForbiddenException(
-        "This request is not assigned to your department",
-      );
-    }
-    const companyIds = await loadCustomerCompanyIds(this.database, request);
-    if (!companyIds.length)
-      throw new ForbiddenException(
-        "An active staff role or customer-company membership is required",
-      );
-    const quoteRequest = await this.database.findQuoteRequest(
-      request.params.id,
-      companyIds,
-    );
-    if (!quoteRequest)
-      throw new NotFoundException("Quote request was not found");
-    request.allowedCompanyIds = companyIds;
-    return true;
-  }
-}
-
-@Injectable()
-export class QuoteDraftWriteGuard implements CanActivate {
-  constructor(@Inject(DatabasePort) private readonly database: DatabasePort) {}
-
-  async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context
-      .switchToHttp()
-      .getRequest<AuthenticatedRequest & { params: { id: string } }>();
-    if (!request.authUser) throw new UnauthorizedException();
-    const roles = await loadStaffRoles(this.database, request);
-    if (roles.includes("super_admin")) return true;
-    const assignedRole = await this.database.getQuoteRequestDepartment(
-      request.params.id,
-    );
-    if (assignedRole === undefined)
-      throw new NotFoundException("Quote request was not found");
-    if (assignedRole !== null && roles.includes(assignedRole)) return true;
-    throw new ForbiddenException(
-      "Only the assigned department or super admin can save this draft",
-    );
   }
 }
 

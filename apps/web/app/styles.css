@@ -10,7 +10,18 @@
   --brand-canvas: #f4f8fc;
   background: var(--brand-canvas);
   color: var(--brand-ink);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family:
+    var(--font-sans),
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    Roboto,
+    Arial,
+    sans-serif;
+  /* 18px base: every rem in the app scales from here, so text stays readable */
+  font-size: 112.5%;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 * {
@@ -20,12 +31,25 @@
 body {
   margin: 0;
   min-height: 100vh;
+  line-height: 1.5;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 .workspace-shell {
   display: grid;
   min-height: 100vh;
-  grid-template-columns: 252px minmax(0, 1fr);
+  grid-template-columns: 232px minmax(0, 1fr);
+  transition: grid-template-columns 0.2s ease;
+}
+
+.workspace-shell.collapsed {
+  grid-template-columns: 68px minmax(0, 1fr);
 }
 
 .sidebar {
@@ -34,32 +58,50 @@ body {
   display: flex;
   height: 100vh;
   flex-direction: column;
-  background: #092b71;
-  padding: 26px 18px 20px;
+  overflow-y: auto;
+  background: #0b3fae;
+  padding: 16px 14px 16px;
   color: #eaf2ff;
+}
+
+.sidebar-toggle {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  place-items: center;
+  margin: 0 0 12px 4px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+.sidebar-toggle:hover,
+.sidebar-toggle:focus-visible {
+  background: rgb(255 255 255 / 12%);
 }
 
 .brand {
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 0 6px 34px;
+  padding: 0 6px 20px;
   color: inherit;
   text-decoration: none;
 }
 
 .brand-mark {
   display: grid;
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid #4775be;
-  border-radius: 12px;
-  background: #17499a;
-  color: #e5efff;
-  font-size: 0.78rem;
-  font-weight: 700;
+  border-radius: 11px;
+  background: #fff;
+  color: #0b3fae;
+  font-size: 0.9rem;
+  font-weight: 800;
   letter-spacing: 0.02em;
 }
 
@@ -68,25 +110,39 @@ body {
   display: block;
 }
 .brand-copy strong {
-  font-size: 0.95rem;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
 }
 .brand-copy small {
-  margin-top: 4px;
-  color: #bfd1ef;
-  font-size: 0.73rem;
+  margin-top: 3px;
+  color: rgb(255 255 255 / 80%);
+  font-size: 0.8rem;
 }
 
 .nav-heading {
   margin: 0 10px 11px;
-  color: #a9c3eb;
-  font-size: 0.65rem;
+  color: rgb(255 255 255 / 75%);
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.12em;
 }
 
 .workspace-nav {
   display: grid;
-  gap: 5px;
+  gap: 4px;
+}
+
+.nav-group {
+  display: grid;
+  gap: 4px;
+}
+
+.nav-group + .nav-group {
+  margin-top: 10px;
+}
+
+.nav-group .nav-heading {
+  margin-bottom: 6px;
 }
 
 .sidebar-settings {
@@ -104,43 +160,56 @@ body {
 
 .nav-link {
   display: flex;
-  min-height: 43px;
+  position: relative;
+  min-height: 42px;
   align-items: center;
   gap: 12px;
-  border-radius: 8px;
-  color: #c6d6f1;
-  padding: 9px 11px;
-  font-size: 0.87rem;
+  border-radius: 11px;
+  color: rgb(255 255 255 / 88%);
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  font-weight: 500;
   text-decoration: none;
+  transition: background-color 0.15s ease;
 }
 
 .nav-link:hover,
 .nav-link:focus-visible {
-  background: #153a82;
+  background: rgb(255 255 255 / 9%);
   color: white;
 }
 .nav-link.active {
-  background: #214a91;
+  background: rgb(255 255 255 / 15%);
   color: white;
   font-weight: 700;
 }
+.nav-link.active::before {
+  position: absolute;
+  top: 11px;
+  bottom: 11px;
+  left: -14px;
+  width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: #fff;
+  content: "";
+}
 .nav-icon {
-  display: inline-grid;
-  width: 20px;
-  place-items: center;
-  color: #a9c5ed;
-  font-size: 1.05rem;
-  line-height: 1;
+  flex: 0 0 auto;
+  color: rgb(255 255 255 / 80%);
+}
+.nav-link.active .nav-icon,
+.nav-link:hover .nav-icon {
+  color: #fff;
 }
 
 .sidebar-note {
   display: flex;
   gap: 10px;
   margin-top: auto;
-  border: 1px solid #365b9b;
-  border-radius: 10px;
-  background: #123981;
-  padding: 12px 10px;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 7%);
+  padding: 14px 12px;
 }
 
 .local-indicator,
@@ -151,17 +220,21 @@ body {
   border-radius: 50%;
   background: #73c39c;
 }
+
+.sidebar-note .local-indicator {
+  background: #fff;
+}
 .local-indicator {
   margin-top: 4px;
 }
 .sidebar-note strong {
   display: block;
-  font-size: 0.75rem;
+  font-size: 0.85rem;
 }
 .sidebar-note p {
   margin: 4px 0 0;
-  color: #c1d3ef;
-  font-size: 0.68rem;
+  color: rgb(255 255 255 / 80%);
+  font-size: 0.78rem;
   line-height: 1.45;
 }
 
@@ -169,9 +242,35 @@ body {
   min-width: 0;
 }
 
+/* Collapsed: an icon rail; labels, headings and the note are hidden. */
+.collapsed .sidebar {
+  padding-right: 12px;
+  padding-left: 12px;
+}
+.collapsed .brand-copy,
+.collapsed .nav-label,
+.collapsed .nav-heading,
+.collapsed .sidebar-note {
+  display: none;
+}
+.collapsed .brand {
+  justify-content: center;
+  padding: 0 0 16px;
+}
+.collapsed .nav-link {
+  justify-content: center;
+  padding: 8px 0;
+}
+.collapsed .nav-link.active::before {
+  left: -12px;
+}
+.collapsed .sidebar-toggle {
+  margin-left: 0;
+}
+
 .topbar {
   display: flex;
-  min-height: 66px;
+  min-height: 72px;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
@@ -179,7 +278,7 @@ body {
   background: var(--brand-surface);
   padding: 0 clamp(22px, 4vw, 54px);
   color: var(--brand-muted);
-  font-size: 0.78rem;
+  font-size: 0.9rem;
 }
 
 .breadcrumb,
@@ -195,8 +294,9 @@ body {
   color: #aebdca;
 }
 .breadcrumb strong {
-  color: #344e67;
-  font-weight: 600;
+  color: #1d3a57;
+  font-weight: 700;
+  font-size: 1rem;
 }
 .topbar-actions {
   gap: 20px;
@@ -232,7 +332,7 @@ body {
 .eyebrow {
   margin: 0 0 9px;
   color: var(--brand-primary);
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.13em;
 }
@@ -263,7 +363,7 @@ h1 {
   background: #fff;
   color: #536d88;
   padding: 8px 11px;
-  font-size: 0.6rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.07em;
 }
@@ -326,6 +426,9 @@ h1 {
   border-color: #cddcf0;
   background: #f5f8fd;
 }
+.action-icon .nav-icon {
+  color: inherit;
+}
 .action-icon {
   display: grid;
   width: 38px;
@@ -348,7 +451,7 @@ h1 {
 .action-kicker {
   margin: 2px 0 8px;
   color: #718698;
-  font-size: 0.61rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.11em;
 }
@@ -367,11 +470,21 @@ h1 {
 .action-link {
   display: inline-flex;
   grid-column: 2;
+  min-height: 44px;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   justify-self: start;
   margin-top: 18px;
-  font-size: 0.76rem;
+  border-radius: 999px;
+  background: var(--brand-primary);
+  padding: 0 24px;
+  color: #fff;
+  font-size: 1rem;
+}
+.action-link:hover {
+  background: var(--brand-primary-dark);
+  color: #fff;
+  text-decoration: none;
 }
 
 .desk-section {
@@ -414,7 +527,7 @@ h1 {
   border-radius: 8px;
   background: #edf3fc;
   color: #416b9e;
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 .workflow-step strong {
@@ -424,7 +537,7 @@ h1 {
 .workflow-step p {
   margin: 5px 0 0;
   color: #718698;
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   line-height: 1.4;
 }
 .workflow-connector {
@@ -440,7 +553,7 @@ h1 {
   border-top: 1px solid #dfe7ee;
   padding-top: 14px;
   color: #8495a3;
-  font-size: 0.66rem;
+  font-size: 0.75rem;
 }
 
 a:focus-visible {
@@ -450,7 +563,7 @@ a:focus-visible {
 
 @media (max-width: 900px) {
   .workspace-shell {
-    grid-template-columns: 218px minmax(0, 1fr);
+    grid-template-columns: 216px minmax(0, 1fr);
   }
   .sidebar {
     padding-right: 13px;
@@ -471,8 +584,21 @@ a:focus-visible {
 }
 
 @media (max-width: 680px) {
-  .workspace-shell {
+  .workspace-shell,
+  .workspace-shell.collapsed {
     display: block;
+  }
+  .sidebar-toggle {
+    display: none;
+  }
+  .collapsed .nav-label {
+    display: inline;
+  }
+  .collapsed .brand-copy {
+    display: block;
+  }
+  .collapsed .nav-link {
+    justify-content: flex-start;
   }
   .sidebar {
     position: sticky;
@@ -533,14 +659,16 @@ a:focus-visible {
     font-size: 0.75rem;
     white-space: nowrap;
   }
-  .nav-icon {
-    width: auto;
-    font-size: 0.9rem;
+  .nav-link.active::before {
+    display: none;
+  }
+  .nav-group {
+    display: contents;
   }
   .topbar {
     min-height: 52px;
     padding: 0 17px;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
   }
   .topbar-actions {
     gap: 12px;
@@ -583,7 +711,7 @@ a:focus-visible {
   }
   .dashboard-footer {
     flex-direction: column;
-    font-size: 0.64rem;
+    font-size: 0.75rem;
   }
 }
 

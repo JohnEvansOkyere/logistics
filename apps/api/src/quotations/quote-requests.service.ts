@@ -1,26 +1,18 @@
 import {
   BadRequestException,
-  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
 import {
-  departmentAssignmentInputSchema,
   parseContract,
-  quoteDraftInputSchema,
   portalQuoteRequestInputSchema,
   quoteRequestInputSchema,
   type QuoteRequestInput,
 } from "@bjh/contracts";
 import { randomUUID } from "node:crypto";
-import {
-  DatabasePort,
-  DepartmentRoleKey,
-  QuoteDraftRecord,
-  QuoteRequestRecord,
-} from "../database/database.port";
+import { DatabasePort, QuoteRequestRecord } from "../database/database.port";
 
 @Injectable()
 export class QuoteRequestsService {
@@ -35,8 +27,9 @@ export class QuoteRequestsService {
       createdAt: new Date().toISOString(),
       customerCompanyId: null,
       customerCompanyName: null,
-      quoteDraftRevisionCount: 0,
-      quoteDraftUpdatedAt: null,
+      quoteId: null,
+      quoteNumber: null,
+      quoteStatus: null,
     });
   }
 
@@ -82,8 +75,9 @@ export class QuoteRequestsService {
       createdAt: new Date().toISOString(),
       customerCompanyId: null,
       customerCompanyName: null,
-      quoteDraftRevisionCount: 0,
-      quoteDraftUpdatedAt: null,
+      quoteId: null,
+      quoteNumber: null,
+      quoteStatus: null,
     });
     const linked = await this.database.linkQuoteRequestToCustomer(
       created.id,
@@ -147,73 +141,6 @@ export class QuoteRequestsService {
       throw new NotFoundException("Quote request was not found");
     }
 
-    return request;
-  }
-
-  async getDepartmentAssignment(
-    requestId: string,
-  ): Promise<DepartmentRoleKey | null> {
-    const role = await this.database.getQuoteRequestDepartment(requestId);
-    if (role === undefined)
-      throw new NotFoundException("Quote request was not found");
-    return role;
-  }
-
-  async assignDepartment(
-    requestId: string,
-    input: unknown,
-    assignedBy: string,
-  ): Promise<{ roleKey: DepartmentRoleKey | null }> {
-    const parsed = parseContract(departmentAssignmentInputSchema, input);
-    if (!parsed.success) throw new BadRequestException(parsed.message);
-    const { roleKey } = parsed.data;
-    const result = await this.database.assignQuoteRequestDepartment(
-      requestId,
-      roleKey,
-      assignedBy,
-      new Date().toISOString(),
-    );
-    if (result === undefined)
-      throw new NotFoundException("Quote request was not found");
-    return { roleKey: result };
-  }
-
-  async getDraft(
-    requestId: string,
-    allowedCompanyIds?: string[],
-  ): Promise<QuoteDraftRecord | null> {
-    await this.requireAssociatedRequest(requestId, allowedCompanyIds);
-    return this.database.findQuoteDraft(requestId);
-  }
-
-  async saveDraft(
-    requestId: string,
-    input: unknown,
-    savedBy: string,
-  ): Promise<QuoteDraftRecord> {
-    await this.requireAssociatedRequest(requestId);
-    const parsed = parseContract(quoteDraftInputSchema, input);
-    if (!parsed.success) throw new BadRequestException(parsed.message);
-    const { content } = parsed.data;
-
-    return this.database.saveQuoteDraft(
-      requestId,
-      content,
-      savedBy,
-      new Date().toISOString(),
-    );
-  }
-
-  private async requireAssociatedRequest(
-    requestId: string,
-    allowedCompanyIds?: string[],
-  ): Promise<QuoteRequestRecord> {
-    const request = await this.get(requestId, allowedCompanyIds);
-    if (!request.customerCompanyId) {
-      throw new ConflictException(
-        "Link the quote request to a customer company before drafting",
-      );
-    }
     return request;
   }
 

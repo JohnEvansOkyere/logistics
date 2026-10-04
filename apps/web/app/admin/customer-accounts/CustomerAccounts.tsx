@@ -50,6 +50,7 @@ export function CustomerAccounts() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [creating, setCreating] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [companyId, setCompanyId] = useState("");
@@ -106,6 +107,7 @@ export function CustomerAccounts() {
       );
       setEmail("");
       setPassword("");
+      setCreating(false);
     }, `Account created for ${email.trim()}. No email was sent: give the sign-in details to the customer directly.`);
     setSaving(false);
   }
@@ -126,71 +128,78 @@ export function CustomerAccounts() {
       <main className={styles.page}>
         <section className={styles.heading}>
           <div>
-            <p className={styles.eyebrow}>SETTINGS</p>
             <h1>Customer accounts</h1>
-            <p>
-              Create a sign-in for a customer and link it to their company. The
-              customer sees only the records of the companies linked here.
-            </p>
           </div>
-          <span className={styles.count}>{accounts.length} accounts</span>
+          {!creating && (
+            <button
+              className={styles.headerButton}
+              onClick={() => setCreating(true)}
+              type="button"
+            >
+              New customer account
+            </button>
+          )}
         </section>
 
-        <section
-          className={styles.invitePanel}
-          aria-labelledby="create-customer-account-title"
-        >
-          <div>
-            <p className={styles.eyebrow}>NEW CUSTOMER ACCOUNT</p>
-            <h2 id="create-customer-account-title">
-              Create a customer account
-            </h2>
-            <p>
-              Choose the password here and hand the details to the customer. No
-              email is sent.
-            </p>
-          </div>
-          <form className={styles.inviteForm} onSubmit={createAccount}>
-            <label>
-              Company
-              <select
-                onChange={(event) => setCompanyId(event.target.value)}
-                required
-                value={companyId}
+        {creating && (
+          <section
+            className={styles.invitePanel}
+            aria-labelledby="create-customer-account-title"
+          >
+            <div>
+              <h2 id="create-customer-account-title">
+                Create a customer account
+              </h2>
+            </div>
+            <form className={styles.inviteForm} onSubmit={createAccount}>
+              <label>
+                Company
+                <select
+                  onChange={(event) => setCompanyId(event.target.value)}
+                  required
+                  value={companyId}
+                >
+                  {companies.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.companyName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Email address
+                <input
+                  autoComplete="off"
+                  onChange={(event) => setEmail(event.target.value)}
+                  required
+                  type="email"
+                  value={email}
+                />
+              </label>
+              <label>
+                Initial password
+                <input
+                  autoComplete="new-password"
+                  minLength={12}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                  type="password"
+                  value={password}
+                />
+              </label>
+              <button disabled={saving || !companyId} type="submit">
+                {saving ? "Creating…" : "Create account"}
+              </button>
+              <button
+                className={styles.cancelButton}
+                onClick={() => setCreating(false)}
+                type="button"
               >
-                {companies.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.companyName}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Email address
-              <input
-                autoComplete="off"
-                onChange={(event) => setEmail(event.target.value)}
-                required
-                type="email"
-                value={email}
-              />
-            </label>
-            <label>
-              Initial password
-              <input
-                autoComplete="new-password"
-                minLength={12}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-                type="password"
-                value={password}
-              />
-            </label>
-            <button disabled={saving || !companyId} type="submit">
-              {saving ? "Creating…" : "Create account"}
-            </button>
-          </form>
-        </section>
+                Cancel
+              </button>
+            </form>
+          </section>
+        )}
 
         {error && (
           <p className={styles.error} role="alert">
@@ -206,9 +215,9 @@ export function CustomerAccounts() {
         <section className={styles.directory} aria-labelledby="customers-title">
           <div className={styles.directoryHeading}>
             <div>
-              <p className={styles.eyebrow}>ACCOUNT DIRECTORY</p>
               <h2 id="customers-title">Customer logins</h2>
             </div>
+            <span>{accounts.length} accounts</span>
           </div>
           {loading ? (
             <p className={styles.empty} role="status">

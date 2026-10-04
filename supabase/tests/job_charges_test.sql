@@ -2,7 +2,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT extensions.plan(15);
+SELECT extensions.plan(18);
 
 SELECT extensions.ok(
   NOT has_table_privilege('anon', 'app.job_charge', 'SELECT')
@@ -31,6 +31,47 @@ VALUES ('00000000-0000-4000-8000-0000000000d8', '00000000-0000-4000-8000-0000000
 INSERT INTO app.job_charge (charge_id, job_id, kind, description, currency, unit_quoted_minor, created_by)
 VALUES ('00000000-0000-4000-8000-0000000000e8', '00000000-0000-4000-8000-0000000000c8',
         'disbursement', 'Terminal handling', 'GHS', 50000, '00000000-0000-4000-8000-0000000000a8');
+
+INSERT INTO app.quote (quote_id, service_line, customer_company_id, created_by)
+VALUES ('00000000-0000-4000-8000-0000000000ab8', 'sea_import',
+        '00000000-0000-4000-8000-0000000000b8', '00000000-0000-4000-8000-0000000000a8');
+INSERT INTO app.quote_version (version_id, quote_id, version_number, currency, title, size_labels, created_by)
+VALUES ('00000000-0000-4000-8000-0000000000ac8', '00000000-0000-4000-8000-0000000000ab8',
+        1, 'GHS', 'Synthetic container quote', ARRAY['20ft', '50ft'],
+        '00000000-0000-4000-8000-0000000000a8');
+INSERT INTO app.quote_line (line_id, version_id, position, description, basis, size_amounts_minor)
+VALUES ('00000000-0000-4000-8000-0000000000ad8', '00000000-0000-4000-8000-0000000000ac8',
+        0, 'Container handling', 'per_container', ARRAY[100, 300]::bigint[]);
+
+SELECT extensions.lives_ok(
+  $$INSERT INTO app.job_charge
+      (charge_id, job_id, kind, description, currency, unit_quoted_minor,
+       quote_line_id, quote_container_size, created_by)
+    VALUES
+      ('00000000-0000-4000-8000-0000000000aa1', '00000000-0000-4000-8000-0000000000c8',
+       'service', 'Container handling', 'GHS', 100, '00000000-0000-4000-8000-0000000000ad8',
+       '20ft', '00000000-0000-4000-8000-0000000000a8'),
+      ('00000000-0000-4000-8000-0000000000aa2', '00000000-0000-4000-8000-0000000000c8',
+       'service', 'Container handling', 'GHS', 300, '00000000-0000-4000-8000-0000000000ad8',
+       '50ft', '00000000-0000-4000-8000-0000000000a8')$$,
+  'one quote line can be imported for multiple container sizes'
+);
+SELECT extensions.throws_ok(
+  $$INSERT INTO app.job_charge
+      (job_id, kind, description, currency, unit_quoted_minor,
+       quote_line_id, quote_container_size, created_by)
+    VALUES ('00000000-0000-4000-8000-0000000000c8', 'service', 'Duplicate', 'GHS', 100,
+       '00000000-0000-4000-8000-0000000000ad8', '20FT',
+       '00000000-0000-4000-8000-0000000000a8')$$,
+  '23505', NULL,
+  'a quote line and size combination can only be imported once'
+);
+SELECT extensions.throws_ok(
+  $$UPDATE app.job_charge SET quote_container_size = '40ft'
+    WHERE charge_id = '00000000-0000-4000-8000-0000000000aa1'$$,
+  'job charge fields are immutable',
+  'an imported container size cannot be changed'
+);
 
 SELECT extensions.throws_ok(
   $$INSERT INTO app.job_charge (job_id, kind, description, currency, created_by)

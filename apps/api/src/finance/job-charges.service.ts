@@ -8,7 +8,6 @@ import {
 import {
   chargeActualInputSchema,
   chargeImportInputSchema,
-  convertMinor,
   isUuid,
   jobChargeInputSchema,
   parseContract,
@@ -22,12 +21,10 @@ import {
 } from "../database/database.port";
 import { JobsService } from "../jobs/jobs.service";
 
-const MAX_MINOR_AMOUNT = 1_000_000_000_000;
-
 export interface JobChargeView extends JobChargeRecord {
   /** Quantity times the quoted unit amount; null when quoted "at cost". */
   quotedTotalMinor: number | null;
-  /** The newest actual entry, in the charge's currency once converted. */
+  /** The newest actual entry, in the currency staff recorded. */
   currentActual: ChargeActualRecord | null;
   /** Current actual minus quoted total, when both are known. */
   varianceMinor: number | null;
@@ -38,6 +35,7 @@ export interface JobChargeView extends JobChargeRecord {
 export interface CurrencyTotals {
   currency: string;
   quotedMinor: number;
+  /** Actuals comparable in this charge currency; excludes unconverted GHS costs. */
   actualMinor: number;
   chargesWithoutActual: number;
   disbursementsWithoutEvidence: number;
@@ -45,7 +43,7 @@ export interface CurrencyTotals {
 
 /**
  * Charges on a job: quoted vs actual, disbursements with their supplier
- * evidence, and the exchange rate fixed with each foreign-currency amount.
+ * evidence. New actual costs are recorded in GHS without conversion.
  * Staff only; customers never see these internal figures.
  */
 @Injectable()
@@ -95,6 +93,7 @@ export class JobChargesService {
       jobId: job.id,
       ...parsed.data,
       quoteLineId: null,
+      quoteContainerSize: null,
       createdBy,
     });
     return this.view(charge!);
@@ -119,19 +118,28 @@ export class JobChargesService {
         "This job was not opened from an accepted quote",
       );
     }
-    const { containerSize } = parsed.data;
+    const { containerSize, quantity } = parsed.data;
+
+    const sizeAt = containerSize
+      ? quote.sizeLabels.findIndex(
+          (label) => label.toLowerCase() === containerSize.toLowerCase(),
+        )
+      : -1;
+    if (containerSize && quote.sizeLabels.length > 0 && sizeAt === -1) {
+      throw new BadRequestException(
+        `containerSize must be one of: ${quote.sizeLabels.join(", ")}`,
+      );
+    }
 
     const planned = quote.lines.map((line) => {
-      const sized = line.amount20ftMinor !== null;
+      const sized = line.sizeAmountsMinor !== null;
       if (sized && containerSize === null) {
         throw new BadRequestException(
-          "containerSize (20ft or 40ft) is required: this quote prices by container size",
+          `containerSize (${quote.sizeLabels.join(" or ")}) is required: this quote prices by container size`,
         );
       }
-      const unit = sized
-        ? containerSize === "20ft"
-          ? line.amount20ftMinor
-          : line.amount40ftMinor
+      const unit = line.sizeAmountsMinor
+        ? line.sizeAmountsMinor[sizeAt]
         : line.amountMinor;
       return {
         // Third-party "at cost" lines are pass-through costs.
@@ -141,9 +149,10 @@ export class JobChargesService {
             : ("service" as const),
         description: line.description,
         currency: quote.currency,
-        quantity: 1,
+        quantity: line.basis === "per_container" ? quantity : 1,
         unitQuotedMinor: unit,
         quoteLineId: line.id,
+        quoteContainerSize: line.sizeAmountsMinor ? containerSize : null,
       };
     });
 
@@ -201,31 +210,19 @@ export class JobChargesService {
     if (!charge)
       throw new NotFoundException("Charge was not found on this job");
 
-    await this.requireConfiguredCurrency(data.currency);
-    let convertedMinor = data.amountMinor;
-    if (data.currency === charge.currency) {
-      if (data.exchangeRate !== null) {
-        throw new BadRequestException(
-          "exchangeRate is only for an amount in another currency",
-        );
-      }
-    } else {
-      if (data.exchangeRate === null) {
-        throw new BadRequestException(
-          `exchangeRate is required: the amount is in ${data.currency} and the charge is in ${charge.currency}`,
-        );
-      }
-      convertedMinor = convertMinor(data.amountMinor, data.exchangeRate);
-      if (convertedMinor > MAX_MINOR_AMOUNT) {
-        throw new BadRequestException("The converted amount is too large");
-      }
+    if (data.currency !== "GHS") {
+      throw new BadRequestException("Record actual amounts in GHS");
+    }
+    if (data.exchangeRate !== null || data.rateNote !== null) {
+      throw new BadRequestException("Exchange rates are not recorded here");
     }
 
     const result = await this.database.appendChargeActual({
       jobId: job.id,
       chargeId: charge.id,
       ...data,
-      convertedMinor,
+      convertedMinor:
+        data.currency === charge.currency ? data.amountMinor : null,
       recordedBy,
     });
     if (result === "charge_not_found") {
@@ -255,7 +252,9 @@ export class JobChargesService {
       quotedTotalMinor,
       currentActual,
       varianceMinor:
-        currentActual && quotedTotalMinor !== null
+        currentActual &&
+        currentActual.convertedMinor !== null &&
+        quotedTotalMinor !== null
           ? currentActual.convertedMinor - quotedTotalMinor
           : null,
       evidenceMissing:

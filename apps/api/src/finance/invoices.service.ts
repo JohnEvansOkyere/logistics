@@ -103,8 +103,9 @@ export class InvoicesService {
 
   /**
    * Starts a draft from the job's charges: each charge in the invoice currency
-   * becomes a line at its current actual amount, or its quoted total when no
-   * actual is recorded. Charges with neither are skipped and counted.
+   * becomes a line at its comparable actual amount, or its quoted total when
+   * the actual is in GHS and the invoice currency differs. Charges with
+   * neither are skipped and counted; currencies are never converted here.
    */
   async createFromCharges(
     id: string,

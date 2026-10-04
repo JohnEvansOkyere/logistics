@@ -141,13 +141,7 @@ export function SignInForm() {
 
   return (
     <section className={styles.signInCard}>
-      <p className={styles.eyebrow}>LOCAL ACCESS</p>
       <h1>{mode === "bootstrap" ? "Create super admin" : "Sign in"}</h1>
-      <p className={styles.description}>
-        {mode === "bootstrap"
-          ? "The first local account becomes the super admin. Bootstrap closes after that account is assigned."
-          : "Sign in with the account BJH created for you."}
-      </p>
 
       <form className={styles.form} onSubmit={submit}>
         <label htmlFor="auth-email">

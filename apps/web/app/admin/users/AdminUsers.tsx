@@ -71,6 +71,7 @@ export function AdminUsers() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const loadPage = useCallback(async (requestedPage: number) => {
     setLoading(true);
@@ -113,6 +114,7 @@ export function AdminUsers() {
       );
       setEmail("");
       setPassword("");
+      setCreating(false);
       setNotice(`Account created for ${email.trim()}. No email was sent.`);
       await loadPage(1);
     } catch (cause) {
@@ -226,67 +228,78 @@ export function AdminUsers() {
       <main className={styles.page}>
         <section className={styles.heading}>
           <div>
-            <p className={styles.eyebrow}>SETTINGS</p>
             <h1>Staff management</h1>
-            <p>Create accounts, set passwords, and manage staff access.</p>
           </div>
-          <span className={styles.count}>
-            {users.length} accounts on this page
-          </span>
+          {!creating && (
+            <button
+              className={styles.headerButton}
+              onClick={() => setCreating(true)}
+              type="button"
+            >
+              New staff account
+            </button>
+          )}
         </section>
 
-        <section
-          className={styles.invitePanel}
-          aria-labelledby="create-account-title"
-        >
-          <div>
-            <p className={styles.eyebrow}>NEW STAFF ACCOUNT</p>
-            <h2 id="create-account-title">Create a staff account</h2>
-            <p>
-              Create the login here, then give the sign-in details directly to
-              the staff member. No email is sent.
-            </p>
-          </div>
-          <form className={styles.inviteForm} onSubmit={createAccount}>
-            <label>
-              Email address
-              <input
-                autoComplete="email"
-                onChange={(event) => setEmail(event.target.value)}
-                required
-                type="email"
-                value={email}
-              />
-            </label>
-            <label>
-              Initial password
-              <input
-                autoComplete="new-password"
-                minLength={12}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-                type="password"
-                value={password}
-              />
-            </label>
-            <label>
-              Initial role
-              <select
-                onChange={(event) => setRoleKey(event.target.value as RoleKey)}
-                value={roleKey}
+        {creating && (
+          <section
+            className={styles.invitePanel}
+            aria-labelledby="create-account-title"
+          >
+            <div>
+              <h2 id="create-account-title">Create a staff account</h2>
+            </div>
+            <form className={styles.inviteForm} onSubmit={createAccount}>
+              <label>
+                Email address
+                <input
+                  autoFocus
+                  autoComplete="email"
+                  onChange={(event) => setEmail(event.target.value)}
+                  required
+                  type="email"
+                  value={email}
+                />
+              </label>
+              <label>
+                Initial password
+                <input
+                  autoComplete="new-password"
+                  minLength={12}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                  type="password"
+                  value={password}
+                />
+              </label>
+              <label>
+                Initial role
+                <select
+                  onChange={(event) =>
+                    setRoleKey(event.target.value as RoleKey)
+                  }
+                  value={roleKey}
+                >
+                  {assignableRoles.map(([key, label]) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button disabled={saving} type="submit">
+                {saving ? "Creating…" : "Create account"}
+              </button>
+              <button
+                className={styles.cancelButton}
+                onClick={() => setCreating(false)}
+                type="button"
               >
-                {assignableRoles.map(([key, label]) => (
-                  <option key={key} value={key}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button disabled={saving} type="submit">
-              {saving ? "Creating…" : "Create account"}
-            </button>
-          </form>
-        </section>
+                Cancel
+              </button>
+            </form>
+          </section>
+        )}
 
         {error && (
           <p className={styles.error} role="alert">
@@ -302,10 +315,9 @@ export function AdminUsers() {
         <section className={styles.directory} aria-labelledby="directory-title">
           <div className={styles.directoryHeading}>
             <div>
-              <p className={styles.eyebrow}>ACCOUNT DIRECTORY</p>
               <h2 id="directory-title">Users and role history</h2>
             </div>
-            <span>Supabase Auth</span>
+            <span>{users.length} on this page</span>
           </div>
           {loading ? (
             <p className={styles.empty} role="status">

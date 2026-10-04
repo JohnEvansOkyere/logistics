@@ -206,13 +206,31 @@ export function renderQuotePdf(
 
   // Charge tables, one per heading.
   for (const section of groupLines(version.lines)) {
-    const sized = section.lines.some((line) => line.amount20ftMinor !== null);
+    const sized = section.lines.some((line) => line.sizeAmountsMinor !== null);
+    const hasSingleAmount = section.lines.some(
+      (line) => line.sizeAmountsMinor === null && line.amountMinor !== null,
+    );
+    const basisWidth = hasSingleAmount ? 0.23 : 0.28;
+    const amountWidth = hasSingleAmount ? 0.15 : 0;
+    const sizeWidth =
+      Math.min(hasSingleAmount ? 0.34 : 0.4, 0.2 * version.sizeLabels.length) /
+      Math.max(version.sizeLabels.length, 1);
+    const chargeWidth =
+      1 - basisWidth - amountWidth - sizeWidth * version.sizeLabels.length;
     const columns = sized
       ? [
-          { title: "Charge", width: width * 0.32 },
-          { title: "20ft", width: width * 0.2 },
-          { title: "40ft", width: width * 0.2 },
-          { title: "Basis", width: width * 0.28 },
+          {
+            title: "Charge",
+            width: width * chargeWidth,
+          },
+          ...version.sizeLabels.map((title) => ({
+            title,
+            width: width * sizeWidth,
+          })),
+          ...(hasSingleAmount
+            ? [{ title: "Amount", width: width * amountWidth }]
+            : []),
+          { title: "Basis", width: width * basisWidth },
         ]
       : [
           { title: "Charge", width: width * 0.45 },
@@ -237,8 +255,20 @@ export function renderQuotePdf(
       const cellsText = sized
         ? [
             line.description,
-            amountText(line, line.amount20ftMinor, version.currency),
-            amountText(line, line.amount40ftMinor, version.currency),
+            ...version.sizeLabels.map((_, at) =>
+              amountText(
+                line,
+                line.sizeAmountsMinor?.[at] ?? null,
+                version.currency,
+              ),
+            ),
+            ...(hasSingleAmount
+              ? [
+                  line.sizeAmountsMinor === null
+                    ? amountText(line, line.amountMinor, version.currency)
+                    : "-",
+                ]
+              : []),
             basisText(line),
           ]
         : [
@@ -247,10 +277,19 @@ export function renderQuotePdf(
             basisText(line),
           ];
       doc.font("Helvetica").fontSize(9);
+      // The charge's description, if any, sits under its name in smaller type.
+      const detailsHeight = line.details
+        ? doc
+            .fontSize(8)
+            .heightOfString(line.details, { width: columns[0].width - 12 }) + 2
+        : 0;
+      doc.fontSize(9);
       const rowHeight =
         Math.max(
-          ...cellsText.map((text, index) =>
-            doc.heightOfString(text, { width: columns[index].width - 12 }),
+          ...cellsText.map(
+            (text, index) =>
+              doc.heightOfString(text, { width: columns[index].width - 12 }) +
+              (index === 0 ? detailsHeight : 0),
           ),
         ) + 12;
       if (doc.y + rowHeight > bottom()) {
@@ -263,6 +302,15 @@ export function renderQuotePdf(
         doc.fillColor(INK).text(text, x + 6, y + 6, {
           width: columns[index].width - 12,
         });
+        if (index === 0 && line.details) {
+          doc
+            .fontSize(8)
+            .fillColor(MUTED)
+            .text(line.details, x + 6, doc.y + 2, {
+              width: columns[index].width - 12,
+            })
+            .fontSize(9);
+        }
         x += columns[index].width;
       });
       doc

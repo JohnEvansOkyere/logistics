@@ -25,14 +25,6 @@
   color: #62788a;
   font-size: 0.9rem;
 }
-.eyebrow {
-  margin: 0;
-  color: #6b8295;
-  font-size: 0.64rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-}
-.count,
 .directoryHeading > span {
   color: #63798b;
   font-size: 0.74rem;
@@ -67,7 +59,7 @@
   display: grid;
   grid-template-columns:
     minmax(160px, 1fr) minmax(180px, 1fr) minmax(190px, 0.8fr)
-    auto;
+    auto auto;
   align-items: end;
   gap: 12px;
 }
@@ -97,15 +89,15 @@
 .addRole button,
 .pagination button,
 .passwordForm button {
-  min-height: 40px;
+  min-height: 46px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 999px;
   background: #0b3fae;
   color: white;
-  padding: 0 14px;
+  padding: 0 26px;
   font: inherit;
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: 1rem;
+  font-weight: 600;
   cursor: pointer;
 }
 .inviteForm button:disabled,
@@ -141,14 +133,14 @@
 .userHeading p {
   margin: 0;
   color: #7a8d9d;
-  font-size: 0.69rem;
+  font-size: 0.75rem;
 }
 .activeBadge,
 .inactiveBadge {
   flex: 0 0 auto;
   border-radius: 20px;
   padding: 5px 9px;
-  font-size: 0.63rem;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 .activeBadge {
@@ -178,18 +170,19 @@
   display: block;
   margin-top: 4px;
   color: #8798a5;
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   font-weight: 400;
 }
 .revokeButton {
-  border: 1px solid #e1c7c7;
-  border-radius: 6px;
+  min-height: 40px;
+  border: 1px solid #0b3fae;
+  border-radius: 999px;
   background: white;
-  color: #9d4141;
-  padding: 6px 9px;
+  color: #0b3fae;
+  padding: 0 20px;
   font: inherit;
-  font-size: 0.68rem;
-  font-weight: 700;
+  font-size: 0.9rem;
+  font-weight: 600;
   cursor: pointer;
 }
 .noRoles,
@@ -201,7 +194,7 @@
 .history {
   margin-top: 13px;
   color: #4e6578;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
 }
 .history summary {
   cursor: pointer;
@@ -231,7 +224,7 @@
   height: 35px;
 }
 .passwordForm button {
-  min-height: 35px;
+  min-height: 42px;
 }
 .history ul {
   display: grid;
@@ -249,8 +242,8 @@
   height: 35px;
 }
 .addRole button {
-  min-height: 35px;
-  font-size: 0.69rem;
+  min-height: 42px;
+  font-size: 0.95rem;
 }
 .pagination {
   display: flex;
@@ -259,12 +252,12 @@
   gap: 12px;
   margin-top: 16px;
   color: #6b8091;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
 }
 .pagination button {
-  min-height: 33px;
-  background: #f2f6fa;
-  color: #284760;
+  min-height: 42px;
+  background: #eaf1fb;
+  color: #0b3fae;
 }
 .error,
 .notice {
@@ -318,4 +311,24 @@
   .userHeading {
     flex-direction: column;
   }
+}
+.headerButton,
+.inviteForm .cancelButton {
+  min-height: 46px;
+  border-radius: 999px;
+  padding: 0 26px;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.headerButton {
+  border: 0;
+  background: #0b3fae;
+  color: white;
+}
+.inviteForm .cancelButton {
+  border: 1px solid #0b3fae;
+  background: transparent;
+  color: #0b3fae;
 }

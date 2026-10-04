@@ -29,7 +29,7 @@
 .eyebrow {
   margin: 0 0 9px;
   color: var(--brand-primary);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.1em;
 }
@@ -57,7 +57,7 @@
   background: #f5f8fd;
   color: #536d88;
   padding: 8px 11px;
-  font-size: 0.63rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.06em;
 }
@@ -115,6 +115,18 @@
   gap: 17px;
 }
 
+.customerFormSection + .customerFormSection {
+  margin-top: 24px;
+  border-top: 1px solid #e5ebf0;
+  padding-top: 20px;
+}
+
+.customerFormSection h2 {
+  margin: 0 0 14px;
+  color: #233d55;
+  font-size: 0.9rem;
+}
+
 .customerFormField {
   display: grid;
   min-width: 0;
@@ -129,7 +141,8 @@
   color: #a94d3d;
 }
 
-.customerFormField input {
+.customerFormField input,
+.customerFormField textarea {
   width: 100%;
   min-width: 0;
   border: 1px solid #bdccd9;
@@ -142,7 +155,12 @@
   font-weight: 400;
 }
 
-.customerFormField input:focus {
+.customerFormField textarea {
+  resize: vertical;
+}
+
+.customerFormField input:focus,
+.customerFormField textarea:focus {
   border-color: var(--brand-primary);
   outline: 3px solid rgb(11 63 174 / 12%);
 }
@@ -270,19 +288,21 @@
 .clearButton,
 .emptyClearButton {
   flex: 0 0 auto;
-  border: 0;
-  background: transparent;
+  min-height: 42px;
+  border: 1px solid var(--brand-primary);
+  border-radius: 999px;
+  background: #fff;
   color: var(--brand-primary);
-  padding: 6px;
+  padding: 0 20px;
   font: inherit;
-  font-size: 0.74rem;
-  font-weight: 700;
+  font-size: 0.95rem;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .clearButton:hover,
 .emptyClearButton:hover {
-  text-decoration: underline;
+  background: #eaf1fb;
 }
 
 .resultSummary {
@@ -317,7 +337,7 @@
 
 .customerTable thead th {
   color: #657889;
-  font-size: 0.66rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.035em;
 }
@@ -337,6 +357,14 @@
   text-decoration: underline;
 }
 
+.tradingName {
+  display: block;
+  margin-top: 4px;
+  color: #718394;
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
 .customerTable tbody td {
   color: #536b7e;
 }
@@ -351,7 +379,7 @@
   background: #eef3f7;
   color: #62788a;
   padding: 5px 8px;
-  font-size: 0.62rem;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 

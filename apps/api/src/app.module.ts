@@ -8,7 +8,10 @@ import { RequestErrorFilter } from "./request-error.filter";
 import { AuthModule } from "./auth/auth.module";
 import { DatabaseModule } from "./database/database.module";
 import { HealthController } from "./health.controller";
-import { DocumentsController } from "./documents/documents.controller";
+import {
+  DocumentLibraryController,
+  DocumentsController,
+} from "./documents/documents.controller";
 import { DocumentsService } from "./documents/documents.service";
 import { ExtractionsController } from "./documents/extractions.controller";
 import { ExtractionsService } from "./documents/extractions.service";
@@ -25,6 +28,7 @@ import { JobCorrespondenceController } from "./jobs/job-correspondence.controlle
 import { JobCorrespondenceService } from "./jobs/job-correspondence.service";
 import {
   AdminNotificationsController,
+  ClientMessagesController,
   JobMessagesController,
 } from "./notifications/notifications.controller";
 import { NotificationDispatcher } from "./notifications/notification-dispatcher.service";
@@ -84,6 +88,7 @@ import { QuotesService } from "./quotations/quotes.service";
     JobCorrespondenceController,
     AdminNotificationsController,
     JobMessagesController,
+    ClientMessagesController,
     JobChargesController,
     InvoicesController,
     OutstandingInvoicesController,
@@ -96,6 +101,7 @@ import { QuotesService } from "./quotations/quotes.service";
     StockReportController,
     TasksController,
     DocumentsController,
+    DocumentLibraryController,
     ExtractionsController,
     ActivityController,
   ],

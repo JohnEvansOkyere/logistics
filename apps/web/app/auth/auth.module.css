@@ -7,15 +7,18 @@
 }
 
 .signOutButton {
-  border: 0;
-  background: transparent;
+  min-height: 40px;
+  border: 1px solid var(--brand-primary);
+  border-radius: 999px;
+  background: #fff;
   color: var(--brand-primary);
-  padding: 5px;
+  padding: 0 20px;
   font: inherit;
-  font-weight: 700;
+  font-size: 0.95rem;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .signOutButton:hover {
-  text-decoration: underline;
+  background: #eaf1fb;
 }

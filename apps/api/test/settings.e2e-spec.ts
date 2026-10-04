@@ -89,12 +89,12 @@ const content = (currency = "GHS") => ({
   procedureSteps: [],
   requiredDocuments: [],
   terms: [],
+  sizeLabels: ["20ft", "40ft"],
   lines: [
     {
       description: "BJH service fee",
       basis: "per_container",
-      amount20ftMinor: 150000,
-      amount40ftMinor: 180000,
+      sizeAmountsMinor: [150000, 180000],
     },
   ],
 });
@@ -108,7 +108,6 @@ const settings = (over: Record<string, unknown> = {}) => ({
     website: "synthetic.test",
   },
   currencies: ["usd", "GHS"],
-  defaultCurrency: "ghs",
   taxLines: [{ name: "Synthetic VAT", rateBasisPoints: 1500 }],
   paymentTermsDays: 14,
   numbering: {
@@ -129,7 +128,6 @@ type Revision = {
   settings: {
     issuer: { name: string };
     currencies: string[];
-    defaultCurrency: string;
     quoteDefaults: { procedureSteps: string[]; intro: string | null };
     taxLines: unknown[];
   };
@@ -153,7 +151,6 @@ test("the super admin saves settings; every save is a new revision", async () =>
   assert.equal(revision.changedBy, TEST_SUPER_ADMIN_ID);
   assert.equal(revision.settings.issuer.name, "Synthetic Forwarding Ltd");
   assert.deepEqual(revision.settings.currencies, ["USD", "GHS"]);
-  assert.equal(revision.settings.defaultCurrency, "GHS");
   assert.equal(revision.settings.quoteDefaults.intro, null);
 
   const second = await put(
@@ -198,10 +195,6 @@ test("invalid settings are rejected", async () => {
       "currencies must be 3-letter codes such as USD or GHS",
     ],
     [settings({ currencies: ["USD", "usd"] }), "currencies must not repeat"],
-    [
-      settings({ defaultCurrency: "EUR" }),
-      "defaultCurrency must be one of the configured currencies",
-    ],
     [
       settings({ taxLines: [{ name: "VAT", rateBasisPoints: 15.5 }] }),
       "rateBasisPoints must be a whole number",

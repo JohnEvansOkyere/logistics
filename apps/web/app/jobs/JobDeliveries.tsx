@@ -48,6 +48,7 @@ export function JobDeliveries({
   const [deliveredAt, setDeliveredAt] = useState("");
   const [damage, setDamage] = useState("");
   const [note, setNote] = useState("");
+  const [adding, setAdding] = useState(false);
 
   async function openWaybill(deliveryId: string) {
     // Opened first so the browser treats it as a click, not a pop-up.
@@ -117,6 +118,7 @@ export function JobDeliveries({
         setWeight("");
         setPickup("");
         setAddress("");
+        setAdding(false);
       },
     );
   }
@@ -151,7 +153,18 @@ export function JobDeliveries({
 
   return (
     <section className={styles.card} aria-labelledby="deliveries-title">
-      <h2 id="deliveries-title">Deliveries and waybills</h2>
+      <div className={styles.stepsHeading}>
+        <h2 id="deliveries-title">Deliveries and waybills</h2>
+        {canEdit && !adding && (
+          <button
+            className={styles.secondaryButton}
+            onClick={() => setAdding(true)}
+            type="button"
+          >
+            Dispatch a delivery
+          </button>
+        )}
+      </div>
       {error && (
         <p className={styles.error} role="alert">
           {error}
@@ -215,7 +228,7 @@ export function JobDeliveries({
               )}
               {canEdit && proofFor === delivery.id && (
                 <form
-                  className={styles.form}
+                  className={`${styles.form} ${styles.quickUpdateForm}`}
                   onSubmit={(event) => submitProof(event, delivery)}
                 >
                   <label className={styles.field}>
@@ -263,9 +276,18 @@ export function JobDeliveries({
                       ))}
                     </select>
                   </label>
-                  <button className={styles.button} type="submit">
-                    Save proof of delivery
-                  </button>
+                  <div className={styles.formActions}>
+                    <button className={styles.button} type="submit">
+                      Save proof of delivery
+                    </button>
+                    <button
+                      className={styles.secondaryButton}
+                      onClick={() => setProofFor(null)}
+                      type="button"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </form>
               )}
             </li>
@@ -273,13 +295,11 @@ export function JobDeliveries({
         </ul>
       )}
 
-      {canEdit && (
-        <form className={styles.form} onSubmit={submitDispatch}>
-          <h2>Dispatch a delivery</h2>
-          <p className={styles.muted}>
-            Driver, vehicle and cargo are copied onto the waybill and cannot
-            change afterwards.
-          </p>
+      {canEdit && adding && (
+        <form
+          className={`${styles.form} ${styles.quickUpdateForm}`}
+          onSubmit={submitDispatch}
+        >
           <label className={styles.field}>
             Driver
             <select
@@ -349,9 +369,18 @@ export function JobDeliveries({
               value={address}
             />
           </label>
-          <button className={styles.button} type="submit">
-            Dispatch and number the waybill
-          </button>
+          <div className={styles.formActions}>
+            <button className={styles.button} type="submit">
+              Dispatch and number the waybill
+            </button>
+            <button
+              className={styles.secondaryButton}
+              onClick={() => setAdding(false)}
+              type="button"
+            >
+              Cancel
+            </button>
+          </div>
         </form>
       )}
     </section>

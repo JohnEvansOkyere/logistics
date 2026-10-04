@@ -107,12 +107,7 @@ export function ActivityLog() {
       <main className={adminStyles.page}>
         <section className={adminStyles.heading}>
           <div>
-            <p className={adminStyles.eyebrow}>SETTINGS</p>
             <h1>Activity log</h1>
-            <p>
-              Everything signed-in users do, newest first, including attempts
-              that were denied. Request contents are not stored.
-            </p>
           </div>
         </section>
 

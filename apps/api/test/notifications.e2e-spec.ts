@@ -94,7 +94,6 @@ function settings(channels?: string) {
   return {
     issuer: { name: "Synthetic Forwarding Ltd" },
     currencies: ["GHS"],
-    defaultCurrency: "GHS",
     taxLines: [],
     paymentTermsDays: 30,
     numbering: {
@@ -213,7 +212,7 @@ test("a milestone messages every contact by email and SMS, with a link, until th
   assert.equal(recorded.status, 201);
 
   const [notice] = await byEvent("milestone");
-  const link = `https://portal.example.test/jobs/${jobA}`;
+  const link = `https://portal.example.test/jobs/${jobA}/shipment`;
   assert.equal(notice.linkUrl, link);
   assert.match(notice.subject, /^BJH\/SI\/\d{4}\/\d{4}: /);
   assert.ok(notice.body.includes(`View it here: ${link}`));

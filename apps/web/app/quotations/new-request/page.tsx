@@ -16,26 +16,9 @@ export default function NewRequestPreviewPage() {
 
       <header className={styles.pageHeader}>
         <div>
-          <p className={styles.eyebrow}>STAFF WORKSPACE · LOCAL ENGINE</p>
           <h1>Quotation request intake</h1>
-          <p className={styles.description}>
-            Capture contact details and the customer's request for follow-up.
-          </p>
         </div>
-        <span className={styles.localBadge}>LOCAL DEVELOPMENT</span>
       </header>
-
-      <aside
-        className={styles.sampleNotice}
-        aria-label="Local development notice"
-      >
-        <span aria-hidden="true">i</span>
-        <p>
-          <strong>Local development only.</strong> Requests are stored in local
-          database. Use synthetic details. Pricing, quote terms, and job
-          creation are not part of this intake step.
-        </p>
-      </aside>
 
       <RequestComposer />
     </main>

@@ -188,8 +188,9 @@ test("a job can only link a quote request from the same company", async () => {
     createdAt: new Date().toISOString(),
     customerCompanyId: null,
     customerCompanyName: null,
-    quoteDraftRevisionCount: 0,
-    quoteDraftUpdatedAt: null,
+    quoteId: null,
+    quoteNumber: null,
+    quoteStatus: null,
   });
   await database.linkQuoteRequestToCustomer(requestId, companyB);
   const mismatch = await openJob(TEST_SUPER_ADMIN_TOKEN, {

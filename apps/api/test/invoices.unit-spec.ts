@@ -142,7 +142,6 @@ const settings = {
     website: null,
   },
   currencies: ["GHS"],
-  defaultCurrency: "GHS",
   taxLines: [],
   paymentTermsDays: null,
   numbering: {

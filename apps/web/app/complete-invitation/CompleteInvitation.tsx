@@ -88,7 +88,6 @@ export function CompleteInvitation() {
         ← Staff sign in
       </Link>
       <section className={styles.signInCard}>
-        <p className={styles.eyebrow}>STAFF INVITATION</p>
         <h1>Set your password</h1>
         <p className={styles.description}>
           {email

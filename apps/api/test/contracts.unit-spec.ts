@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   customerInputSchema,
+  chargeImportInputSchema,
   milestoneTemplates,
   serviceLineKeys,
-  departmentAssignmentInputSchema,
   parseContract,
-  quoteDraftInputSchema,
   quoteRequestInputSchema,
+  quoteVersionInputSchema,
   staffCreateInputSchema,
   staffRoleInputSchema,
 } from "@bjh/contracts";
@@ -30,7 +30,17 @@ test("customer contract trims text and rejects invalid bodies with API wording",
     success: true,
     data: {
       companyName: "Northstar Synthetic Ltd",
+      tradingName: null,
+      registrationNumber: null,
+      taxNumber: null,
+      companyPhone: null,
+      companyEmail: null,
+      website: null,
+      businessAddress: null,
+      billingAddress: null,
+      country: null,
       contactName: "Contact",
+      contactRole: null,
       email: "contact@example.test",
       phone: null,
     },
@@ -42,6 +52,21 @@ test("customer contract trims text and rejects invalid bodies with API wording",
     phone: " 024 405 8592 ",
   });
   assert.equal(withPhone.success && withPhone.data.phone, "024 405 8592");
+  const withCompanyPhone = parseContract(customerInputSchema, {
+    companyName: "Northstar Synthetic Ltd",
+    contactName: "Contact",
+    email: "contact@example.test",
+    companyPhone: " +233 24 405 8592 ",
+    tradingName: " Northstar ",
+  });
+  assert.equal(
+    withCompanyPhone.success && withCompanyPhone.data.companyPhone,
+    "+233 24 405 8592",
+  );
+  assert.equal(
+    withCompanyPhone.success && withCompanyPhone.data.tradingName,
+    "Northstar",
+  );
   assert.equal(
     message(customerInputSchema, {
       companyName: "x",
@@ -101,29 +126,57 @@ test("quote request contract enforces the message length", () => {
   );
 });
 
-test("quote draft and department contracts", () => {
-  assert.equal(message(quoteDraftInputSchema, { content: " draft " }), "ok");
+test("quote sizes are quote-specific labels with one matching amount per size", () => {
+  const base = {
+    currency: "GHS",
+    title: "Synthetic quote",
+    procedureSteps: [],
+    requiredDocuments: [],
+    terms: [],
+    sizeLabels: ["20ft", "40ft", "50ft"],
+    lines: [
+      {
+        description: "Container handling",
+        basis: "per_container",
+        sizeAmountsMinor: [100, 200, 300],
+      },
+    ],
+  };
+  assert.equal(message(quoteVersionInputSchema, base), "ok");
   assert.equal(
-    message(quoteDraftInputSchema, { content: "x".repeat(20001) }),
-    "content must contain 1 to 20000 characters",
+    message(quoteVersionInputSchema, {
+      ...base,
+      sizeLabels: ["50ft", "50FT"],
+    }),
+    "sizeLabels must not repeat",
   );
   assert.equal(
-    message(departmentAssignmentInputSchema, { roleKey: null }),
-    "ok",
+    message(quoteVersionInputSchema, {
+      ...base,
+      lines: [{ ...base.lines[0], sizeAmountsMinor: [100, 200] }],
+    }),
+    "Give one amount for each size column, or use one amount",
   );
   assert.equal(
-    message(departmentAssignmentInputSchema, { roleKey: "sea_import_rep" }),
-    "ok",
+    message(quoteVersionInputSchema, {
+      ...base,
+      lines: [{ ...base.lines[0], details: "x".repeat(501) }],
+    }),
+    "details must be at most 500 characters",
   );
-  for (const roleKey of ["super_admin", "nope", undefined, 1]) {
-    assert.equal(
-      message(departmentAssignmentInputSchema, { roleKey }),
-      "roleKey must be a department role or null",
-    );
-  }
+});
+
+test("quote charge import accepts a custom size and container count", () => {
+  assert.deepEqual(
+    parseContract(chargeImportInputSchema, {
+      containerSize: "50ft",
+      quantity: 3,
+    }),
+    { success: true, data: { containerSize: "50ft", quantity: 3 } },
+  );
   assert.equal(
-    message(departmentAssignmentInputSchema, null),
-    "A department role is required",
+    message(chargeImportInputSchema, { containerSize: "50ft", quantity: 0 }),
+    "quantity must be at least 1",
   );
 });
 

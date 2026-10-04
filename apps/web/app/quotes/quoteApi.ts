@@ -6,11 +6,11 @@ export type QuoteLine = {
   position: number;
   section: string | null;
   description: string;
+  details: string | null;
   basis: QuoteBasis;
   basisNote: string | null;
   amountMinor: number | null;
-  amount20ftMinor: number | null;
-  amount40ftMinor: number | null;
+  sizeAmountsMinor: number[] | null;
 };
 
 export type QuoteVersion = {
@@ -28,6 +28,7 @@ export type QuoteVersion = {
   documentsNote: string | null;
   timeline: string | null;
   terms: string[];
+  sizeLabels: string[];
   issuedAt: string | null;
   lines: QuoteLine[];
 };
@@ -78,14 +79,15 @@ export type QuoteVersionBody = {
   documentsNote?: string;
   timeline?: string;
   terms: string[];
+  sizeLabels: string[];
   lines: Array<{
     section?: string;
     description: string;
+    details?: string;
     basis: QuoteBasis;
     basisNote?: string;
     amountMinor?: number;
-    amount20ftMinor?: number;
-    amount40ftMinor?: number;
+    sizeAmountsMinor?: number[];
   }>;
 };
 
@@ -121,6 +123,8 @@ export const getQuote = (id: string) =>
 export const createQuote = (input: {
   customerCompanyId: string;
   serviceLine: ServiceLine;
+  /** The customer request this quote answers, if any. */
+  quoteRequestId?: string;
   version: QuoteVersionBody;
 }) => send<Quote>("", "POST", input);
 export const saveQuoteDraft = (id: string, body: QuoteVersionBody) =>

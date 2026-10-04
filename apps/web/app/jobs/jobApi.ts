@@ -36,6 +36,7 @@ export type MilestoneEvent = {
   occurredAt: string;
   recordedAt: string;
   recordedBy: string;
+  source: "manual" | "system";
   note: string | null;
   correctionOf: string | null;
 };
@@ -127,7 +128,12 @@ export const getTimeline = (id: string) =>
   send<Timeline>(`/${encodeURIComponent(id)}/milestones`, "GET");
 export const recordMilestone = (
   id: string,
-  input: { milestoneKey: string; occurredAt?: string; note?: string },
+  input: {
+    milestoneKey: string;
+    occurredAt?: string;
+    note?: string;
+    correctionOf?: string;
+  },
 ) =>
   send<MilestoneEvent>(`/${encodeURIComponent(id)}/milestones`, "POST", input);
 export const getStatusHistory = (id: string) =>
@@ -299,7 +305,7 @@ export type ChargeActual = {
   amountMinor: number;
   currency: string;
   exchangeRate: string | null;
-  convertedMinor: number;
+  convertedMinor: number | null;
   rateNote: string | null;
   supplierDocumentId: string | null;
   note: string | null;
@@ -313,6 +319,7 @@ export type JobCharge = {
   currency: string;
   quantity: number;
   unitQuotedMinor: number | null;
+  quoteContainerSize: string | null;
   quotedTotalMinor: number | null;
   currentActual: ChargeActual | null;
   actuals: ChargeActual[];
@@ -348,11 +355,15 @@ export const removeCharge = (id: string, chargeId: string) =>
     `/${encodeURIComponent(id)}/charges/${encodeURIComponent(chargeId)}`,
     "DELETE",
   );
-export const importCharges = (id: string, containerSize?: "20ft" | "40ft") =>
+export const importCharges = (
+  id: string,
+  containerSize?: string,
+  quantity = 1,
+) =>
   send<{ created: JobCharge[]; skipped: number }>(
     `/${encodeURIComponent(id)}/charges/import-from-quote`,
     "POST",
-    { containerSize },
+    { containerSize, quantity },
   );
 export const recordActual = (
   id: string,

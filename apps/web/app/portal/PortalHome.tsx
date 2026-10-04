@@ -69,15 +69,10 @@ export function PortalHome() {
       <main className={styles.page}>
         <header className={styles.header}>
           <div>
-            <p className={styles.eyebrow}>CUSTOMER PORTAL</p>
             <h1 className={styles.title}>
               {companies.map((item) => item.companyName).join(", ") ||
                 "Your account"}
             </h1>
-            <p className={styles.muted}>
-              Follow your shipments, download your documents and invoices, and
-              ask for a quotation.
-            </p>
           </div>
         </header>
 

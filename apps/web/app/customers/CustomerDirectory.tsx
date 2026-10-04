@@ -51,9 +51,6 @@ export function CustomerDirectory() {
           <label className={styles.searchLabel} htmlFor="customer-search">
             Search companies and contacts
           </label>
-          <p className={styles.searchHint}>
-            Search by company, contact name, or email address.
-          </p>
         </div>
         {isSuperAdmin && (
           <Link className={styles.newCustomerLink} href="/customers/new">
@@ -71,7 +68,7 @@ export function CustomerDirectory() {
           className={styles.searchInput}
           id="customer-search"
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Try a company, contact, or email"
+          placeholder="Try a company, ID number, address, contact, or phone"
           type="search"
           value={query}
         />
@@ -135,6 +132,11 @@ export function CustomerDirectory() {
                           href={`/customers/${customer.id}`}
                         >
                           {customer.companyName}
+                          {customer.tradingName && (
+                            <span className={styles.tradingName}>
+                              Trading as {customer.tradingName}
+                            </span>
+                          )}
                         </Link>
                       </th>
                       <td>

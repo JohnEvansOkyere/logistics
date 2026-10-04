@@ -16,28 +16,9 @@ export default function CustomersPage() {
 
       <header className={styles.header}>
         <div>
-          <p className={styles.eyebrow}>STAFF WORKSPACE · LOCAL ENGINE</p>
           <h1 className={styles.title}>Customer directory</h1>
-          <p className={styles.description}>
-            Search customer profiles and contact details in the staff directory.
-          </p>
         </div>
-        <span className={styles.localBadge}>LOCAL DEVELOPMENT</span>
       </header>
-
-      <aside
-        className={styles.sampleNotice}
-        aria-label="Local development notice"
-      >
-        <span className={styles.noticeMark} aria-hidden="true">
-          !
-        </span>
-        <p>
-          <strong>Local development only.</strong> Sign in with the local
-          super_admin account and use synthetic details. Customer-company
-          membership access is not implemented yet.
-        </p>
-      </aside>
 
       <CustomerDirectory />
     </main>

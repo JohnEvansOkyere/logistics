@@ -8,7 +8,6 @@ export const departmentRoleKeys = [
 ] as const;
 export const staffRoleKeys = ["super_admin", ...departmentRoleKeys] as const;
 
-export type DepartmentRoleKey = (typeof departmentRoleKeys)[number];
 export type StaffRoleKey = (typeof staffRoleKeys)[number];
 
 export const serviceLineKeys = [
@@ -45,6 +44,16 @@ const emailField = requiredText("email", 254).refine(
 
 const objectError = (message: string) => ({ error: message });
 
+const optionalText = (field: string, maximumLength: number) =>
+  z
+    .string({ error: `${field} must be text` })
+    .transform((value) => value.trim())
+    .refine((value) => value.length <= maximumLength, {
+      error: `${field} must be at most ${maximumLength} characters`,
+    })
+    .nullish()
+    .transform((value) => value || null);
+
 /** A phone number people can type: digits with an optional +, spaces, dashes and brackets. */
 const phoneField = z
   .string({ error: "phone must be text" })
@@ -59,7 +68,24 @@ const phoneField = z
 export const customerInputSchema = z.object(
   {
     companyName: requiredText("companyName", 160),
+    tradingName: optionalText("tradingName", 160),
+    registrationNumber: optionalText("registrationNumber", 120),
+    taxNumber: optionalText("taxNumber", 120),
+    companyPhone: phoneField,
+    companyEmail: z
+      .string({ error: "companyEmail must be text" })
+      .transform((value) => value.trim())
+      .refine((value) => value === "" || EMAIL_PATTERN.test(value), {
+        error: "companyEmail must be a valid email address",
+      })
+      .nullish()
+      .transform((value) => value || null),
+    website: optionalText("website", 300),
+    businessAddress: optionalText("businessAddress", 1000),
+    billingAddress: optionalText("billingAddress", 1000),
+    country: optionalText("country", 100),
     contactName: requiredText("contactName", 160),
+    contactRole: optionalText("contactRole", 120),
     email: emailField,
     phone: phoneField,
   },
@@ -67,24 +93,59 @@ export const customerInputSchema = z.object(
 );
 export type CustomerInput = z.infer<typeof customerInputSchema>;
 
+export const customerCompanyUpdateSchema = z.object(
+  {
+    companyName: requiredText("companyName", 160),
+    tradingName: optionalText("tradingName", 160),
+    registrationNumber: optionalText("registrationNumber", 120),
+    taxNumber: optionalText("taxNumber", 120),
+    phone: phoneField,
+    companyEmail: z
+      .string({ error: "companyEmail must be text" })
+      .transform((value) => value.trim())
+      .refine((value) => value === "" || EMAIL_PATTERN.test(value), {
+        error: "companyEmail must be a valid email address",
+      })
+      .nullish()
+      .transform((value) => value || null),
+    website: optionalText("website", 300),
+    businessAddress: optionalText("businessAddress", 1000),
+    billingAddress: optionalText("billingAddress", 1000),
+    country: optionalText("country", 100),
+  },
+  objectError("A customer company update is required"),
+);
+export type CustomerCompanyUpdate = z.infer<typeof customerCompanyUpdateSchema>;
+
 export const customerContactInputSchema = z.object(
   {
     name: requiredText("name", 160),
+    role: optionalText("role", 120),
     email: emailField,
     phone: phoneField,
+    isPrimary: z.boolean().default(false),
   },
   objectError("A contact object is required"),
 );
 export type CustomerContactInput = z.infer<typeof customerContactInputSchema>;
 
-/** Change a contact's phone number or switch its notifications on or off. */
-export const customerContactUpdateSchema = z.object(
-  {
-    phone: phoneField,
-    notify: z.boolean({ error: "notify must be true or false" }).optional(),
-  },
-  objectError("A contact update object is required"),
-);
+/** Update a contact's details and notification settings. */
+export const customerContactUpdateSchema = z
+  .object(
+    {
+      name: requiredText("name", 160),
+      role: optionalText("role", 120),
+      email: emailField,
+      phone: phoneField,
+      notify: z.boolean({ error: "notify must be true or false" }),
+      isPrimary: z.boolean({ error: "isPrimary must be true or false" }),
+    },
+    objectError("A contact update object is required"),
+  )
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, {
+    error: "At least one contact field must be provided",
+  });
 export type CustomerContactUpdate = z.infer<typeof customerContactUpdateSchema>;
 
 export const quoteRequestInputSchema = z.object(
@@ -97,26 +158,6 @@ export const quoteRequestInputSchema = z.object(
   objectError("A quote request object is required"),
 );
 export type QuoteRequestInput = z.infer<typeof quoteRequestInputSchema>;
-
-export const quoteDraftInputSchema = z.object(
-  {
-    content: requiredText("content", 20000),
-  },
-  objectError("A quote draft object is required"),
-);
-export type QuoteDraftInput = z.infer<typeof quoteDraftInputSchema>;
-
-export const departmentAssignmentInputSchema = z.object(
-  {
-    roleKey: z.union([z.enum(departmentRoleKeys), z.null()], {
-      error: "roleKey must be a department role or null",
-    }),
-  },
-  objectError("A department role is required"),
-);
-export type DepartmentAssignmentInput = z.infer<
-  typeof departmentAssignmentInputSchema
->;
 
 const staffRoleField = z.enum(staffRoleKeys, {
   error: "roleKey is not a supported staff role",
@@ -335,6 +376,28 @@ export const documentUploadFieldsSchema = z.object(
 );
 export type DocumentUploadFields = z.infer<typeof documentUploadFieldsSchema>;
 
+/** A library upload is always a new document; it may name a job or a company, not both. */
+export const libraryUploadFieldsSchema = documentUploadFieldsSchema
+  .omit({ documentId: true })
+  .extend({
+    title: z
+      .string()
+      .trim()
+      .max(200, { error: "title can be at most 200 characters" })
+      .nullish()
+      .transform((value) => value || null),
+    jobId: uuidField("jobId")
+      .nullish()
+      .transform((value) => value ?? null),
+    companyId: uuidField("companyId")
+      .nullish()
+      .transform((value) => value ?? null),
+  })
+  .refine((fields) => !(fields.jobId && fields.companyId), {
+    error: "Choose a job or a customer company, not both",
+  });
+export type LibraryUploadFields = z.infer<typeof libraryUploadFieldsSchema>;
+
 export interface MilestoneDefinition {
   key: string;
   label: string;
@@ -528,16 +591,6 @@ export const taskKinds = [
 ] as const;
 export type TaskKind = (typeof taskKinds)[number];
 
-const optionalText = (field: string, maximumLength: number) =>
-  z
-    .string({ error: `${field} must be text` })
-    .transform((value) => value.trim())
-    .refine((value) => value.length <= maximumLength, {
-      error: `${field} must be at most ${maximumLength} characters`,
-    })
-    .nullish()
-    .transform((value) => value || null);
-
 export const jobTaskInputSchema = z.object(
   {
     kind: z
@@ -610,34 +663,41 @@ const textList = (field: string, maximumItems: number, maximumLength: number) =>
     .nullish()
     .transform((value) => value ?? []);
 
-/** One charge row: a single amount, or a 20ft and a 40ft amount together. */
+/** One charge row: a single amount, or one amount per size column of the quote. */
 export const quoteLineInputSchema = z
   .object(
     {
       section: optionalText("section", 200),
       description: requiredText("description", 300),
+      /** Optional description printed under the charge name. */
+      details: optionalText("details", 500),
       basis: z.enum(quoteBasisKeys, {
         error: `basis must be one of ${quoteBasisKeys.join(", ")}`,
       }),
       basisNote: optionalText("basisNote", 300),
       amountMinor: minorAmount("amountMinor"),
-      amount20ftMinor: minorAmount("amount20ftMinor"),
-      amount40ftMinor: minorAmount("amount40ftMinor"),
+      sizeAmountsMinor: z
+        .array(
+          z
+            .number({ error: "sizeAmountsMinor must be whole minor units" })
+            .int({ error: "sizeAmountsMinor must be whole minor units" })
+            .min(0, { error: "sizeAmountsMinor cannot be negative" })
+            .max(MAX_MINOR_AMOUNT, { error: "sizeAmountsMinor is too large" }),
+          { error: "sizeAmountsMinor must be a list of amounts" },
+        )
+        .min(1, { error: "sizeAmountsMinor needs at least one amount" })
+        .max(4, { error: "sizeAmountsMinor has at most 4 amounts" })
+        .nullish()
+        .transform((value) => value ?? null),
     },
     objectError("A charge line object is required"),
   )
   .superRefine((line, context) => {
-    const sized =
-      line.amount20ftMinor !== null || line.amount40ftMinor !== null;
-    if ((line.amount20ftMinor === null) !== (line.amount40ftMinor === null)) {
+    const sized = line.sizeAmountsMinor !== null;
+    if (sized && line.amountMinor !== null) {
       context.addIssue({
         code: "custom",
-        message: "Give both the 20ft and the 40ft amount, or neither",
-      });
-    } else if (sized && line.amountMinor !== null) {
-      context.addIssue({
-        code: "custom",
-        message: "Use either one amount or 20ft and 40ft amounts, not both",
+        message: "Use either one amount or an amount per size, not both",
       });
     } else if (
       line.basis !== "at_cost" &&
@@ -652,30 +712,53 @@ export const quoteLineInputSchema = z
   });
 export type QuoteLineInput = z.infer<typeof quoteLineInputSchema>;
 
-export const quoteVersionInputSchema = z.object(
-  {
-    currency: z
-      .string({ error: "currency is required" })
-      .transform((value) => value.trim().toUpperCase())
-      .refine((value) => /^[A-Z]{3}$/.test(value), {
-        error: "currency must be a 3-letter code such as USD or GHS",
-      }),
-    title: requiredText("title", 200),
-    subtitle: optionalText("subtitle", 200),
-    shipmentScope: optionalText("shipmentScope", 500),
-    intro: optionalText("intro", 4000),
-    atCostNote: optionalText("atCostNote", 2000),
-    procedureSteps: textList("procedureSteps", 30, 1000),
-    requiredDocuments: textList("requiredDocuments", 30, 300),
-    documentsNote: optionalText("documentsNote", 2000),
-    timeline: optionalText("timeline", 2000),
-    terms: textList("terms", 30, 1000),
-    lines: z
-      .array(quoteLineInputSchema, { error: "lines must be a list" })
-      .max(100, { error: "A quote can have at most 100 charge lines" }),
-  },
-  objectError("A quote version object is required"),
-);
+export const quoteVersionInputSchema = z
+  .object(
+    {
+      currency: z
+        .string({ error: "currency is required" })
+        .transform((value) => value.trim().toUpperCase())
+        .refine((value) => /^[A-Z]{3}$/.test(value), {
+          error: "currency must be a 3-letter code such as USD or GHS",
+        }),
+      title: requiredText("title", 200),
+      subtitle: optionalText("subtitle", 200),
+      shipmentScope: optionalText("shipmentScope", 500),
+      intro: optionalText("intro", 4000),
+      atCostNote: optionalText("atCostNote", 2000),
+      procedureSteps: textList("procedureSteps", 30, 1000),
+      requiredDocuments: textList("requiredDocuments", 30, 300),
+      documentsNote: optionalText("documentsNote", 2000),
+      timeline: optionalText("timeline", 2000),
+      terms: textList("terms", 30, 1000),
+      /** Names of the size columns, for example 20ft and 40ft; empty for none. */
+      sizeLabels: textList("sizeLabels", 4, 30),
+      lines: z
+        .array(quoteLineInputSchema, { error: "lines must be a list" })
+        .max(100, { error: "A quote can have at most 100 charge lines" }),
+    },
+    objectError("A quote version object is required"),
+  )
+  .superRefine((version, context) => {
+    const names = version.sizeLabels.map((label) => label.toLowerCase());
+    if (new Set(names).size !== names.length) {
+      context.addIssue({
+        code: "custom",
+        message: "sizeLabels must not repeat",
+      });
+    } else if (
+      version.lines.some(
+        (line) =>
+          line.sizeAmountsMinor !== null &&
+          line.sizeAmountsMinor.length !== version.sizeLabels.length,
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Give one amount for each size column, or use one amount",
+      });
+    }
+  });
 export type QuoteVersionInput = z.infer<typeof quoteVersionInputSchema>;
 
 export const quoteCreateInputSchema = z.object(
@@ -771,9 +854,6 @@ export const businessSettingsSchema = z
         )
         .min(1, { error: "Configure at least one currency" })
         .max(10, { error: "At most 10 currencies can be configured" }),
-      defaultCurrency: z
-        .string({ error: "defaultCurrency is required" })
-        .transform((value) => value.trim().toUpperCase()),
       taxLines: z
         .array(
           z.object(
@@ -857,11 +937,6 @@ export const businessSettingsSchema = z
         code: "custom",
         message: "currencies must not repeat",
       });
-    } else if (!settings.currencies.includes(settings.defaultCurrency)) {
-      context.addIssue({
-        code: "custom",
-        message: "defaultCurrency must be one of the configured currencies",
-      });
     }
   });
 export type BusinessSettings = z.infer<typeof businessSettingsSchema>;
@@ -938,10 +1013,15 @@ export type ChargeActualInput = z.infer<typeof chargeActualInputSchema>;
 
 export const chargeImportInputSchema = z.object(
   {
-    containerSize: z
-      .enum(["20ft", "40ft"], { error: "containerSize must be 20ft or 40ft" })
+    /** One of the size column names of the accepted quote, such as 20ft. */
+    containerSize: optionalText("containerSize", 30),
+    quantity: z
+      .number({ error: "quantity must be a whole number" })
+      .int({ error: "quantity must be a whole number" })
+      .min(1, { error: "quantity must be at least 1" })
+      .max(10000, { error: "quantity cannot exceed 10000" })
       .nullish()
-      .transform((value) => value ?? null),
+      .transform((value) => value ?? 1),
   },
   objectError("An import object is required"),
 );
@@ -1235,6 +1315,31 @@ export const jobMessageInputSchema = z.object(
   objectError("A message object is required"),
 );
 export type JobMessageInput = z.infer<typeof jobMessageInputSchema>;
+
+/**
+ * A message to client companies that is not about one job: to every company
+ * ("all") or to the companies chosen, sent by the configured channels.
+ */
+export const clientMessageInputSchema = z.object(
+  {
+    audience: z.union(
+      [
+        z.literal("all"),
+        z
+          .array(uuidField("audience"), {
+            error: "audience must be all or a list of company IDs",
+          })
+          .min(1, { error: "Choose at least one company" })
+          .max(500, { error: "At most 500 companies can be chosen" }),
+      ],
+      { error: "audience must be all or a list of company IDs" },
+    ),
+    subject: optionalText("subject", 200),
+    body: requiredText("body", 1500),
+  },
+  objectError("A message object is required"),
+);
+export type ClientMessageInput = z.infer<typeof clientMessageInputSchema>;
 
 /** The fields a person chose to apply from an extraction draft, with any corrections. */
 export const extractionApproveInputSchema = z.object(

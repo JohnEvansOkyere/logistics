@@ -8,17 +8,9 @@ import type { CustomerCompany } from "../../../customers/customerApi";
 import { useStaffAccess } from "../../../auth/useStaffAccess";
 import {
   associateQuoteRequestCustomer,
-  assignQuoteRequestDepartment,
-  getQuoteDraft,
-  getQuoteRequestAssignment,
   getQuoteRequest,
-  saveQuoteDraft,
 } from "../../quoteRequestApi";
-import type {
-  DepartmentRoleKey,
-  QuoteDraft,
-  QuoteRequest,
-} from "../../quoteRequestApi";
+import type { QuoteRequest } from "../../quoteRequestApi";
 import styles from "../../quotation.module.css";
 
 type LoadState = "loading" | "ready" | "error";
@@ -34,17 +26,6 @@ export function QuoteRequestDetail() {
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [linkError, setLinkError] = useState("");
   const [linking, setLinking] = useState(false);
-  const [draft, setDraft] = useState<QuoteDraft | null>(null);
-  const [draftContent, setDraftContent] = useState("");
-  const [draftState, setDraftState] = useState<LoadState>("loading");
-  const [draftError, setDraftError] = useState("");
-  const [savingDraft, setSavingDraft] = useState(false);
-  const [assignedRole, setAssignedRole] = useState<DepartmentRoleKey | null>(
-    null,
-  );
-  const [selectedRole, setSelectedRole] = useState("");
-  const [assignmentError, setAssignmentError] = useState("");
-  const [savingAssignment, setSavingAssignment] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -54,37 +35,6 @@ export function QuoteRequestDetail() {
         if (active) {
           setRequest(result);
           setLoadState("ready");
-          if (result.customerCompanyId) {
-            if (staffAccess.status === "loading") return;
-            if (staffAccess.status === "unavailable") {
-              setDraftError("Staff access could not be checked.");
-              setDraftState("error");
-              return;
-            }
-            setDraftState("loading");
-            getQuoteDraft(requestId)
-              .then((savedDraft) => {
-                if (active) {
-                  setDraft(savedDraft);
-                  setDraftContent(savedDraft?.content ?? "");
-                  setDraftState("ready");
-                }
-              })
-              .catch((cause: unknown) => {
-                if (active) {
-                  setDraftError(
-                    cause instanceof Error
-                      ? cause.message
-                      : "The quote draft could not be loaded",
-                  );
-                  setDraftState("error");
-                }
-              });
-          } else {
-            setDraft(null);
-            setDraftContent("");
-            setDraftState("ready");
-          }
         }
       })
       .catch((cause: unknown) => {
@@ -101,23 +51,7 @@ export function QuoteRequestDetail() {
     return () => {
       active = false;
     };
-  }, [requestId, staffAccess.isDepartmentStaff, staffAccess.status]);
-
-  useEffect(() => {
-    if (staffAccess.status !== "ready" || !staffAccess.roles.length) return;
-    getQuoteRequestAssignment(requestId)
-      .then((role) => {
-        setAssignedRole(role);
-        setSelectedRole(role ?? "");
-      })
-      .catch((cause: unknown) => {
-        setAssignmentError(
-          cause instanceof Error
-            ? cause.message
-            : "Assignment could not be loaded",
-        );
-      });
-  }, [requestId, staffAccess.roles.length, staffAccess.status]);
+  }, [requestId]);
 
   useEffect(() => {
     let active = true;
@@ -155,20 +89,6 @@ export function QuoteRequestDetail() {
         selectedCustomerId,
       );
       setRequest(linkedRequest);
-      setDraftState("loading");
-      try {
-        const savedDraft = await getQuoteDraft(requestId);
-        setDraft(savedDraft);
-        setDraftContent(savedDraft?.content ?? "");
-        setDraftState("ready");
-      } catch (cause) {
-        setDraftError(
-          cause instanceof Error
-            ? cause.message
-            : "The quote draft could not be loaded",
-        );
-        setDraftState("error");
-      }
     } catch (cause) {
       setLinkError(
         cause instanceof Error
@@ -180,61 +100,6 @@ export function QuoteRequestDetail() {
     }
   }
 
-  async function saveDraft() {
-    if (savingDraft || !draftContent.trim()) {
-      return;
-    }
-
-    setSavingDraft(true);
-    setDraftError("");
-    try {
-      const savedDraft = await saveQuoteDraft(requestId, draftContent);
-      setDraft(savedDraft);
-      setDraftContent(savedDraft.content);
-      setRequest((current) =>
-        current
-          ? {
-              ...current,
-              quoteDraftRevisionCount: savedDraft.revisions.length,
-              quoteDraftUpdatedAt: savedDraft.updatedAt,
-            }
-          : current,
-      );
-    } catch (cause) {
-      setDraftError(
-        cause instanceof Error
-          ? cause.message
-          : "The quote draft could not be saved",
-      );
-    } finally {
-      setSavingDraft(false);
-    }
-  }
-
-  async function saveAssignment() {
-    if (savingAssignment) return;
-    setSavingAssignment(true);
-    setAssignmentError("");
-    try {
-      const role = selectedRole ? (selectedRole as DepartmentRoleKey) : null;
-      await assignQuoteRequestDepartment(requestId, role);
-      setAssignedRole(role);
-      if (!role) {
-        setDraft(null);
-        setDraftContent("");
-        setDraftState("ready");
-      }
-    } catch (cause) {
-      setAssignmentError(
-        cause instanceof Error
-          ? cause.message
-          : "Assignment could not be saved",
-      );
-    } finally {
-      setSavingAssignment(false);
-    }
-  }
-
   return (
     <main className={styles.page}>
       <Link className={styles.backLink} href="/quotations">
@@ -242,14 +107,25 @@ export function QuoteRequestDetail() {
       </Link>
 
       <header className={styles.pageHeader}>
-        <div>
-          <p className={styles.eyebrow}>STAFF WORKSPACE · LOCAL ENGINE</p>
-          <h1>Quote request</h1>
-          <p className={styles.description}>
-            Captured customer details and request message.
-          </p>
-        </div>
-        <span className={styles.localBadge}>LOCAL DEVELOPMENT</span>
+        <h1>Quote request</h1>
+        {request?.customerCompanyId &&
+          (request.quoteId ? (
+            <Link
+              className={styles.primaryButton}
+              href={`/quotes/${request.quoteId}`}
+            >
+              Open quote{request.quoteNumber ? ` ${request.quoteNumber}` : ""}
+            </Link>
+          ) : (
+            staffAccess.roles.length > 0 && (
+              <Link
+                className={styles.primaryButton}
+                href={`/quotes/new?requestId=${request.id}&customerId=${request.customerCompanyId}`}
+              >
+                Create quote
+              </Link>
+            )
+          ))}
       </header>
 
       {loadState === "loading" && (
@@ -275,11 +151,7 @@ export function QuoteRequestDetail() {
         <>
           <article className={styles.requestDetail}>
             <header className={styles.detailHeader}>
-              <div>
-                <p className={styles.sectionEyebrow}>RECEIVED REQUEST</p>
-                <h2>{request.companyName}</h2>
-              </div>
-              <span className={styles.sampleCount}>Received</span>
+              <h2>{request.companyName}</h2>
             </header>
             <dl className={styles.contactGrid}>
               <div>
@@ -308,49 +180,6 @@ export function QuoteRequestDetail() {
               <h3 id="message-title">Request message</h3>
               <p>{request.message}</p>
             </section>
-            {staffAccess.roles.length > 0 && (
-              <section
-                className={styles.customerLinkPanel}
-                aria-labelledby="department-assignment-title"
-              >
-                <h3 id="department-assignment-title">Department assignment</h3>
-                <p>
-                  {assignedRole
-                    ? `Assigned to ${assignedRole.replaceAll("_", " ")}.`
-                    : "Not assigned."}
-                </p>
-                {staffAccess.isSuperAdmin && (
-                  <div className={styles.customerLinkActions}>
-                    <label htmlFor="request-department">
-                      Assign department
-                    </label>
-                    <select
-                      id="request-department"
-                      value={selectedRole}
-                      onChange={(event) => setSelectedRole(event.target.value)}
-                    >
-                      <option value="">Unassigned</option>
-                      <option value="air_import_rep">Air import</option>
-                      <option value="air_export_rep">Air export</option>
-                      <option value="sea_import_rep">Sea import</option>
-                      <option value="sea_export_rep">Sea export</option>
-                    </select>
-                    <button
-                      className={styles.secondaryButton}
-                      disabled={
-                        savingAssignment ||
-                        selectedRole === (assignedRole ?? "")
-                      }
-                      onClick={() => void saveAssignment()}
-                      type="button"
-                    >
-                      {savingAssignment ? "Saving…" : "Save assignment"}
-                    </button>
-                  </div>
-                )}
-                {assignmentError && <p role="alert">{assignmentError}</p>}
-              </section>
-            )}
             <section
               className={styles.customerLinkPanel}
               aria-labelledby="customer-link-title"
@@ -363,11 +192,7 @@ export function QuoteRequestDetail() {
                     {request.customerCompanyName}
                   </Link>
                 </p>
-              ) : !staffAccess.isSuperAdmin ? (
-                <p>
-                  Only the super admin can link requests to customer records.
-                </p>
-              ) : customerLoadError ? (
+              ) : !staffAccess.isSuperAdmin ? null : customerLoadError ? (
                 <p role="alert">{customerLoadError}</p>
               ) : customers.length === 0 ? (
                 <p>
@@ -407,81 +232,7 @@ export function QuoteRequestDetail() {
                 </p>
               )}
             </section>
-            <section
-              className={styles.customerLinkPanel}
-              aria-labelledby="quote-draft-title"
-            >
-              <h3 id="quote-draft-title">Quote draft</h3>
-              {!request.customerCompanyId ? (
-                <p>Link this request to a customer record before drafting.</p>
-              ) : draftState === "loading" ? (
-                <p role="status">Loading quote draft…</p>
-              ) : draftState === "error" ? (
-                <p role="alert">{draftError}</p>
-              ) : (
-                <>
-                  <label htmlFor="quote-draft-content">Draft content</label>
-                  <textarea
-                    id="quote-draft-content"
-                    maxLength={20000}
-                    onChange={(event) => setDraftContent(event.target.value)}
-                    readOnly={
-                      !staffAccess.isSuperAdmin &&
-                      !staffAccess.roles.includes(assignedRole ?? "")
-                    }
-                    rows={8}
-                    value={draftContent}
-                  />
-                  {(staffAccess.isSuperAdmin ||
-                    staffAccess.roles.includes(assignedRole ?? "")) && (
-                    <button
-                      className={styles.secondaryButton}
-                      disabled={!draftContent.trim() || savingDraft}
-                      onClick={() => void saveDraft()}
-                      type="button"
-                    >
-                      {savingDraft
-                        ? "Saving…"
-                        : draft
-                          ? "Save new revision"
-                          : "Save quote draft"}
-                    </button>
-                  )}
-                  {draftError && <p role="alert">{draftError}</p>}
-                  {draft && (
-                    <div aria-label="Quote draft revisions">
-                      <h4>Saved revisions</h4>
-                      <ol>
-                        {draft.revisions.map((revision) => (
-                          <li key={revision.id}>
-                            Revision {revision.revisionNumber} ·{" "}
-                            {new Intl.DateTimeFormat("en-GH", {
-                              dateStyle: "medium",
-                              timeStyle: "short",
-                              timeZone: "Africa/Accra",
-                            }).format(new Date(revision.createdAt))}
-                            <details>
-                              <summary>View saved content</summary>
-                              <p>{revision.content}</p>
-                            </details>
-                          </li>
-                        ))}
-                      </ol>
-                    </div>
-                  )}
-                  <p>
-                    Draft only. Saving does not issue or accept a quote or
-                    create a job.
-                  </p>
-                </>
-              )}
-            </section>
           </article>
-
-          <p className={styles.notIssued}>
-            This request has not been priced or issued as a quotation, and no
-            job has been created.
-          </p>
         </>
       )}
     </main>

@@ -14,6 +14,7 @@ import {
   quoteVersionInputSchema,
 } from "@bjh/contracts";
 import { serviceLinesForRoles } from "../auth/auth.guards";
+import { randomUUID } from "node:crypto";
 import { quoteIssuedMessage } from "../notifications/notification-messages";
 import { NotificationsService } from "../notifications/notifications.service";
 import { renderQuotePdf } from "./quote-pdf";
@@ -162,6 +163,42 @@ export class QuotesService {
       });
     }
     return issued;
+  }
+
+  /**
+   * Sends the client the link to an issued quote again, by the configured
+   * channels. The automatic message at issue time stays; this is a new one.
+   */
+  async send(id: string, sentBy: string, scope: JobScope) {
+    const quote = await this.get(id, scope);
+    const version = quote.versions
+      .filter((item) => item.status === "issued")
+      .at(-1);
+    if (!quote.quoteNumber || !version) {
+      throw new ConflictException("Only an issued quote can be sent");
+    }
+    if (
+      (await this.notifications.notifiableContactCount(
+        quote.customerCompanyId,
+      )) === 0
+    ) {
+      throw new ConflictException(
+        "This company has no contact to notify; add or switch on a contact first",
+      );
+    }
+    const quoteNumber = quote.quoteNumber;
+    const result = await this.notifications.queue({
+      companyId: quote.customerCompanyId,
+      event: "quote_sent",
+      dedupeKey: `quote-sent:${version.id}:${randomUUID()}`,
+      message: (sender) => quoteIssuedMessage(sender, quoteNumber),
+      linkPath: `/quotes/${quote.id}`,
+      createdBy: sentBy,
+    });
+    if (result === "duplicate") {
+      throw new ConflictException("The message was already queued");
+    }
+    return result;
   }
 
   /**

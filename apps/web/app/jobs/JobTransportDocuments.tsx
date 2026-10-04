@@ -47,7 +47,6 @@ export function JobTransportDocuments({
   const [items, setItems] = useState<TransportDocument[] | null>(null);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<Editing | null>(null);
-  const [reason, setReason] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -133,14 +132,23 @@ export function JobTransportDocuments({
 
   return (
     <section className={styles.card} aria-labelledby="transport-docs-title">
-      <h2 id="transport-docs-title">House documents</h2>
-      {isStaff && (
-        <p className={styles.muted}>
-          BJH&apos;s own bill of lading, air waybill and manifest for this job.
-          An issued document never changes: to correct one, void it and issue a
-          new one.
-        </p>
-      )}
+      <div className={styles.stepsHeading}>
+        <h2 id="transport-docs-title">House documents</h2>
+        {isStaff && canEdit && !editing && (
+          <div className={styles.actions}>
+            {kinds.map((kind) => (
+              <button
+                className={styles.secondaryButton}
+                key={kind}
+                onClick={() => void start(kind)}
+                type="button"
+              >
+                New {transportDocumentTitles[kind]}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       {error && (
         <p className={styles.error} role="alert">
           {error}
@@ -150,96 +158,68 @@ export function JobTransportDocuments({
         <p className={styles.muted}>No documents yet.</p>
       )}
       {items && items.length > 0 && (
-        <ul className={styles.list}>
+        <ul className={styles.itemList}>
           {items.map((item) => (
             <li key={item.id}>
-              <strong>{transportDocumentTitles[item.kind]}</strong> ·{" "}
-              {item.documentNumber ?? "not numbered"} ·{" "}
-              <span className={styles.badge}>
-                {item.status === "draft"
-                  ? "Draft"
-                  : item.status === "issued"
-                    ? "Issued"
-                    : "Void"}
-              </span>
-              {item.status === "void" && item.voidReason
-                ? ` · void: ${item.voidReason}`
-                : ""}{" "}
-              <button
-                className={styles.secondaryButton}
-                onClick={() => void openPdf(item.id)}
-                type="button"
-              >
-                {item.status === "draft" ? "Preview PDF (draft)" : "PDF"}
-              </button>
-              {isStaff && canEdit && item.status === "draft" && (
-                <>
-                  {" "}
-                  <button
-                    className={styles.secondaryButton}
-                    onClick={() =>
-                      setEditing({
-                        id: item.id,
-                        kind: item.kind,
-                        number: item.documentNumber ?? "",
-                        fields: item.fields,
-                      })
-                    }
-                    type="button"
-                  >
-                    Edit
-                  </button>
-                </>
-              )}
-              {isStaff && canEdit && item.status !== "void" && (
-                <>
-                  {" "}
-                  <button
-                    className={styles.secondaryButton}
-                    onClick={() => {
-                      const why = reason.trim();
-                      if (!why) {
-                        setError("Give a reason first");
-                        return;
+              <div>
+                <span>{transportDocumentTitles[item.kind]}</span>
+                <strong>{item.documentNumber ?? "Not numbered"}</strong>
+                <small>
+                  {item.status === "draft"
+                    ? "Draft"
+                    : item.status === "issued"
+                      ? "Issued"
+                      : "Void"}
+                  {item.status === "void" && item.voidReason
+                    ? ` · ${item.voidReason}`
+                    : ""}
+                </small>
+              </div>
+              <div className={styles.actions}>
+                <button
+                  className={styles.textButton}
+                  onClick={() => void openPdf(item.id)}
+                  type="button"
+                >
+                  {item.status === "draft" ? "Preview PDF" : "PDF"}
+                </button>
+                {isStaff && canEdit && item.status === "draft" && (
+                  <>
+                    <button
+                      className={styles.textButton}
+                      onClick={() =>
+                        setEditing({
+                          id: item.id,
+                          kind: item.kind,
+                          number: item.documentNumber ?? "",
+                          fields: item.fields,
+                        })
                       }
-                      void run(async () => {
-                        await voidTransportDocument(jobId, item.id, why);
-                        setReason("");
-                      });
+                      type="button"
+                    >
+                      Edit
+                    </button>
+                  </>
+                )}
+                {isStaff && canEdit && item.status !== "void" && (
+                  <button
+                    className={styles.textButton}
+                    onClick={() => {
+                      const why = window.prompt("Reason")?.trim();
+                      if (!why) return;
+                      void run(() =>
+                        voidTransportDocument(jobId, item.id, why),
+                      );
                     }}
                     type="button"
                   >
-                    Void (uses the reason below)
+                    Void
                   </button>
-                </>
-              )}
+                )}
+              </div>
             </li>
           ))}
         </ul>
-      )}
-      {isStaff && canEdit && !editing && (
-        <>
-          <label className={styles.field}>
-            Reason for a void
-            <input
-              maxLength={500}
-              onChange={(event) => setReason(event.target.value)}
-              value={reason}
-            />
-          </label>
-          <div className={styles.actions}>
-            {kinds.map((kind) => (
-              <button
-                className={styles.button}
-                key={kind}
-                onClick={() => void start(kind)}
-                type="button"
-              >
-                New {transportDocumentTitles[kind]}
-              </button>
-            ))}
-          </div>
-        </>
       )}
       {isStaff && editing && (
         <form

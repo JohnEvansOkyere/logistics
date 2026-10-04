@@ -31,6 +31,12 @@ export class CustomersController {
     return this.customers.create(body);
   }
 
+  @Patch(":id")
+  @UseGuards(SuperAdminGuard)
+  update(@Param("id") id: string, @Body() body: unknown) {
+    return this.customers.updateCustomer(id, body);
+  }
+
   @Post(":id/contacts")
   @UseGuards(SuperAdminGuard)
   addContact(@Param("id") id: string, @Body() body: unknown) {

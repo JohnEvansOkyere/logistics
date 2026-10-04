@@ -501,7 +501,6 @@ test("the waybill prefix comes from the settings once configured", async () => {
     body: JSON.stringify({
       issuer: { name: "Synthetic Ltd" },
       currencies: ["GHS"],
-      defaultCurrency: "GHS",
       numbering: {
         quotePrefix: "S/Q",
         invoicePrefix: "S/I",

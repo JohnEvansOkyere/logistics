@@ -1,29 +1,41 @@
 import { authenticatedFetch } from "../auth/authenticatedFetch";
+import type {
+  CustomerCompanyUpdate,
+  CustomerContactInput,
+  CustomerContactUpdate,
+  CustomerInput,
+} from "@bjh/contracts";
 
 export type CustomerContact = {
   id: string;
   name: string;
+  role: string | null;
   email: string;
   /** For SMS messages. */
   phone: string | null;
   /** Whether this person receives customer messages. */
   notify: boolean;
+  isPrimary: boolean;
   createdAt: string;
 };
 
 export type CustomerCompany = {
   id: string;
   companyName: string;
+  tradingName: string | null;
+  registrationNumber: string | null;
+  taxNumber: string | null;
+  phone: string | null;
+  companyEmail: string | null;
+  website: string | null;
+  businessAddress: string | null;
+  billingAddress: string | null;
+  country: string | null;
   createdAt: string;
   contacts: CustomerContact[];
 };
 
-export type NewCustomer = {
-  companyName: string;
-  contactName: string;
-  email: string;
-  phone?: string;
-};
+export type NewCustomer = CustomerInput;
 
 const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:3001/api";
@@ -70,9 +82,25 @@ export async function createCustomer(
   );
 }
 
+export async function updateCustomer(
+  companyId: string,
+  update: CustomerCompanyUpdate,
+): Promise<CustomerCompany> {
+  return readResponse<CustomerCompany>(
+    await authenticatedFetch(
+      `${customersUrl}/${encodeURIComponent(companyId)}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(update),
+      },
+    ),
+  );
+}
+
 export async function addContact(
   companyId: string,
-  contact: { name: string; email: string; phone?: string },
+  contact: CustomerContactInput,
 ): Promise<CustomerContact> {
   return readResponse<CustomerContact>(
     await authenticatedFetch(
@@ -89,7 +117,7 @@ export async function addContact(
 export async function updateContact(
   companyId: string,
   contactId: string,
-  update: { phone: string; notify: boolean },
+  update: CustomerContactUpdate & { notify: boolean },
 ): Promise<CustomerContact> {
   return readResponse<CustomerContact>(
     await authenticatedFetch(

@@ -64,16 +64,9 @@ export function Receivables() {
       <main className={styles.page}>
         <header className={styles.header}>
           <div>
-            <p className={styles.eyebrow}>
-              {isStaff ? "FINANCE" : "YOUR ACCOUNT"}
-            </p>
             <h1 className={styles.title}>
               {isStaff ? "Unpaid invoices" : "Invoices you still owe"}
             </h1>
-            <p className={styles.muted}>
-              Issued invoices with a balance, oldest due date first. Open the
-              job to record a payment or download the invoice.
-            </p>
           </div>
         </header>
         {error && (
